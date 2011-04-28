@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: Feb/Mar 2011 (minor tweaks to reduce code in ISR/excpn hdlrs)
+ *  -for ISR orig_r0 not used to keep it 0 instead of -1 (saves 4 bytes)
+ *  -added pt_regs canary to verify they are not clobbered
+ *
  * Vineetg: March 2009 (Supporting 2 levels of Interrupts)
  *  Stack switching code can no longer reliably rely on the fact that
  *  if we are NOT in user mode, stack is switched to kernel mode.
@@ -462,7 +466,7 @@
 
     /* now we are ready to save the remaining context :) */
     st.a    -1, [sp, -4]    /* orig_r8, -1 for interuppt level one */
-    st.a    -1, [sp, -4]    /* orig_r0 , -1 for interrpts */
+    st.a    0, [sp, -4]    /* orig_r0 , N/A for IRQ */
     SAVE_CALLER_SAVED
     st.a    r26, [sp, -4]   /* gp */
     st.a    fp, [sp, - 4]
@@ -493,7 +497,7 @@
 
     /* now we are ready to save the remaining context :) */
     st.a    -2, [sp, -4]    /* orig_r8, -2 for interrupt level 2 */
-    st.a    -1, [sp, -4]    /* orig_r0 , -1 for interrpts */
+    st.a    0, [sp, -4]    /* orig_r0 , N/A for IRQ */
     SAVE_CALLER_SAVED
     st.a    r26, [sp, -4]   /* gp */
     st.a    fp, [sp, - 4]

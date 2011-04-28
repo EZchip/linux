@@ -316,7 +316,7 @@ ARC_ENTRY instr_service
     FAKE_RET_FROM_EXCPN r9
 
     bl  do_insterror_or_kprobe
-    j   ret_from_user_faults
+    b   ret_from_exception
 
 ; ---------------------------------------------
 ; Memory Error Exception Handler
@@ -337,7 +337,7 @@ ARC_ENTRY mem_service
     lr  r1, [efa]
     mov r2, sp
     bl  do_memory_error
-    j   ret_from_user_faults
+    b   ret_from_exception
 
 ; ---------------------------------------------
 ; Machine Check Exception Handler
@@ -424,7 +424,7 @@ ARC_ENTRY EV_TLBProtV
     mov r2, r4              ; faulting address
     mov r0, sp              ; pt_regs
     bl  do_page_fault
-    j   ret_from_user_faults
+    b   ret_from_exception
 
     ;========== (6b) Non aligned access ============
 4:
@@ -432,7 +432,7 @@ ARC_ENTRY EV_TLBProtV
     mov r1, r4              ; faulting address
     mov r2, sp              ; pt_regs
     bl  do_misaligned_access
-    j   ret_from_user_faults
+    b   ret_from_exception
 
 ; ---------------------------------------------
 ; Privilege Violation Exception Handler
@@ -454,7 +454,7 @@ ARC_ENTRY EV_PrivilegeV
     FAKE_RET_FROM_EXCPN r9
 
     bl  do_privilege_fault
-    j   ret_from_user_faults
+    b   ret_from_exception
 
 ; ---------------------------------------------
 ; Extension Instruction Exception Handler
@@ -470,7 +470,7 @@ ARC_ENTRY EV_Extension
     lr  r1, [efa]
     mov r2, sp
     bl  do_extension_fault
-    j   ret_from_user_faults
+    b   ret_from_exception
 
 ;######################### System Call Tracing #########################
 
@@ -709,17 +709,16 @@ restore_regs :
     and r9, r9, ~(STATUS_E1_MASK | STATUS_E2_MASK)
     flag r9
 
+#ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     ; Restore User R25
     ; Earlier this used to be only for returning to user mode
     ; However with 2 levels of IRQ this can also happen even if
     ; in kernel mode
     ld r9, [sp, PT_sp]
     brhs r9, VMALLOC_START, 8f
-#ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     RESTORE_USER_R25
-#endif
-
 8:
+#endif
 
     ; Restore REG File. In case multiple Events outstanding,
     ; use the same priorty as rtie: EXCPN, L2 IRQ, L1 IRQ, None
@@ -808,28 +807,6 @@ debug_marker_syscall:
     rtie
 
 ARC_EXIT ret_from_exception
-
-
-;----------------------------------------------------------------------
-; This is hook incase some one wants to do more in case of a User FAULT
-; All user faults fall off thru this routine.
-; However Right now we don't anything specific, so its branching off to
-; normal excpetion return path
-;
-; Our requirement for dumping reg file on fatal signals is catered to by
-; /proc/sys/kernel/print-fatal-signals in generic signal code
-;-----------------------------------------------------------------------
-
-ARC_ENTRY ret_from_user_faults
-
-    ; Add code here
-    ; .........
-    ; .........
-
-    b ret_from_exception
-
-ARC_EXIT ret_from_user_faults
-
 
 ARC_ENTRY ret_from_fork
     ; when the forked child comes here from the __switch_to function
