@@ -453,7 +453,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "15:    ld.ab   %4, [%2,4]              \n"
                 "       st.ab   %3, [%1,4]              \n"
                 "       st.ab   %4, [%1,4]              \n"
-                "       sub.f   %0,%0,8                 \n"
+                "       sub     %0,%0,8                 \n"
                 "31:    ;nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
@@ -476,7 +476,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 __asm__ __volatile__ (
                 "16:    ld.ab   %3, [%2,4]              \n"
                 "       st.ab   %3, [%1,4]              \n"
-                "       sub.f   %0,%0,4                 \n"
+                "       sub     %0,%0,4                 \n"
                 "32:     ;nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
@@ -498,7 +498,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 __asm__ __volatile__ (
                 "17:    ldw.ab   %3, [%2,2]              \n"
                 "       stw.ab   %3, [%1,2]              \n"
-                "       sub.f   %0,%0,2                 \n"
+                "       sub      %0,%0,2                 \n"
                 "33:     ;nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
@@ -518,7 +518,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 __asm__ __volatile__ (
                 "18:    ldb.ab   %3, [%2,2]             \n"
                 "       stb.ab   %3, [%1,2]             \n"
-                "       sub.f   %0,%0,1                 \n"
+                "       sub      %0,%0,1                 \n"
                 "34:    ; nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
@@ -818,7 +818,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "     ld.ab   %4, [%2,4]        \n"
                 "14:  st.ab   %3, [%1,4]        \n"
                 "15:  st.ab   %4, [%1,4]        \n"
-                "     sub.f   %0, %0, 8         \n"
+                "     sub     %0, %0, 8         \n"
                 "31:  ;nop                      \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
@@ -841,7 +841,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 __asm__ __volatile__ (
                 "     ld.ab   %3, [%2,4]        \n"
                 "16:  st.ab   %3, [%1,4]        \n"
-                "     sub.f   %0, %0, 4         \n"
+                "     sub     %0, %0, 4         \n"
                 "32:  ;nop                      \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
@@ -863,8 +863,8 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 __asm__ __volatile__ (
                 "     ldw.ab    %3, [%2,2]      \n"
                 "17:  stw.ab    %3, [%1,2]      \n"
-                "     sub.f %0, %0, 2           \n"
-                "33:  ;nop                       \n"
+                "     sub       %0, %0, 2       \n"
+                "33:  ;nop                      \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
                 "4: j   33b                     \n"
@@ -881,10 +881,10 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
             if (orig_n & 1)
             {
                 __asm__ __volatile__ (
-                "     ldb.ab  %3, [%2,1]      \n" // just one byte left
+                "     ldb.ab  %3, [%2,1]        \n" // just one byte left
                 "18:  stb.ab  %3, [%1,1]        \n"
-                "     sub.f %0, %0, 1           \n"
-                "34:  ;nop                       \n"
+                "     sub     %0, %0, 1         \n"
+                "34:  ;nop                      \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
                 "4: j   34b                     \n"
@@ -1091,7 +1091,7 @@ __do_strncpy_from_user(char *dst, const char *src, long count)
     __asm__ __volatile__ (
         "   lp 2f   \n"
         "1: ldb.ab  %3, [%2, 1]         \n"
-        "   breq.d    %3, 0, 2f           \n"
+        "   breq.d  %3, 0, 2f           \n"
         "   stb.ab  %3, [%1, 1]         \n"
         "2: sub %0, %6, %4              \n"
         "3: ;nop                         \n"
@@ -1106,7 +1106,7 @@ __do_strncpy_from_user(char *dst, const char *src, long count)
         "   .previous                   \n"
 
         :"=r"(res), "+r"(dst), "+r"(src), "=&r"(val),"=l"(hw_count)
-        :"g" (-EFAULT), "ir"(count),"4"(count)
+        :"g" (-EFAULT), "ir"(count),"4"(count)  // this "4" seeds lp_count abv
         :"memory"
     );
 
