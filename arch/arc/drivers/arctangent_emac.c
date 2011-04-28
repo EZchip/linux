@@ -5,6 +5,13 @@
  *  -Unified NAPI and Non-NAPI Code.
  *  -API changes since 2.6.26 for making NAPI independent of netdevice
  *  -Cutting a few checks in main rx poll routine
+ *  -Tweaked NAPI implementation:
+ *      In poll mode, Original driver would always start sweeping BD chain
+ *      from BD-0 upto poll budget (40). And if it got over-budget it would
+ *      drop remiander of packets.
+ *      Instead now we remember last BD polled and in next
+ *      cycle, we resume from next BD onwards. That way in case of over-budget
+ *      no packet needs to be dropped.
  *
  * vineetg: Nov 2009
  *  -Rewrote the driver register access macros so that multiple accesses
@@ -293,6 +300,11 @@ struct aa3_emac_priv
 		struct sk_buff *tx_skbuff[TX_BDT_LEN];
 		unsigned int    txbd_curr;
 		unsigned int    txbd_dirty;
+
+        /* Remember where driver last saw a pkt, so next iternation it
+         * starts from here and not 0
+         */
+        unsigned int    last_rx_bd;
 		/*
 		 * Set by interrupt handler to indicate completion of mdio
 		 * operation. reset by reader (see __mdio_read())
@@ -392,15 +404,27 @@ static int aa3_clean(struct net_device *dev
 	struct aa3_emac_priv *ap = netdev_priv(dev);
 	unsigned int len, info;
 	struct sk_buff *skb, *skbnew;
-    int work_done=0, i;
+    int work_done=0, i, loop;
 
-    for (i = 0; i < RX_BDT_LEN; i++)
+    /* Loop thru the BD chain, but not always from 0.
+     * start from right after where we last saw a pkt
+     */
+    i = ap->last_rx_bd;
+
+    for (loop = 0; loop < RX_BDT_LEN; loop++)
 	{
+        i = (i + 1) & (RX_BDT_LEN - 1);
+
 		info = arc_read_uncached_32(&ap->rxbd[i].info);
 
         /* BD contains a packet for CPU to grab */
         if ((info & OWN_MASK) == FOR_CPU)
         {
+            /* Make a note that we saw a pkt at this BD.
+             * So next time, driver starts from this + 1
+             */
+            ap->last_rx_bd = i;
+
             /* Packet fits in one BD (Non Fragmented) */
 			if ((info & (FRST_MASK|LAST_MASK)) == (FRST_MASK|LAST_MASK))
 			{
@@ -450,13 +474,12 @@ static int aa3_clean(struct net_device *dev
 				skb->protocol = eth_type_trans(skb, dev);
 
 #ifdef CONFIG_EMAC_NAPI
-                if(work_done >= work_to_do)
-			        dev_kfree_skb_irq(skb);  // drop packet
-                else
-                {
-                    work_done++;
-					netif_receive_skb(skb);
-                }
+		        /* Correct NAPI smenatics: If work quota exceeded return
+                 * don't dequeue any further packets
+                 */
+                work_done++;
+                netif_receive_skb(skb);
+                if(work_done >= work_to_do) break;
 #else
                 netif_rx(skb);
 #endif
@@ -707,6 +730,10 @@ aa3_emac_open(struct net_device * dev)
 		arc_write_uncached_32(&bd->info, FOR_EMAC | (dev->mtu + VMAC_BUFFER_PAD));
 		bd++;
 	}
+
+    /* setup last seen to MAX, so driver starts from 0 */
+    ap->last_rx_bd = RX_BDT_LEN - 1;
+
 	/* Allocate tx BD's similar to rx BD's */
 	/* All TX BD's owned by CPU */
 	bd = ap->txbd;
