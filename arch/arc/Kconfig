@@ -256,10 +256,6 @@ config TIMER_LV2
         bool "Configure Timer0 interrupt on level 2"
         default n
 
-config ARC700_HLINK
-        bool "ARC700 Host Link support"
-        default n
-
 config ARCTANGENT_EMAC
         tristate "ARCTangent EMAC support"
         select NET
@@ -283,6 +279,15 @@ config ARCH_ARC_LV2_INTR
         bool
         default y if EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
         depends on EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
+
+config ARCH_ARC_HLINK
+        bool "Support for Metaware debugger assisted Host access"
+        default n
+        help
+        This options allows a Linux userland apps to directly access
+        host file system (open/creat/read/write etc) with help from
+        Metaware Debugger. This can come in handy for Linux-host communication
+        when there is no real usable peripherla such as EMAC.
 
 config ARCPGU
         tristate "Use ARC Pixel Graphics Unit"

@@ -8,16 +8,12 @@
 # Copyright (C) 2003, ARC International
 #
 
-# Sameer: export-objs is obsolete in 2.6 now. We need to investigate
-# if we need something else here.
-
-#export-objs     := arcksyms.o
-
 obj-$(CONFIG_MODULES)   += arcksyms.o module.o
 # Object file lists.
 
 obj-y		+= arcksyms.o ptrace.o sys_arc.o setup.o irq.o
 obj-y		+= troubleshoot.o stacktrace.o event-log.o
+obj-$(CONFIG_ARCH_ARC_HLINK)		+= arc_hostlink.o
 
 ifdef CONFIG_SMP
 obj-y		+= atomic_lock.o bitops_lock.o
@@ -46,5 +42,3 @@ obj-y		+= unwind.o
 endif
 
 extra-y := init_task.o vmlinux.lds
-
-#include $(TOPDIR)/Rules.make

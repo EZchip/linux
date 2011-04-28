@@ -79,10 +79,6 @@ drivers-y	+= arch/arc/drivers/
 
 libs-y 		+= arch/arc/lib/ $(LIBGCC)
 
-ifeq ($(CONFIG_ARC700_HLINK),y)
-libs-y		+= arch/arc/lib/libhlt.a
-endif
-
 #default target for make without any arguements.
 KBUILD_IMAGE := bootpImage
 
