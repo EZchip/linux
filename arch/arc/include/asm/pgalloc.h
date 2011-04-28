@@ -1,6 +1,9 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2010-2011
  *
+ * vineetg: Nov 2010
+ *  -Added pgtable ctor/dtor used for pgtable mem accounting
+ *
  * vineetg: April 2010
  *  -Switched pgtable_t from being struct page * to unsigned long
  *      =Needed so that Page Table allocator (pte_alloc_one) is not forced to
@@ -120,6 +123,7 @@ pte_alloc_one(struct mm_struct *mm, unsigned long address)
     if (pte_pg)
     {
 		memset_aligned((void *)pte_pg, PTRS_PER_PTE * 4);
+		pgtable_page_ctor(virt_to_page(pte_pg));
     }
 
     return pte_pg;
@@ -132,6 +136,7 @@ static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 
 static inline void pte_free(struct mm_struct *mm, pgtable_t ptep)
 {
+	pgtable_page_dtor(virt_to_page(ptep));
     free_pages(ptep, PTE_ORDER);
 }
 
