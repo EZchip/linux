@@ -384,7 +384,7 @@ ARC_ENTRY EV_MachineCheck
 not_tlb_overlap:
 
     ; DEAD END: can't do much, display Regs and HALT
-    SAVE_CALLEE_SAVED
+    SAVE_CALLEE_SAVED_USER
 
     GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
     st  sp, [r10, THREAD_CALLEE_REG]
@@ -547,7 +547,7 @@ trap_is_brkpt:
     ; Save callee regs in case gdb wants to have a look
     ; SP will grow up by size of CALLEE Reg-File
     ; NOTE: clobbers r12
-    SAVE_CALLEE_SAVED
+    SAVE_CALLEE_SAVED_USER
 
     ; save location of saved Callee Regs @ thread_struct->pc
     GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
@@ -557,7 +557,7 @@ trap_is_brkpt:
     bl  do_trap_is_brkpt
 
     ; unwind stack to discard Callee saved Regs
-    RESTORE_CALLEE_SAVED_FAST
+    DISCARD_CALLEE_SAVED_USER
 
     j   ret_from_exception
 
@@ -675,7 +675,7 @@ skip_user_resched:
     ;
     ; NOTE: SP will grow up by size of CALLEE Reg-File
     ; NOTE: macro clobbers r12
-    SAVE_CALLEE_SAVED
+    SAVE_CALLEE_SAVED_USER
 
     ; save location of saved Callee Regs @ thread_struct->pc
     GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
@@ -684,7 +684,7 @@ skip_user_resched:
     jl  SYMBOL_NAME(do_signal)
 
     ; unwind stack to discard Callee saved Regs
-    RESTORE_CALLEE_SAVED_FAST
+    DISCARD_CALLEE_SAVED_USER
 
     ;--------- All things done, go back to Userland ------
 
@@ -873,25 +873,25 @@ ARC_ENTRY sys_execve_wrapper
 ARC_ENTRY sys_fork_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
-    SAVE_CALLEE_SAVED
+    SAVE_CALLEE_SAVED_USER
     jl  SYMBOL_NAME(sys_fork)
-    RESTORE_CALLEE_SAVED_FAST
+    DISCARD_CALLEE_SAVED_USER
     jal ret_from_system_call
 
 ARC_ENTRY sys_vfork_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
-    SAVE_CALLEE_SAVED
+    SAVE_CALLEE_SAVED_USER
     jl  SYMBOL_NAME(sys_vfork)
-    RESTORE_CALLEE_SAVED_FAST
+    DISCARD_CALLEE_SAVED_USER
     jal ret_from_system_call
 
 ARC_ENTRY sys_clone_wrapper
     ; copy parameter( struct pt_regs *) for sys_clone
     mov r2, sp
-    SAVE_CALLEE_SAVED
+    SAVE_CALLEE_SAVED_USER
     jl  SYMBOL_NAME(sys_clone)
-    RESTORE_CALLEE_SAVED_FAST
+    DISCARD_CALLEE_SAVED_USER
     jal ret_from_system_call
 
 ARC_ENTRY sys_rt_sigreturn_wrapper

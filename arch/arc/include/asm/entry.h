@@ -119,13 +119,17 @@
 
 
 /*--------------------------------------------------------------
-* Save callee saved registers (non scratch registers) ( r16 - r23 )
- * This is the actual context saved when a task gets scheduled out.
- * sp points to the next free element on the stack at exit of this macro.
- * Registers are pushed / popped in the order defined in struct callee_regs
- * in asm/ptrace.h
+ * Save callee saved registers (non scratch registers) ( r13 - r25 )
+ *  on kernel stack.
+ * User mode callee regs need to be saved in case of
+ *    -fork and friends for replicating from parent to child
+ *    -before going into do_signal( ) for ptrace/core-dump
+ * Special case handling is required for r25 in case it is used by kernel
+ *   for caching task ptr. Low level exception/ISR save user mode r25
+ *   into task->thread.user_r25. So it needs to be retrieved from there and
+ *   saved into kernel stack wit rest of callee reg-file
  *-------------------------------------------------------------*/
-.macro SAVE_CALLEE_SAVED
+.macro SAVE_CALLEE_SAVED_USER
     st.a    r13, [sp, -4]
     st.a    r14, [sp, -4]
     st.a    r15, [sp, -4]
@@ -147,8 +151,35 @@
     st.a    r25, [sp, -4]
 #endif
 
-    /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
+    /* move up by 1 word to "create" callee_regs->"stack_place_holder" */
     sub sp, sp, 4
+.endm
+
+/*--------------------------------------------------------------
+ * Save callee saved registers (non scratch registers) ( r13 - r25 )
+ * kernel mode callee regs needed to be saved in case of context switch
+ * If r25 is used for caching task pointer then that need not be saved
+ * as it can be re-created from current task global
+ *-------------------------------------------------------------*/
+.macro SAVE_CALLEE_SAVED_KERNEL
+    st.a    r13, [sp, -4]
+    st.a    r14, [sp, -4]
+    st.a    r15, [sp, -4]
+    st.a    r16, [sp, -4]
+    st.a    r17, [sp, -4]
+    st.a    r18, [sp, -4]
+    st.a    r19, [sp, -4]
+    st.a    r20, [sp, -4]
+    st.a    r21, [sp, -4]
+    st.a    r22, [sp, -4]
+    st.a    r23, [sp, -4]
+    st.a    r24, [sp, -4]
+#ifdef CONFIG_ARCH_ARC_CURR_IN_REG
+    sub     sp, sp, 8
+#else
+    st.a    r25, [sp, -4]
+    sub     sp, sp, 4
+#endif
 .endm
 
 /*--------------------------------------------------------------
@@ -162,16 +193,13 @@
  * For all other cases RESTORE_CALLEE_SAVED_FAST must be used
  * which simply pops the stack w/o touching regs.
  *-------------------------------------------------------------*/
-.macro RESTORE_CALLEE_SAVED
-    add sp, sp, 4       /* hop over unused "pt_regs->stack_place_holder" */
+.macro RESTORE_CALLEE_SAVED_KERNEL
+
 
 #ifdef CONFIG_ARCH_ARC_CURR_IN_REG
-
-    /* Don't load r25 with r25 reg from stack because in kernel mode
-     * r25 is always loaded with current task ptr
-     */
-    add     sp, sp, 4
+    add     sp, sp, 8  /* skip callee_reg gutter and user r25 placeholder */
 #else
+    add     sp, sp, 4   /* skip "callee_regs->stack_place_holder" */
     ld.ab   r25, [sp, 4]
 #endif
 
@@ -193,7 +221,7 @@
 /*--------------------------------------------------------------
  * Super FAST Restore callee saved regs by simply re-adjusting SP
  *-------------------------------------------------------------*/
-.macro RESTORE_CALLEE_SAVED_FAST
+.macro DISCARD_CALLEE_SAVED_USER
     add     sp, sp, 14 * 4
 .endm
 
@@ -330,14 +358,17 @@
     rtie
 55:
 .endm
+
 /*--------------------------------------------------------------
  * Save all registers used by Exceptions (TLB Miss, Prot-V, Mem err etc)
  * Requires SP to be already switched to kernel mode Stack
  * sp points to the next free element on the stack at exit of this macro.
  * Registers are pushed / popped in the order defined in struct ptregs
  * in asm/ptrace.h
+ * Note that syscalls are implemented via TRAP which is also a exception
+ * from CPU's point of view
  *-------------------------------------------------------------*/
-.macro SAVE_ALL_SYS
+.macro SAVE_ALL_EXCEPTION   marker
 
     /* restore original r9 , saved in ex_saved_reg1
      * It will be saved on stack in macro: SAVE_CALLER_SAVED
@@ -345,8 +376,11 @@
     ld  r9, [SYMBOL_NAME(ex_saved_reg1)]
 
     /* now we are ready to save the remaining context */
-    st.a    NR_syscalls + 1, [sp, -4]   /* positive value in orig_r8 */
-    st.a    r0, [sp, -4]    /* orig_r0 */
+    st.a    \marker, [sp, -4]	/* orig_r8:
+                                    syscalls   -> 1 to NR_SYSCALLS
+                                    Exceptions -> NR_SYSCALLS + 1
+                                 */
+    st.a    r0, [sp, -4]    /* orig_r0, needed only for sys calls */
     SAVE_CALLER_SAVED
     st.a    r26, [sp, -4]   /* gp */
     st.a    fp, [sp, - 4]
@@ -368,33 +402,17 @@
 .endm
 
 /*--------------------------------------------------------------
- * Save all registers used by system calls.
+ * Save scratch regs for exceptions
+ *-------------------------------------------------------------*/
+.macro SAVE_ALL_SYS
+    SAVE_ALL_EXCEPTION  (NR_syscalls + 1)
+.endm
+
+/*--------------------------------------------------------------
+ * Save scratch regs for sys calls
  *-------------------------------------------------------------*/
 .macro SAVE_ALL_TRAP
-    /* retsore original r9 , saved in ex_saved_reg1 */
-    ld  r9, [SYMBOL_NAME(ex_saved_reg1)]
-
-    /* now we are ready to save the remaining context */
-    st.a    r8, [sp, -4]    /* orig_r8 */
-    st.a    r0, [sp, -4]    /* orig_r0 */
-    SAVE_CALLER_SAVED
-    st.a    r26, [sp, -4]   /* gp */
-    st.a    fp, [sp, - 4]
-    st.a    blink, [sp, -4]
-    lr  r9, [eret]
-    st.a    r9, [sp, -4]
-    lr  r9, [erstatus]
-    st.a    r9, [sp, -4]
-    st.a    lp_count, [sp, -4]
-    lr  r9, [lp_end]
-    st.a    r9, [sp, -4]
-    lr  r9, [lp_start]
-    st.a    r9, [sp, -4]
-    lr  r9, [erbta]
-    st.a    r9, [sp, -4]
-
-    /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
-    sub sp, sp, 4
+    SAVE_ALL_EXCEPTION  r8
 .endm
 
 /*--------------------------------------------------------------

@@ -26,11 +26,10 @@ ARC_SCHED_FUNC __switch_to
     /* Save regs on kernel mode stack of task */
     st.a    blink, [sp, -4]
     st.a    fp, [sp, -4]
-    SAVE_CALLEE_SAVED
+    SAVE_CALLEE_SAVED_KERNEL
 
     /* Save the now KSP in task->thread.ksp */
-    add r9, r0, (TASK_THREAD + THREAD_KSP)
-    st  sp, [r9]
+    st.as  sp, [r0, (TASK_THREAD + THREAD_KSP)/4]
 
     /* Return last task in r0 (return reg)
          On ARC, Return reg = First Arg reg = r0.
@@ -48,10 +47,10 @@ ARC_SCHED_FUNC __switch_to
     PUT_CURR_TASK_ON_CPU  r1, r3
 
     /* reload SP with saved kernel mode stack pointer in task->thread.ksp */
-    ld  sp, [r1, TASK_THREAD + THREAD_KSP]
+    ld.as  sp, [r1, (TASK_THREAD + THREAD_KSP)/4]
 
     /* restore the registers */
-    RESTORE_CALLEE_SAVED
+    RESTORE_CALLEE_SAVED_KERNEL
     ld.ab   fp, [sp, 4]
     ld.ab   blink, [sp, 4]
     j       [blink]
