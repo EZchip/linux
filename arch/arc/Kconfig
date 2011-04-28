@@ -297,6 +297,13 @@ config XILINX_TEMAC
         select NETDEVICES
         select NET_ETHERNET
 
+config ISS_MAC
+        tristate "Use ISS ENET simulation ?"
+        default n
+        select NET
+        select IET
+        select NETDEVICES
+        select NET_ETHERNET
 
 config ARCH_ARC_LV2_INTR
         bool
