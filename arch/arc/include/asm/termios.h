@@ -91,36 +91,48 @@ struct termio {
 
 #ifdef __KERNEL__
 
+#include "asm/uaccess.h"
+
 /*
  * Translate a "termio" structure into a "termios". Ugh.
  */
-#define SET_LOW_TERMIOS_BITS(termios, termio, x) {		\
-	unsigned short __tmp;					\
-	get_user(__tmp,&(termio)->x);				\
-	*(unsigned short *) &(termios)->x = __tmp;		\
-}
+static inline int user_termio_to_kernel_termios(struct ktermios *termios,
+                        struct termio __user *termio)
+{
+    struct termio tmpio;
 
-#define user_termio_to_kernel_termios(termios, termio) \
-({ \
-	SET_LOW_TERMIOS_BITS(termios, termio, c_iflag); \
-	SET_LOW_TERMIOS_BITS(termios, termio, c_oflag); \
-	SET_LOW_TERMIOS_BITS(termios, termio, c_cflag); \
-	SET_LOW_TERMIOS_BITS(termios, termio, c_lflag); \
-	copy_from_user((termios)->c_cc, (termio)->c_cc, NCC); \
-})
+    if (copy_from_user(&tmpio, termio, sizeof(struct termio)) != 0)
+        return -EFAULT;
+
+    termios->c_iflag = (0xffff0000 & termios->c_iflag) | tmpio.c_iflag;
+    termios->c_oflag = (0xffff0000 & termios->c_oflag) | tmpio.c_oflag;
+    termios->c_cflag = (0xffff0000 & termios->c_cflag) | tmpio.c_cflag;
+    termios->c_lflag = (0xffff0000 & termios->c_lflag) | tmpio.c_lflag;
+    termios->c_line = tmpio.c_line;
+    memcpy(termios->c_cc, &tmpio.c_cc, NCC);
+    return 0;
+}
 
 /*
  * Translate a "termios" structure into a "termio". Ugh.
  */
-#define kernel_termios_to_user_termio(termio, termios) \
-({ \
-	put_user((termios)->c_iflag, &(termio)->c_iflag); \
-	put_user((termios)->c_oflag, &(termio)->c_oflag); \
-	put_user((termios)->c_cflag, &(termio)->c_cflag); \
-	put_user((termios)->c_lflag, &(termio)->c_lflag); \
-	put_user((termios)->c_line,  &(termio)->c_line); \
-	copy_to_user((termio)->c_cc, (termios)->c_cc, NCC); \
-})
+static inline int kernel_termios_to_user_termio(struct termio __user *termio,
+                        struct ktermios *termios)
+{
+    struct termio tmpio;
+
+    tmpio.c_iflag = termios->c_iflag;
+    tmpio.c_oflag = termios->c_oflag;
+    tmpio.c_cflag = termios->c_cflag;
+    tmpio.c_lflag = termios->c_lflag;
+    tmpio.c_line = termios->c_line;
+    memcpy(&tmpio.c_cc, termios->c_cc, NCC);
+
+    if (copy_to_user(termio, &tmpio, sizeof(struct termio)) != 0)
+        return -EFAULT;
+
+    return 0;
+}
 
 #define user_termios_to_kernel_termios(k, u) copy_from_user(k, u, sizeof(struct termios))
 #define kernel_termios_to_user_termios(u, k) copy_to_user(u, k, sizeof(struct termios))
