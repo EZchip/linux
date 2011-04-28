@@ -31,10 +31,6 @@ else
     obj-y += time-jiff.o
 endif
 
-ifeq ($(CONFIG_EARLY_PRINTK),y)
-    obj-y += early_printk.o
-endif
-
 obj-m		:=
 obj-n		:=
 obj-		:=
