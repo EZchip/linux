@@ -75,7 +75,7 @@ pmd_populate(struct mm_struct *mm, pmd_t *pmd, pgtable_t ptep)
 
 #define PTE_ORDER 0
 
-extern __inline__ pgd_t *get_pgd_slow(void)
+static inline pgd_t *get_pgd_slow(void)
 {
     int num, num2;
     pgd_t *ret = (pgd_t *)__get_free_page(GFP_KERNEL);
@@ -94,7 +94,7 @@ extern __inline__ pgd_t *get_pgd_slow(void)
     return ret;
 }
 
-extern __inline__ void free_pgd_slow(pgd_t *pgd)
+static inline void free_pgd_slow(pgd_t *pgd)
 {
         free_page((unsigned long)pgd);
 }

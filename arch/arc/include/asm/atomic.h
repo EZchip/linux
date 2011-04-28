@@ -167,7 +167,7 @@ static __inline__ int atomic_dec_and_test(volatile atomic_t *v)
     return result;
 }
 
-extern __inline__ int atomic_add_negative(int i, volatile atomic_t *v)
+static __inline__ int atomic_add_negative(int i, volatile atomic_t *v)
 {
     unsigned long flags;
     int result;

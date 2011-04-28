@@ -36,6 +36,9 @@ ifndef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS  += -O3
 endif
 
+# vineetg Oct 2010: ARC GCC 4.4.2 supports section anchors
+KBUILD_CFLAGS		+=	$(call cc-ifversion, -gt, 0402, -fsection-anchors)
+
 # vineetg, Oct 2009
 # Low level event tracing is sort of crude, as it relies on visualisation
 # of log-buffer as a global array in Metaware debugger's "globals" Pane and
@@ -52,11 +55,6 @@ endif
 MODFLAGS	+= -mlong-calls
 
 KBUILD_CFLAGS	+= $(shell if [ $(call cc-version, $(CC)) -gt 0400 ] ; then echo $(call cc-option,-mno-sdata); fi ;)
-
-gcc-ver := $(call cc-version, $(CC))
-ifeq ($(gcc-ver), 0304)
-KBUILD_CFLAGS		+= -fno-unit-at-a-time
-endif
 
 ifeq ($(CONFIG_DEBUG_INFO),y)
 KBUILD_CFLAGS		+= -O1 -gdwarf-2
