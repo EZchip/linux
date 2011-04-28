@@ -1,6 +1,15 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ *
+ * vineetg: March 2010
+ *  -Rewrote atomic/non-atomic test_and_(set|clear|change)_bit and
+ *           (set|clear|change)_bit APIs
+ *  -Removed the redundant loads due to multiple ops on volatile args
+ *  -Convert non-atomic APIs to "C" for better insn scheduling
+ *  -take adv of fact that ARC bit fidding insn (bset/bclr/asl) etc only
+ *   use bottom 5 bits of bit pos, avoiding the need to mask them off
+ *
  * vineetg: March 2010
  *  -optimised ARC versions of ffz, ffs, fls
  *  -fls in particular is now loopless based on ARC norm insn
@@ -46,11 +55,15 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 #if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
+// TODO does this affect uni-processor code
+#define smp_mb__before_clear_bit()  barrier()
+#define smp_mb__after_clear_bit()   barrier()
+
 static inline void
-set_bit(unsigned long nr, volatile void * addr)
+set_bit(unsigned long nr, volatile unsigned long * m)
 {
     unsigned long temp, flags;
-    int *m = ((int *) addr) + (nr >> 5);
+    m += nr >> 5;
 
     bitops_lock(flags);
 
@@ -64,241 +77,209 @@ set_bit(unsigned long nr, volatile void * addr)
     bitops_unlock(flags);
 }
 
-/*
- * WARNING: non atomic version.
- */
 static inline void
-__set_bit(unsigned long nr, volatile void * addr)
+__set_bit(unsigned long nr, volatile unsigned long * m)
 {
-  unsigned long temp;
-  int *m = ((int *) addr) + (nr >> 5);
+    unsigned long temp;
+    m += nr >> 5;
 
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bset %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    temp = *m;
+    *m = temp | (1UL << nr);
 }
 
-// TODO does this affect uni-processor code
-
-#define smp_mb__before_clear_bit()  barrier()
-#define smp_mb__after_clear_bit()   barrier()
-
 static inline void
-clear_bit(unsigned long nr, volatile void * addr)
+clear_bit(unsigned long nr, volatile unsigned long * m)
 {
-  unsigned long temp, flags;
-  int *m = ((int *) addr) + (nr >> 5);
+    unsigned long temp, flags;
+    m += nr >> 5;
 
-  bitops_lock(flags);
+    bitops_lock(flags);
 
-  __asm__ __volatile__(
+    __asm__ __volatile__(
        "    ld%U3 %0,%3\n\t"
        "    bclr %0,%0,%2\n\t"
        "    st%U1 %0,%1\n\t"
        :"=&r" (temp), "=o" (*m)
        :"Ir" (nr), "m" (*m));
 
-  bitops_unlock(flags);
+    bitops_unlock(flags);
 }
 
 
 static inline void
-__clear_bit(unsigned long nr, volatile void * addr)
+__clear_bit(unsigned long nr, volatile unsigned long * m)
 {
-  unsigned long temp;
-  int *m = ((int *) addr) + (nr >> 5);
+    unsigned long temp;
+    m += nr >> 5;
 
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bclr %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
-}
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
 
-/*
- * WARNING: non atomic version.
- */
-static inline void
-__change_bit(unsigned long nr, volatile void * addr)
-{
-  unsigned long temp;
-  int *m = ((int *) addr) + (nr >> 5);
-
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bxor %0,%0,%2\n\t"
-       "    st%U1 %0,%1"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
+    temp = *m;
+    *m = temp & ~(1UL << (nr & 0x1f));
 }
 
 static inline void
-change_bit(unsigned long nr, volatile void * addr)
+change_bit(unsigned long nr, volatile unsigned long * m)
 {
-  unsigned long temp, flags;
-  int *m = ((int *) addr) + (nr >> 5);
+    unsigned long temp, flags;
+    m += nr >> 5;
 
-  bitops_lock(flags);
+    bitops_lock(flags);
 
-  __asm__ __volatile__(
+    __asm__ __volatile__(
        "    ld%U3 %0,%3\n\t"
        "    bxor %0,%0,%2\n\t"
        "    st%U1 %0,%1\n\t"
        :"=&r" (temp), "=o" (*m)
        :"Ir" (nr), "m" (*m));
 
-  bitops_unlock(flags);
+    bitops_unlock(flags);
+}
+
+static inline void
+__change_bit(unsigned long nr, volatile unsigned long * m)
+{
+    unsigned long temp;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    temp = *m;
+    *m = temp ^ (1UL << (nr & 0x1f));
 }
 
 static inline int
-test_and_set_bit(unsigned long nr, volatile void *addr)
+test_and_set_bit(unsigned long nr, volatile unsigned long *m)
 {
-  unsigned long temp, flags;
-  int *m = ((int *) addr) + (nr >> 5);
-  // int old = *m; This is wrong, we are reading data before getting lock
-  int old;
+    unsigned long old, temp, flags;
+    m += nr >> 5;
+    // int old = *m; This is wrong, we are reading data before getting lock
 
-  bitops_lock(flags);
+    bitops_lock(flags);
 
-  old = *m;
+    old = *m;
 
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bset  %0,%0,%2\n\t"
+    __asm__ __volatile__(
+       "    bset  %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
+       :"=r" (temp), "=o" (*m)
+       :"Ir" (nr), "r"(old));
 
-  bitops_unlock(flags);
+    bitops_unlock(flags);
 
-  return (old & (1 << (nr & 0x1f))) != 0;
-}
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
 
-/*
- * WARNING: non atomic version.
- */
-static inline int
-__test_and_set_bit(unsigned long nr, volatile void * addr)
-{
-  unsigned long temp;
-  int *m = ((int *) addr) + (nr >> 5);
-  int old = *m;
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bset  %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
-
-  return (old & (1 << (nr & 0x1f))) != 0;
+    return (old & (1 << nr)) != 0;
 }
 
 static inline int
-test_and_clear_bit(unsigned long nr, volatile void * addr)
+__test_and_set_bit(unsigned long nr, volatile unsigned long * m)
 {
-  unsigned long temp, flags;
-  int *m = ((int *) addr) + (nr >> 5);
-  int old;
+    unsigned long old;
+    m += nr >> 5;
 
-  bitops_lock(flags);
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
 
-  old = *m;
+    old = *m;
+    *m = old | (1 << nr);
 
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bclr  %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
-
-  bitops_unlock(flags);
-
-  return (old & (1 << (nr & 0x1f))) != 0;
-}
-
-/*
- * WARNING: non atomic version.
- */
-static inline int
-__test_and_clear_bit(unsigned long nr, volatile void * addr)
-{
-  unsigned long temp;
-  int *m = ((int *) addr) + (nr >> 5);
-  int old = *m;
-
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bclr  %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
-
-  return (old & (1 << (nr & 0x1f))) != 0;
-}
-
-/*
- * WARNING: non atomic version.
- */
-static inline int
-__test_and_change_bit(unsigned long nr, volatile void * addr)
-{
-  unsigned long temp;
-  int *m = ((int *) addr) + (nr >> 5);
-  int old = *m;
-
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bxor %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
-
-  return (old & (1 << (nr & 0x1f))) != 0;
+    return (old & (1 << nr)) != 0;
 }
 
 static inline int
-test_and_change_bit(unsigned long nr, volatile void * addr)
+test_and_clear_bit(unsigned long nr, volatile unsigned long * m)
 {
-  unsigned long temp, flags;
-  int *m = ((int *) addr) + (nr >> 5);
-  int old;
+    unsigned long temp, old, flags;
+    m += nr >> 5;
 
-  bitops_lock(flags);
+    bitops_lock(flags);
 
-  old = *m;
+    old = *m;
 
-  __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bxor %0,%0,%2\n\t"
+    __asm__ __volatile__(
+       "    bclr  %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
+       :"=r" (temp), "=o" (*m)
+       :"Ir" (nr), "r"(old));
 
-  bitops_unlock(flags);
+    bitops_unlock(flags);
 
-  return (old & (1 << (nr & 0x1f))) != 0;
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    return (old & (1 << nr)) != 0;
+}
+
+static inline int
+__test_and_clear_bit(unsigned long nr, volatile unsigned long * m)
+{
+    unsigned long old;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    old = *m;
+    *m = old & ~(1UL << (nr & 0x1f));
+
+    return (old & (1 << nr)) != 0;
+}
+
+static inline int
+test_and_change_bit(unsigned long nr, volatile unsigned long * m)
+{
+    unsigned long temp, old, flags;
+    m += nr >> 5;
+
+    bitops_lock(flags);
+
+    old = *m;
+
+    __asm__ __volatile__(
+       "    bxor %0,%3,%2\n\t"
+       "    st%U1 %0,%1\n\t"
+       :"=r" (temp), "=o" (*m)
+       :"Ir" (nr), "r"(old));
+
+    bitops_unlock(flags);
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    return (old & (1 << nr)) != 0;
+}
+
+static inline int
+__test_and_change_bit(unsigned long nr, volatile unsigned long * m)
+{
+    unsigned long old;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    old = *m;
+    *m = old ^ (1 << nr);
+
+    return (old & (1 << nr)) != 0;
 }
 
 /*
  * This routine doesn't need to be atomic.
  */
-static inline int __constant_test_bit(int nr, const volatile void * addr)
+static inline int __constant_test_bit(unsigned int nr, const volatile unsigned long * addr)
 {
-       return ((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
+    return ((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
 }
 
-static inline int __test_bit(int nr, const volatile void * addr)
+static inline int __test_bit(unsigned int nr, const volatile unsigned long * addr)
 {
-    int     * a = (int *) addr;
-    int mask;
+    unsigned long mask;
 
-    a += nr >> 5;
-    mask = 1 << (nr & 0x1f);
-    return ((mask & *a) != 0);
+    addr += nr >> 5;
+
+    // take adv of ARC700 feature which only considers 5 bits in bit-fiddling insn
+    mask = 1 << nr;
+
+    return ((mask & *addr) != 0);
 }
 
 #define test_bit(nr,addr) \
