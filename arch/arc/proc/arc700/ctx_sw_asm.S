@@ -14,10 +14,12 @@
 ;################### Low Level Context Switch ##########################
 
 .macro ARC_SCHED_FUNC x
-	.section .sched.text
-	.align 4
-	.global	SYMBOL_NAME(\x)
-	.type   SYMBOL_NAME(\x), @function
+    ; By having the code placed in .sched.text section, incorrect addresses are
+    ; generated for symbols in the final image. eg: _current_task in __switch_to
+    ; .section .sched.text
+    .align 4
+    .global SYMBOL_NAME(\x)
+    .type   SYMBOL_NAME(\x), @function
 SYMBOL_NAME_LABEL(\x)
 .endm
 
