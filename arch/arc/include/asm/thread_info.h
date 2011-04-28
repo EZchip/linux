@@ -1,4 +1,13 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2009-2010
+ *
+ * Vineetg: Oct 2009
+ *  No need for ARC specific thread_info allocator (kmalloc/free). This is
+ *  anyways one page allocation, thus slab alloc can be short-circuited and
+ *  the generic version (get_free_page) would be loads better.
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com)
  *
  *
@@ -31,6 +40,7 @@
 #ifdef __KERNEL__
 
 #include <asm/page.h>
+
 #define THREAD_SIZE_ORDER 1
 #ifdef CONFIG_16KSTACKS
 #define THREAD_SIZE     (PAGE_SIZE << 1)
@@ -97,11 +107,6 @@ static inline struct thread_info *current_thread_info(void)
     register unsigned long sp asm ("sp");
     return (struct thread_info *)(sp & ~(THREAD_SIZE - 1));
 }
-
-/* thread information allocation */
-#define __HAVE_ARCH_THREAD_INFO_ALLOCATOR
-#define alloc_thread_info(tsk) kmalloc(THREAD_SIZE, GFP_KERNEL)
-#define free_thread_info(info) kfree(info)
 
 #else /*  __ASSEMBLY__ */
 
