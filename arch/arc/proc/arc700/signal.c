@@ -190,10 +190,11 @@ static int restore_sigframe(struct pt_regs *regs, struct sigframe __user * sf)
     }
 
     {
-        void *dst_end = &(regs->r0);
         void *dst_start = &(regs->bta);
+        const int sz1 = (void *)&(((struct pt_regs *)0)->r0) -
+                        (void *)&(((struct pt_regs *)0)->bta) + 4;
+
         void *src_start = &(sf->uc.uc_mcontext.bta);
-        unsigned int sz1 = dst_end - dst_start + 4;
         err |= __copy_from_user(dst_start, src_start, sz1);
     }
 
@@ -312,12 +313,12 @@ setup_sigframe(struct sigframe __user * sf, struct pt_regs *regs,
            sigset_t * set)
 {
     int err;
-    void *src_end = &(regs->r0);
-    void *src_start = &(regs->bta);
     void *dst_start = &(sf->uc.uc_mcontext.bta);
+    void *src_start = &(regs->bta);
 
     /* bta to r0 is laid out same in both pt_regs and sigcontext */
-    unsigned int sz1 = src_end - src_start + 4;
+    const int sz1 = (void *)&(((struct pt_regs *)0)->r0) -
+                        (void *)&(((struct pt_regs *)0)->bta) + 4;
 
     /* Bulk Copy the part of reg file which is common in layout in
      * both the structs
