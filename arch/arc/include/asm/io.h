@@ -249,6 +249,9 @@ static inline __deprecated void *bus_to_virt(unsigned long address)
 #define iowrite32_rep(a,s,c)   outsl((a),(s),(c))
 #define ioread32_rep(a,d,c)   insl((a),(d),(c))
 
+#define mmiowb()
+
+
 /* Create a virtual mapping cookie for an IO port range */
 extern void __iomem *ioport_map(unsigned long port, unsigned int nr);
 extern void ioport_unmap(void __iomem *);
