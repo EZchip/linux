@@ -202,17 +202,17 @@ static inline int pte_file(pte_t pte)	{ return pte_val(pte) & _PAGE_FILE; }
 
 #define pfn_pte(pfn,prot)	(__pte(((pfn) << PAGE_SHIFT) | pgprot_val(prot)))
 
-#define __pte_offset(address)						\
-	(((address) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
-
 #define __pte_index(addr)	(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
 
-#define pte_offset_kernel(dir,addr)	((pte_t *)pmd_page_vaddr(*(dir)) + __pte_index(addr))
-#define pte_offset_map(dir,addr)	((pte_t *)pmd_page_vaddr(*(dir)) + __pte_index(addr))
-#define pte_offset_map_nested(dir,addr)	((pte_t *)pmd_page_vaddr(*(dir)) + __pte_index(addr))
+/* pte_offset gets a @ptr to PMD entry (PGD in our 2-tier paging system)
+   and returns ptr to PTE entry corresponding to @addr
+ */
+#define pte_offset(dir, address) ((pte_t *) (pmd_page_vaddr(*dir)) + __pte_index(address))
 
-#define pte_offset(dir, address)					\
-	((pte_t *) (pmd_page_vaddr(*dir)) + __pte_offset(address))
+/* No mapping of Page Tables in high mem etc, so following same as above */
+#define pte_offset_kernel(dir,addr) pte_offset(dir, addr)
+#define pte_offset_map(dir,addr) pte_offset(dir, addr)
+#define pte_offset_map_nested(dir,addr) pte_offset(dir, addr)
 
 static inline pte_t pte_wrprotect(pte_t pte)
 {
