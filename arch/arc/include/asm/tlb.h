@@ -23,17 +23,11 @@
 #ifndef _ASM_ARC_TLB_H
 #define _ASM_ARC_TLB_H
 
+#ifdef __KERNEL__
+
 /* Build option For chips with Metal Fix */
 /* #define METAL_FIX  1 */
 #define METAL_FIX  0
-
-
-/*
- * .. because we flush the whole mm when it fills up.
- */
-#define tlb_flush(tlb) local_flush_tlb_mm((tlb)->mm)
-
-
 
 #define TLB_SIZE 256                    // Num of TLB Entries in ARC700 MMU
 #define ENTIRE_TLB_MAP  (TLB_SIZE * PAGE_SIZE)  // addr space mapped by TLB
@@ -77,12 +71,17 @@
                              _PAGE_EXECUTE | _PAGE_WRITE | _PAGE_READ | \
                              _PAGE_K_EXECUTE | _PAGE_K_WRITE | _PAGE_K_READ)
 
+/* MMU PID Register contains 1 bit for MMU Enable and 8 bits of ASID */
+#define MMU_ENABLE          0x80000000
+#define ASID_EXTRACT_MASK   (~MMU_ENABLE)
+
 #ifndef __ASSEMBLY__
+
 void tlb_init(void);
 void tlb_find_asid(unsigned int asid);
-#endif
 
-/* Sameer: Do nothing as in MIPS */
+#define tlb_flush(tlb) local_flush_tlb_mm((tlb)->mm)
+
 #define tlb_start_vma(tlb, vma)                 \
     do {                            \
         if (!tlb->fullmm)               \
@@ -93,13 +92,11 @@ void tlb_find_asid(unsigned int asid);
 
 #define __tlb_remove_tlb_entry(tlb, ptep, address) do { } while (0)
 
-#ifndef __ASSEMBLY__
 #include <linux/pagemap.h>
 #include <asm-generic/tlb.h>
 #endif
 
-/* MMU PID Register contains 1 bit for MMU Enable and 8 bits of ASID */
-#define MMU_ENABLE          0x80000000
-#define ASID_EXTRACT_MASK   (~MMU_ENABLE)
+
+#endif
 
 #endif  /* _ASM_ARC_TLB_H */
