@@ -203,4 +203,5 @@ static inline void serio_continue_rx(struct serio *serio)
 #define SERIO_PS2MULT	0x3c
 #define SERIO_TSC40	0x3d
 
+#define SERIO_DMC_FIT10	0x3c
 #endif

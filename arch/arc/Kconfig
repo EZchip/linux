@@ -309,6 +309,7 @@ config TIMER_LV2
 config ARC_PS2
         bool "ARC PS/2 support"
         default n
+	depends on SERIO
         help
         ARC FPGA Peripherals PS/2 support. Driver currently works only
         on AA4 board.
