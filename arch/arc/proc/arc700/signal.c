@@ -1,6 +1,14 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: June 2010:
+ *  =Reducing gen code footprint of do_signal which is getting bloated up
+ *   due to gcc doing inlining of static fns in this file.
+ *      -Synth sigret stub gen function now a seperate fn (never called)
+ *       Will get rid of it altogether at some point
+ *      -setup_rt_frame, create_sigret_stub, set_frame_exec forced noinline
+ *       as they are never called in practise
+ *
  * vineetg: Nov 2009 (Everything needed for TIF_RESTORE_SIGMASK)
  *  -do_signal() supports TIF_RESTORE_SIGMASK
  *  -do_signal() no loner needs oldset, required by OLD sys_sigsuspend
@@ -85,10 +93,9 @@
 
 #define EXEC_DISABLE 0
 #define EXEC_ENABLE 1
-void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
-               int exec_or_not);
 
-void set_frame_exec(unsigned long vaddr, unsigned int exec_enable);
+static void noinline
+set_frame_exec(unsigned long vaddr, unsigned int exec_enable);
 
 
 /*
@@ -287,7 +294,7 @@ asmlinkage int sys_rt_sigreturn(struct pt_regs *regs)
         goto badframe;
 
     /* If C-lib provided userland sigret stub, no need to do anything */
-    if (MAGIC_USERLAND_STUB != sigret_magic) {
+    if (unlikely(MAGIC_USERLAND_STUB != sigret_magic)) {
 
         /* If it's kernel sythesized sigret stub, need to undo
          *  the PTE/TLB changes for making stack executable
@@ -357,31 +364,12 @@ static inline void *get_sigframe(struct k_sigaction *ka, struct pt_regs *regs,
     return frame;
 }
 
-/* Set up to return from userspace signal handler back into kernel */
 static int noinline
-setup_ret_from_usr_sighdlr(struct k_sigaction *ka, struct pt_regs *regs,
-                    struct sigframe __user *frame)
+create_sigret_stub(struct k_sigaction *ka, struct pt_regs *regs,
+                    struct sigframe __user *frame, unsigned long *retcode)
 {
-    unsigned long *retcode;
-    int err = 0;
-
-    /* Setup for returning from signal handler(USER Mode => KERNEL Mode)*/
-
-    /* If provided, use a stub already in userspace */
-    if (ka->sa.sa_flags & SA_RESTORER) {
-        retcode = (unsigned long *)ka->sa.sa_restorer;
-        err = __put_user(MAGIC_USERLAND_STUB, &frame->sigret_magic);
-        if (err)
-            return err;
-    }
-    else {  /* Note that with uClibc providing userland sigreturn stub,
-               this code is more of a legacy and will not be executed.
-               The really bad part was flushing the TLB and caches which
-               we no longer have to do
-             */
         unsigned int code;
-
-        retcode = frame->retcode;
+        int err;
 
         /* A7 is middle endian ! */
         if (ka->sa.sa_flags & SA_SIGINFO)
@@ -405,7 +393,35 @@ setup_ret_from_usr_sighdlr(struct k_sigaction *ka, struct pt_regs *regs,
      * execute permissions of the stack: In the pte entry and in the TLB entry.
      */
         set_frame_exec((unsigned long)retcode, EXEC_ENABLE);
+        return 0;
+}
+
+/* Set up to return from userspace signal handler back into kernel */
+static int
+setup_ret_from_usr_sighdlr(struct k_sigaction *ka, struct pt_regs *regs,
+                    struct sigframe __user *frame)
+{
+    unsigned long *retcode;
+    int err = 0;
+
+    /* Setup for returning from signal handler(USER Mode => KERNEL Mode)*/
+
+    /* If provided, use a stub already in userspace */
+    if (likely(ka->sa.sa_flags & SA_RESTORER)) {
+        retcode = (unsigned long *)ka->sa.sa_restorer;
+        err = __put_user(MAGIC_USERLAND_STUB, &frame->sigret_magic);
     }
+    else {  /* Note that with uClibc providing userland sigreturn stub,
+               this code is more of a legacy and will not be executed.
+               The really bad part was flushing the TLB and caches which
+               we no longer have to do
+             */
+        retcode = frame->retcode;
+        err = create_sigret_stub(ka, regs, frame, retcode);
+    }
+
+    if (err)
+        return err;
 
     /* Modify critical regs, so that when control goes back to user-mode
      * it starts executing the user space Signal handler and when that handler
@@ -451,8 +467,9 @@ static int setup_frame(int sig, struct k_sigaction *ka,
     return err;
 }
 
-static int setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t * info,
-               sigset_t * set, struct pt_regs *regs)
+static int noinline
+setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t * info,
+    sigset_t * set, struct pt_regs *regs)
 {
     struct rt_sigframe __user *rt_frame;
     stack_t stack;
@@ -526,7 +543,7 @@ handle_signal(unsigned long sig, struct k_sigaction *ka,
         usig = thread->exec_domain->signal_invmap[usig];
 
     /* Set up the stack frame */
-    if (ka->sa.sa_flags & SA_SIGINFO)
+    if (unlikely(ka->sa.sa_flags & SA_SIGINFO))
         ret = setup_rt_frame(usig, ka, info, oldset, regs);
     else
         ret = setup_frame(usig, ka, oldset, regs);
@@ -611,7 +628,8 @@ no_signal:
     }
 }
 
-void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
+static void noinline
+mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
                int exec_or_not)
 {
     unsigned long frame_tlbpd1;
@@ -649,7 +667,8 @@ void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
 }
 
 
-void set_frame_exec(unsigned long vaddr, unsigned int exec_enable)
+static void noinline
+set_frame_exec(unsigned long vaddr, unsigned int exec_enable)
 {
     unsigned long paddr, vaddr_pg, off_from_pg_start;
     pgd_t *pgdp;
