@@ -1,6 +1,12 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ * Vineetg: Oct 1009
+ *  -In a rare scenario, Process gets a Priv-V exception and gets scheduled
+ *   out. Since we don't do FAKE RTIE for Priv-V, CPU excpetion state remains
+ *   active (AE bit enabled).  This causes a double fault for a subseq valid
+ *   exception. Thus FAKE RTIE needed in low level Priv-Violation handler.
+ *   Instr Error could also cause similar scenario, so same there as well.
  *
  * Vineetg: July 2009
  *  -Removed CONFIG_ARC_USER_FAULTS_DEBUG (dumping regs in case of fatal
@@ -322,6 +328,9 @@ ARC_ENTRY instr_service
     lr  r1, [efa]
 
     mov r2, sp
+
+    FAKE_RET_FROM_EXCPN r9
+
     bl  do_instruction_error
     j   ret_from_user_faults
 
@@ -457,6 +466,8 @@ ARC_ENTRY EV_PrivilegeV
     lr  r0, [ecr]
     lr  r1, [efa]
     mov r2, sp
+
+    FAKE_RET_FROM_EXCPN r9
 
     bl  do_privilege_fault
     j   ret_from_user_faults
