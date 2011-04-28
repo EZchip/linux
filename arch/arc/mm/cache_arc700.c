@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: Dec 2010
+ *  -Off-by-one error when computing num_of_lines to flush
+ *   This broke signal handling with bionic which uses synthetic sigret stub
+ *
  * vineetg: Mar 2010
  *  -GCC can't generate ZOL for core cache flush loops.
  *   Conv them into iterations based as opposed to while (start < end) types
@@ -305,10 +309,10 @@ static inline void __arc_dcache_entire_op(int aux_reg, int cacheop)
 
 static inline void __arc_dcache_per_line_op(unsigned long start, unsigned long sz, int aux_reg)
 {
-    int num_lines = sz/DCACHE_COMPILE_LINE_LEN;
+    // round off non-line sized flushes correctly
+    int num_lines = (sz + DCACHE_COMPILE_LINE_LEN - 1)/DCACHE_COMPILE_LINE_LEN;
 
     /* If @start address is not cache line aligned, do so.
-     * This also means 1 extra line to be flushed
      *
      * However instead of doing this unconditionally, we can optimise a bit.
      * Page sized flush ops can be assumed to begin on a cache line (if not
@@ -317,8 +321,7 @@ static inline void __arc_dcache_per_line_op(unsigned long start, unsigned long s
      * function is inline, gcc can do "constant propagation" and compile away
      * the entire alignment code block.
      *      -outer "if" will be eliminated by constant propagation
-     *     -Since outer "if" will compile time evaluate to false,
-     *      inner block will be thrown away as well
+     *      -this automatically eliminates inner block as dead code
      *
      * However when @sz is not constant, the exta size check is superflous
      * as we want to unconditionally do the aligment check, hence the
@@ -327,7 +330,6 @@ static inline void __arc_dcache_per_line_op(unsigned long start, unsigned long s
     if ( ! __builtin_constant_p(sz) || sz != PAGE_SIZE ) {
         if (start & ~DCACHE_LINE_MASK) {
             start &= DCACHE_LINE_MASK;
-            num_lines++;
         }
     }
 
@@ -489,12 +491,11 @@ static void __arc_icache_inv_lines_64k(unsigned long start, int num_lines)
 static void __arc_icache_inv_lines(unsigned long start, unsigned long sz)
 {
     unsigned long flags;
-    int num_lines = sz / ICACHE_COMPILE_LINE_LEN;
+    int num_lines = (sz + ICACHE_COMPILE_LINE_LEN - 1)/ICACHE_COMPILE_LINE_LEN;
 
     if ( ! __builtin_constant_p(sz) || sz != PAGE_SIZE ) {
         if (start & ~ICACHE_LINE_MASK) {
             start &= ICACHE_LINE_MASK;
-            num_lines++;
         }
     }
 
