@@ -193,12 +193,20 @@ ex_saved_reg1:
     or.nz   r2, r2, _PAGE_WRITE     ; If Write access, chk if Write flag in PTE
                                     ; Above laddering takes care of XCHG access
                                     ;   which is both Read and Write
+
+    ; If kernel mode access, ; make _PAGE_xx flags as _PAGE_K_xx
+    ; This code doesn't hit, when exception happens in kernel mode, when
+    ; doing copy_to_user( ), as EFA would still have the user mode address
+    ; ( < 0x7000_0000) where kernel faulted.
+    ; This is correct, since there is nothing in user mode which kernel can't access.
+    ; What this checks for is faults in vmalloc region (0x7000_0000 to 0x7FFF_FFFF)
+
     lr      r3, [efa]
     cmp     r3, VMALLOC_START - 1   ; If kernel mode access
     asl.hi  r2, r2, 3               ; make _PAGE_xx flags as _PAGE_K_xx
     or      r2, r2, _PAGE_PRESENT   ; Common flag for K/U mode
 
-    ; r2 setup with all the Flags we need to check in PTE
+    ; By now, r2 setup with all the Flags we need to check in PTE
     and     r3, r0, r2              ; Mask out NON Flag bits from PTE
     brne.d  r3, r2, do_slow_path_pf ; check ( ( pte & flags_test ) == flags_test )
 .endm
@@ -386,6 +394,12 @@ ARC_ENTRY EV_TLBMissI
 
     SAVE_TEMP
 
+#ifdef CONFIG_ARC_TLB_PROFILE
+    ld  r0, [numitlb]
+    add r0, r0, 1
+    st  r0, [numitlb]
+#endif
+
     LOAD_PTE
 
     ; Check if PTE flags approp for executing code
@@ -415,6 +429,12 @@ ARC_EXIT EV_TLBMissI
 ARC_ENTRY EV_TLBMissD
 
     SAVE_TEMP
+
+#ifdef CONFIG_ARC_TLB_PROFILE
+    ld  r0, [numdtlb]
+    add r0, r0, 1
+    st  r0, [numdtlb]
+#endif
 
     ; Get the PTE corresponding to V-addr accessed
     ; If PTE exists, it will setup, r0 = PTE, r1 = Ptr to PTE

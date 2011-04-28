@@ -201,41 +201,90 @@ void print_var_on_irq(int irq, int in_or_out, uint addr, uint val)
 static struct dentry *test_dentry;
 static struct dentry *test_dir;
 static struct dentry *test_u32_dentry;
-static u32 value = 42;
 
-static ssize_t example_read_file(struct file *file, char __user *user_buf,
-                    size_t count, loff_t *ppos)
+u32 clr_on_read = 1;
+
+#ifdef CONFIG_ARC_TLB_PROFILE
+u32 numitlb, numdtlb, num_pte_not_present;
+
+static int fill_display_data(char *kbuf)
 {
-    char buf[10];
+    size_t num = 0;
+    num += sprintf(kbuf+num, "I-TLB Miss %x\n", numitlb);
+    num += sprintf(kbuf+num, "D-TLB Miss %x\n", numdtlb);
+    num += sprintf(kbuf+num, "PTE not present %x\n", num_pte_not_present);
 
-    sprintf(buf, "foola\n");
-    return simple_read_from_buffer(user_buf, count, ppos, buf, sizeof(buf));
+    if (clr_on_read)
+        numitlb = numdtlb = num_pte_not_present = 0;
+
+    return num;
 }
 
-static int example_open(struct inode *inode, struct file *file)
+static int tlb_stats_open(struct inode *inode, struct file *file)
 {
+    file->private_data = (void *)__get_free_page(GFP_KERNEL);
     return 0;
 }
 
-static struct file_operations example_file_operations = {
-    .read = example_read_file,
-    .open = example_open,
+/* called on user read(): display the couters */
+static ssize_t tlb_stats_output(
+    struct file *file,      /* file descriptor */
+    char __user *user_buf,  /* user buffer */
+    size_t  len,            /* length of buffer */
+    loff_t *offset)         /* offset in the file */
+{
+    size_t num;
+    char *kbuf = (char *)file->private_data;
+
+    num = fill_display_data(kbuf);
+
+   /* simple_read_from_buffer() is helper for copy to user space
+     It copies up to @2 (num) bytes from kernel buffer @4 (kbuf) at offset
+     @3 (offset) into the user space address starting at @1 (user_buf).
+     @5 (len) is max size of user buffer
+   */
+    return simple_read_from_buffer(user_buf, num, offset, kbuf, len);
+}
+
+/* called on user write : clears the counters */
+static ssize_t tlb_stats_clear(struct file *file, const char __user *user_buf,
+     size_t length, loff_t *offset)
+{
+    numitlb = numdtlb = num_pte_not_present = 0;
+    return  length;
+}
+
+
+static int tlb_stats_close(struct inode *inode, struct file *file)
+{
+    free_page((unsigned long)(file->private_data));
+    return 0;
+}
+
+static struct file_operations tlb_stats_file_ops = {
+    .read = tlb_stats_output,
+    .write = tlb_stats_clear,
+    .open = tlb_stats_open,
+    .release = tlb_stats_close
 };
+#endif
 
-static int __init example_init(void)
+static int __init arc_debugfs_init(void)
 {
-    test_dir = debugfs_create_dir("foo_dir", NULL);
+    test_dir = debugfs_create_dir("arc", NULL);
 
-    test_dentry = debugfs_create_file("foo", 0444, test_dir, NULL,
-                            &example_file_operations);
+#ifdef CONFIG_ARC_TLB_PROFILE
+    test_dentry = debugfs_create_file("tlb_stats", 0444, test_dir, NULL,
+                            &tlb_stats_file_ops);
+#endif
 
-    test_u32_dentry = debugfs_create_u32("foo_u32", 0444, test_dir, &value);
+    test_u32_dentry = debugfs_create_u32("clr_on_read", 0444, test_dir, &clr_on_read);
 
     return 0;
 }
-module_init(example_init);
+module_init(arc_debugfs_init);
 
-static void __exit example_exit(void)
+static void __exit arc_debugfs_exit(void)
 {
     debugfs_remove(test_u32_dentry);
     debugfs_remove(test_dentry);
