@@ -274,29 +274,32 @@ config ARC_BLK_DEV_IDEDMA
         select BLK_DEV_IDEDMA
         depends on ARC_IDE
 
-config ARC700_SERIAL
-        bool "ARC700 UART driver support"
+config ARC_SERIAL
+        bool "ARC UART driver support"
+        select SERIAL_CORE
         default y
 
-config ARC700_NUM_SERIAL_PORTS
+config ARC_SERIAL_NR_PORTS
     int 'Number of ports'
+    range 1 3
     default 1
-    depends on ARC700_SERIAL
+    depends on ARC_SERIAL
 
-config ARC700_SERIAL_BAUD
+config ARC_SERIAL_BAUD
         int "Baud rate"
         default "115200"
-        depends on ARC700_SERIAL
+        depends on ARC_SERIAL
 
-config ARC_UART_CONSOLE
+config ARC_SERIAL_CONSOLE
         bool
+        select SERIAL_CORE_CONSOLE
         depends on !ARC_PGU_CONSOLE
         default y
 
 config SERIAL_LV2
         bool "Configure serial interrupt on level 2"
         default n
-        depends on ARC700_SERIAL && ARCH_ARC_LV2_INTR
+        depends on ARC_SERIAL && ARCH_ARC_LV2_INTR
 
 config TIMER_LV2
         bool "Configure Timer0 interrupt on level 2"

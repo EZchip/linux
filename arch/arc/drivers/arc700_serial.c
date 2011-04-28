@@ -132,7 +132,7 @@ typedef volatile struct {
 /*
  * Define the number of ports supported and their irqs.
  */
-#define NR_PORTS CONFIG_ARC700_NUM_SERIAL_PORTS
+#define NR_PORTS CONFIG_ARC_SERIAL_NR_PORTS
 #if NR_PORTS > 3
 #error ARC Linux supports only 3 UARTS
 #endif
@@ -335,7 +335,7 @@ static int startup(struct arc_serial_dev * info)
         clear_bit(TTY_IO_ERROR, &info->tty->flags);
 
     /* and set the speed of the serial port */
-    change_speed(info,CONFIG_ARC700_SERIAL_BAUD);
+    change_speed(info,CONFIG_ARC_SERIAL_BAUD);
 
     info->flags |= ASYNC_INITIALIZED;
 
@@ -759,7 +759,7 @@ arcserial_set_termios(struct tty_struct *tty, struct ktermios *old_termios)
     if (tty->termios->c_cflag == old_termios->c_cflag)
         return;
 
-    change_speed(info, BASE_BAUD);
+    change_speed(info, CONFIG_ARC_SERIAL_BAUD);
 
     if ((old_termios->c_cflag & CRTSCTS) &&
             !(tty->termios->c_cflag & CRTSCTS)) {
@@ -1167,7 +1167,7 @@ static int __init arcserial_init(void)
     struct arc_serial_dev *info;
     int i;
 
-    serial_driver = alloc_tty_driver(CONFIG_ARC700_NUM_SERIAL_PORTS);
+    serial_driver = alloc_tty_driver(CONFIG_ARC_SERIAL_NR_PORTS);
     if (!serial_driver)
         return -ENOMEM;
 
@@ -1256,7 +1256,7 @@ void unregister_serial(int line)
 module_init(arcserial_init);
 
 
-#ifdef CONFIG_ARC_UART_CONSOLE
+#ifdef CONFIG_ARC_SERIAL_CONSOLE
 
 /******************************************************************************
  *

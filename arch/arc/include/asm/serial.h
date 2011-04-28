@@ -23,8 +23,5 @@
 #ifndef _ASM_ARC_SERIAL_H
 #define _ASM_ARC_SERIAL_H
 
-#define BASE_BAUD CONFIG_ARC700_SERIAL_BAUD
-
-void __init reset_vuart(void);
 
 #endif  /* _ASM_ARC_SERIAL_H */

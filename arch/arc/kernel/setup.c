@@ -74,8 +74,8 @@ struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
 
 unsigned long end_mem = CONFIG_SDRAM_SIZE + CONFIG_LINUX_LINK_BASE;
 unsigned long clk_speed = CONFIG_ARC700_CLK;
-unsigned long serial_baudrate = BASE_BAUD;
-int arc_console_baud = (CONFIG_ARC700_CLK/(BASE_BAUD * 4)) - 1;
+unsigned long serial_baudrate = CONFIG_ARC_SERIAL_BAUD;
+int arc_console_baud = (CONFIG_ARC700_CLK/(CONFIG_ARC_SERIAL_BAUD * 4)) - 1;
 struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
 
 #ifdef CONFIG_ROOT_NFS
@@ -83,7 +83,7 @@ struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
 // Example of NFS root booting.
 char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=172.16.0.196:/shared,nolock ip=dhcp,console=ttyS0" };
 
-#elif defined(CONFIG_ARC_UART_CONSOLE)
+#elif defined(CONFIG_ARC_SERIAL_CONSOLE)
 
 /* with console=tty0, arc uart console will be prefered console and
  * registrations will be successful, otherwise dummy console will be
@@ -521,7 +521,7 @@ static struct init_tags {
     struct tag_clk_speed clk_speed;
     struct tag_header hdr6;
     struct tag_cache cache;
-#ifdef CONFIG_ARC700_SERIAL
+#ifdef CONFIG_ARC_SERIAL
     struct tag_header hdr7;
     struct tag_serial serial;
 #endif
@@ -554,9 +554,9 @@ static struct init_tags {
 
 #endif
 
-#ifdef CONFIG_ARC700_SERIAL
+#ifdef CONFIG_ARC_SERIAL
     {tag_size(tag_serial), ATAG_SERIAL},
-    {0, CONFIG_ARC700_SERIAL_BAUD},
+    {0, CONFIG_ARC_SERIAL_BAUD},
 #endif
 
 #ifdef CONFIG_ARCTANGENT_EMAC
@@ -596,11 +596,6 @@ void __init setup_arch(char **cmdline_p)
 
 #ifdef CONFIG_SMP
     smp_init_cpus();
-#endif
-
-#ifdef CONFIG_ARC700_SERIAL
-    /* FIXME: ARC : temporarily done to reset the vuart */
-    reset_vuart();
 #endif
 
     init_mm.start_code = (unsigned long)&_text;
