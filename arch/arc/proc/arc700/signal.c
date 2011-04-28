@@ -163,8 +163,9 @@ sys_sigaction(int sig, const struct old_sigaction __user * act,
 }
 
 asmlinkage int
-sys_sigaltstack(const stack_t * uss, stack_t * uoss, struct pt_regs *regs)
+sys_sigaltstack(const stack_t * uss, stack_t * uoss)
 {
+    struct pt_regs *regs = task_pt_regs(current);
     return do_sigaltstack(uss, uoss, regs->sp);
 }
 
@@ -214,11 +215,12 @@ static int restore_sigframe(struct pt_regs *regs, struct sigframe __user * sf)
     return err;
 }
 
-asmlinkage int sys_sigreturn(struct pt_regs *regs)
+int sys_sigreturn(void)
 {
     struct sigframe __user *frame;
     unsigned int sigret_magic;
     int err;
+    struct pt_regs *regs = task_pt_regs(current);
 
     /* Always make any pending restarted system calls return -EINTR */
     current_thread_info()->restart_block.fn = do_no_restart_syscall;
@@ -264,11 +266,12 @@ badframe:
     return 0;
 }
 
-asmlinkage int sys_rt_sigreturn(struct pt_regs *regs)
+int sys_rt_sigreturn(void)
 {
     struct rt_sigframe __user *frame;
     unsigned int sigret_magic;
     int err;
+    struct pt_regs *regs = task_pt_regs(current);
 
     /* Always make any pending restarted system calls return -EINTR */
     current_thread_info()->restart_block.fn = do_no_restart_syscall;

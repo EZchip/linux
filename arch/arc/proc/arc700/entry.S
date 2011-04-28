@@ -889,42 +889,6 @@ ARC_ENTRY sys_clone_wrapper
     bz ret_from_system_call
     b  tracesys_exit
 
-ARC_ENTRY sys_rt_sigreturn_wrapper
-    ; copy pointer to pt_regs as a parameter
-    mov  r0, sp
-    bl  SYMBOL_NAME(sys_rt_sigreturn)
-
-    GET_CURR_THR_INFO_FROM_SP   r9
-    ld  r10, [r9, THREAD_INFO_FLAGS]
-    and.f   0, r10, _TIF_SYSCALL_TRACE
-
-    bz ret_from_system_call
-    b  tracesys_exit
-
-ARC_ENTRY sys_sigreturn_wrapper
-    ; copy pointer to pt_regs as a parameter
-    mov  r0, sp
-    bl  SYMBOL_NAME(sys_sigreturn)
-
-    GET_CURR_THR_INFO_FROM_SP   r9
-    ld  r10, [r9, THREAD_INFO_FLAGS]
-    and.f   0, r10, _TIF_SYSCALL_TRACE
-
-    bz ret_from_system_call
-    b  tracesys_exit
-
-ARC_ENTRY sys_sigaltstack_wrapper
-    ; copy pointer to pt_regs as a parameter
-    mov  r2, sp
-    bl  SYMBOL_NAME(sys_sigaltstack)
-
-    GET_CURR_THR_INFO_FROM_SP   r9
-    ld  r10, [r9, THREAD_INFO_FLAGS]
-    and.f   0, r10, _TIF_SYSCALL_TRACE
-
-    bz ret_from_system_call
-    b  tracesys_exit
-
 ;################### Sys Call Table ##########################
 
 ; The syscall table starts here...
@@ -1050,7 +1014,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_sysinfo)
         .long   SYMBOL_NAME(sys_ipc)
         .long   SYMBOL_NAME(sys_fsync)
-        .long   SYMBOL_NAME(sys_sigreturn_wrapper)
+        .long   SYMBOL_NAME(sys_sigreturn)
 /* 120 */   .long   SYMBOL_NAME(sys_clone_wrapper)
         .long   SYMBOL_NAME(sys_setdomainname)
         .long   SYMBOL_NAME(sys_newuname)
@@ -1104,7 +1068,7 @@ __syscall_start:
  /* 170 */  .long   SYMBOL_NAME(sys_setresgid16)
         .long   SYMBOL_NAME(sys_getresgid16)
         .long   SYMBOL_NAME(sys_prctl)
-        .long   SYMBOL_NAME(sys_rt_sigreturn_wrapper)
+        .long   SYMBOL_NAME(sys_rt_sigreturn)
         .long   SYMBOL_NAME(sys_rt_sigaction)
  /* 175 */  .long   SYMBOL_NAME(sys_rt_sigprocmask)
         .long   SYMBOL_NAME(sys_rt_sigpending)
@@ -1117,7 +1081,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_getcwd)
         .long   SYMBOL_NAME(sys_capget)
  /* 185 */  .long   SYMBOL_NAME(sys_capset)
-        .long   SYMBOL_NAME(sys_sigaltstack_wrapper)
+        .long   SYMBOL_NAME(sys_sigaltstack)
         .long   SYMBOL_NAME(sys_sendfile)
         .long   SYMBOL_NAME(sys_ni_syscall)
         .long   SYMBOL_NAME(sys_ni_syscall)
