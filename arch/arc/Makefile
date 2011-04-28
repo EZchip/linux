@@ -120,8 +120,8 @@ maketools: include/linux/version.h FORCE
 	$(Q)$(MAKE) $(build)=arch/$(ARCH)/tools
 
 define arc-create-symlink
-	@echo 'SYMLINK arch/arc/include/asm/board -> arch/arc/include/asm/board-$(PLATFORM)'; \
-	ln -fsn board-$(PLATFORM) arch/arc/include/asm/board;
+	@echo 'SYMLINK arch/arc/include/asm/board -> ${src}/arch/arc/include/asm/board-$(PLATFORM)'; \
+	ln -fsn board-$(PLATFORM) ${src}/arch/arc/include/asm/board;
 endef
 
 arch/arc/include/asm/board: FORCE
