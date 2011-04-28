@@ -22,7 +22,7 @@ void noinline print_reg_file(unsigned long *last_reg, int num)
     unsigned int i;
 
     for (i = num; i < num + 13; i++) {
-        printk("r%02u: %08lx\t", i, *last_reg);
+        printk("r%02u: 0x%08lx\t", i, *last_reg);
         if ( ( (i+1) % 3) == 0 ) printk("\n");
         last_reg--;
     }
@@ -34,6 +34,14 @@ void show_regs(struct pt_regs *regs)
 
     if (current->thread.cause_code)
         show_ecr_verbose(regs);
+
+    /* print special regs */
+    printk("status32: 0x%08lx\n", regs->status32);
+    printk("sp: 0x%08lx\tfp: 0x%08lx\n", regs->sp, regs->fp);
+    printk("ret: 0x%08lx\tblink: 0x%08lx\tbta: 0x%08lx\n",
+            regs->ret, regs->blink, regs->bta);
+    printk("LPS: 0x%08lx\tLPE: 0x%08lx\tLPC: 0x%08lx \n",
+            regs->lp_start, regs->lp_end, regs->lp_count);
 
     /* print regs->r0 thru regs->r12
      * Sequential printing was generating horrible code

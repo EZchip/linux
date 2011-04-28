@@ -41,6 +41,16 @@
 
 #ifdef CONFIG_ARC_DBG_EVENT_TIMELINE
 
+/* current on ARC is a register variable "r25" setup on entry to kernel and
+   restored back to user value on return.
+   However if the event snap hostting return is called very late from
+   ISR/EXception return code, r25 might already have been restored to user
+   value, hence would no longer point to current task. This can cause weird
+   de-referencing crashes. Safest option is to undef it and instead define
+   it in terms of current_thread_info() which is derived from SP
+*/
+#undef current
+#define current (current_thread_info()->task)
 
 /* Log buffer which stores the event info
  *
@@ -82,7 +92,7 @@ void take_snap(int event, unsigned int arg1, unsigned int arg2)
 
 void take_snap2(int event)
 {
-    unsigned long x, flags, stat32;
+    unsigned long x, flags=0, stat32;
 
     stat32 = read_new_aux_reg(0xa);  //status32
 
@@ -93,7 +103,7 @@ void take_snap2(int event)
         local_irq_save(flags);
 
     timeline_log[timeline_ctr].time = read_new_aux_reg(ARC_REG_TIMER1_CNT);
-    timeline_log[timeline_ctr].task = current_thread_info()->task->pid;
+    timeline_log[timeline_ctr].task = current->pid;
     timeline_log[timeline_ctr].event = event;
     timeline_log[timeline_ctr].extra2 = stat32;
 
@@ -266,7 +276,14 @@ void sort_snaps(int halt_after_sort)
                 break;
             }
             break;
+        case SNAP_SIGRETURN:
+            strcpy(timeline_log[i].nm, "sigreturn");
+            break;
+        case SNAP_BEFORE_SIG:
+            strcpy(timeline_log[i].nm, "before sig");
+            break;
         }
+
     }
 
 #if 0

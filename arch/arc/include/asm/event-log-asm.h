@@ -94,8 +94,10 @@
     ;
     mov \reg_scratch, \type
 
-    and.f 0, \reg_scratch, SNAP_OUT
+    and.f 0, \reg_scratch, EVENT_CLASS_EXIT
     bz 1f
+
+    // Stuff to do for all kernel exit events
     ld \reg_scratch, [sp, PT_status32]
     st \reg_scratch, [\reg_ptr, EVLOG_FIELD_EXTRA]
 
