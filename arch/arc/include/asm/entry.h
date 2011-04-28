@@ -61,15 +61,6 @@
 #include <asm/pgtable.h>   // For VMALLOC_START
 #include <asm/thread_info.h>   // For THREAD_SIZE
 
-; the ENTRY macro in linux/linkage.h does not work for us ';' is treated
-; as a comment and I could not find a way to put a new line in a #define
-
-.macro ARC_ENTRY name
-  .globl SYMBOL_NAME(\name)
-  .align 4
-  SYMBOL_NAME_LABEL(\name)
-.endm
-
 /* Context saving macros -
  *
  * Note

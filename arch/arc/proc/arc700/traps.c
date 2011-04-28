@@ -81,7 +81,7 @@ void die(const char *str, struct pt_regs *regs, unsigned long address,
         __asm__("flag 1");
     }
 
-    show_fault_diagnostics(str, regs, NULL, address, cause_reg);
+    show_kernel_fault_diag(str, regs, NULL, address, cause_reg);
     __asm__("flag 1");
 
     console_verbose();
@@ -93,24 +93,21 @@ void die(const char *str, struct pt_regs *regs, unsigned long address,
     do_exit(SIGSEGV);
 }
 
-int do_fatal_exception(unsigned long cause, char *str, struct pt_regs *regs,
+static int do_fatal_exception(unsigned long cause, char *str, struct pt_regs *regs,
          siginfo_t * info)
 {
     if (regs->status32 & STATUS_U_MASK) {
         struct task_struct *tsk = current;
 #ifdef CONFIG_ARC_USER_FAULTS_DBG
         if (info->si_code != TRAP_BRKPT) {
-            show_fault_diagnostics(str, regs, NULL,
+            show_user_fault_diag(str, regs, NULL,
                                     (unsigned long)info->si_addr, cause);
         }
 #endif              /* CONFIG_ARC_FAULTS_DBG */
 
         tsk->thread.fault_address = (unsigned int)info->si_addr;
 
-        if (info)
-            force_sig_info(info->si_signo, info, tsk);
-        else
-            force_sig(info->si_signo, tsk);
+		force_sig_info(info->si_signo, info, tsk);
 
     } else {
         /* Are we prepared to handle this kernel fault?
@@ -146,7 +143,7 @@ asmlinkage int name(unsigned long cause, unsigned long address, \
     return do_fatal_exception(cause,str,regs,&info);\
 }
 
-DO_ERROR_INFO(SIGSEGV, "Access Violation/Misaligned Access",
+DO_ERROR_INFO(SIGSEGV, "Misaligned Access",
                 do_misaligned_access, SEGV_ACCERR)
 DO_ERROR_INFO(SIGILL, "Privileged Operation/Disabled Extension/Actionpoint Hit",
                 do_privilege_fault, ILL_PRVOPC)
@@ -161,7 +158,8 @@ DO_ERROR_INFO(SIGTRAP, "Breakpoint Set", do_trap_is_brkpt, TRAP_BRKPT)
 asmlinkage void do_machine_check_fault(unsigned long cause, unsigned long address,
                   struct pt_regs *regs, struct callee_regs *cregs)
 {
-    show_fault_diagnostics("Machine Check Exception", regs, cregs, address, cause);
+    show_kernel_fault_diag("Machine Check Exception", regs, cregs, address,
+							cause);
 
     // DEAD END
     __asm__("flag 1");

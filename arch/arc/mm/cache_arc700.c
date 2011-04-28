@@ -122,6 +122,7 @@ char * arc_cache_mumbojumbo(int cpu_id, char *buf)
 
 void __init a7_probe_cache(void)
 {
+
     unsigned int temp, sz;
     struct bcr_cache *p_i_bcr, *p_d_bcr;  /* Build Config Reg */
 
@@ -177,10 +178,8 @@ void __init a7_probe_cache(void)
     if ( ( p_d_bcr->type != 0x2 ) ||      /* 4 way set assoc */
          ( p_d_bcr->line_len != 0x01 ) )  /* 32 byte line length */
        goto sw_hw_mismatch;
-
     /* Convert encoded size to real value */
     sz = arc_cache_meta.d_sz = CALC_CACHE_SZ(p_d_bcr->sz);
-
     /* check whether dcache way size greater than PAGE_SIZE */
     if ((sz / ARC_DCACHE_WAY_NUM) > PAGE_SIZE) {
         arc_cache_meta.has_aliasing |= ARC_DC_ALIASING;

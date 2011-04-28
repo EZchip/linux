@@ -295,15 +295,47 @@ void show_stacktrace(struct task_struct *tsk, struct pt_regs *regs);
 void raw_printk(const char *str, unsigned int num);
 void raw_printk5(const char *str, unsigned int n1, unsigned int n2,
                     unsigned int n3, unsigned int n4);
+
+/***** Diagnostic routines *******/
+
 void show_fault_diagnostics(const char *str, struct pt_regs *regs,
     struct callee_regs *cregs, unsigned long address, unsigned long cause_reg);
 
+#define show_kernel_fault_diag(a,b,c,d,e) show_fault_diagnostics(a,b,c,d,e)
+
+/* So that LMBench numbers for Signal handling are not affected
+ * by diagnostic stuff
+ */
+#ifdef CONFIG_ARC_USER_FAULTS_DBG
+#define show_user_fault_diag(a,b,c,d,e) show_fault_diagnostics(a,b,c,d,e)
+#else
+#define show_user_fault_diag(a,b,c,d,e)
+#endif
+
+/******************************************************************
+ * printk calls in __init code, so that their literal strings go into
+ * .init.rodata (which gets reclaimed) instead of in .rodata
+ ******************************************************************/
+#define INIT_PRINT 0
+
+#if (INIT_PRINT == 2)
+#define printk_init(fmt, args...) 	printk(fmt, ## args)
+#elif (INIT_PRINT == 1)
+#define printk_init(fmt, args...)
+#else
+#define printk_init(fmt, args...) 					\
+({ 													\
+	static const __initconst char __fmt[] = fmt; 	\
+	printk(__fmt, ## args); 						\
+})
+#endif
 
 #endif /*__KERNEL__*/
 
 #else  /* !__ASSEMBLY__ */
 
 #include <asm/event-log.h>  // event log from Assembly
+
 
 #endif /* __ASSEMBLY__ */
 

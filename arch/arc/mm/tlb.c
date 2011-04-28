@@ -153,7 +153,7 @@ unsigned int ARC_shmlba;
 // If we do, then a whole bunch of changes required in other places too
 struct cpuinfo_arc_mmu  mmu_info;
 
-void print_asid_mismatch(int pid_sw, int pid_hw, int fast_or_slow_path);
+void print_asid_mismatch(int fast_or_slow_path);
 unsigned int tlb_entry_erase(unsigned int vaddr_n_asid);
 
 
@@ -403,7 +403,7 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long address, pte_t p
         if (address < 0x70000000 &&
             ((pid != pid_sw) || (pid_sw == NO_ASID)))
         {
-            print_asid_mismatch(pid_sw, pid, 1);
+            print_asid_mismatch(0);
         }
     }
 #endif
@@ -548,10 +548,18 @@ void __init tlb_init(void)
  * Low Level ASM TLB handler calls this if it finds that HW and SW ASIDS
  * don't match
  */
-void print_asid_mismatch(int pid_sw, int pid_hw, int fast_or_slow_path)
+void print_asid_mismatch(int is_fast_path)
 {
+    int pid_sw, pid_hw;
+    pid_sw = current->active_mm->context.asid;
+    pid_hw = read_new_aux_reg(ARC_REG_PID) & 0xff;
+
+#ifdef CONFIG_ARC_DBG_EVENT_TIMELINE
+    sort_snaps(1);
+#endif
+
     printk("ASID Mismatch in %s Path Handler: sw-pid=0x%x hw-pid=0x%x\n",
-                fast_or_slow_path ? "Fast" : "Slow",
+                is_fast_path ? "Fast" : "Slow",
                 pid_sw, pid_hw);
 
     __asm__ __volatile__ ("flag 1");
@@ -564,6 +572,8 @@ void print_pgd_mismatch(void)
     unsigned int reg = read_new_aux_reg(ARC_REG_SCRATCH_DATA0);
     printk("HW PDG %x  SW PGD %p CURR PDG %p\n", reg, current->active_mm->pgd,
                     _current_task->active_mm->pgd);
+
+    __asm__ __volatile__ ("flag 1");
 }
 
 #endif

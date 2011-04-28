@@ -59,17 +59,14 @@ SECTIONS
         __per_cpu_start = .;
             *(.data.percpu)
         __per_cpu_end = .;
-        . = ALIGN(PAGE_SIZE);
-        _init_end = .;
     }
 
-    /* Sections to be discarded */
-    /DISCARD/ : {           /* Exit code and data       */
-        EXIT_TEXT
-        EXIT_DATA
-        *(.exitcall.exit)
-        *(.gnu.linkonce.arcextmap.*)
-    }
+	.init.rodata : {
+		*(.init.rodata)
+	}
+
+    . = ALIGN(PAGE_SIZE);
+    _init_end = .;
 
     .text : {           /* Real text segment        */
         _text = .;      /* Text and read-only data  */
@@ -92,19 +89,10 @@ SECTIONS
     . = ALIGN(PAGE_SIZE);
     .data : {
 
-        /* first, the init task union, aligned
-         * to an PAGE_SIZE byte boundary.
-         */
         *(.init.task)
-
-        /* then the cacheline aligned data
-         */
         . = ALIGN(32);
         *(.data.cacheline_aligned)
-
-        /* and the usual data section
-         */
-	DATA_DATA
+        DATA_DATA
 
         CONSTRUCTORS
         _edata = .;
@@ -119,7 +107,6 @@ SECTIONS
     }
 
 
-
     . = ALIGN(PAGE_SIZE);
     __start_unwind = .;
     .debug_frame  : { *(.debug_frame) }
@@ -127,6 +114,14 @@ SECTIONS
 
     . = ALIGN(PAGE_SIZE);
     end_kernel = .;
+
+    /* Sections to be discarded */
+    /DISCARD/ : {           /* Exit code and data       */
+        EXIT_TEXT
+        EXIT_DATA
+        *(.exitcall.exit)
+        *(.gnu.linkonce.arcextmap.*)
+    }
 
     STABS_DEBUG
 

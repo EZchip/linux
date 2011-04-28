@@ -110,54 +110,55 @@
  * a section other than .vector.
  */
 
-j   res_service             ; 0x0,  restart vector
-j   mem_service             ; 0x8,  memory exception
-j   instr_service           ; 0x10, instruction error
+; ********* Critical System Events **********************
+j   res_service             ; 0x0, Restart Vector	(0x0)
+j   mem_service             ; 0x8, Mem exception	(0x1)
+j   instr_service           ; 0x10, Instrn Error	(0x2)
+
+; ******************** Device ISRs **********************
 #ifdef  CONFIG_TIMER_LV2
-j   handle_interrupt_level2 ; Timer0 level2
+j   handle_interrupt_level2 ; Timer0 level2			(0x3)
 #else
-j   handle_interrupt_level1 ; Timer0 level1
+j   handle_interrupt_level1 ; Timer0 level1			(0x3)
 #endif
 j   handle_interrupt_level1
 
 #ifdef  CONFIG_SERIAL_LV2
-j   handle_interrupt_level2 ; UART level2
+j   handle_interrupt_level2 ; UART level2			(0x4)
 #else
-j   handle_interrupt_level1 ; UART level1
+j   handle_interrupt_level1 ; UART level1			(0x4)
 #endif
 
 #ifdef  CONFIG_EMAC_LV2
-j   handle_interrupt_level2 ; EMAC level2
+j   handle_interrupt_level2 ; EMAC level2			(0x5)
 #else
-j   handle_interrupt_level1 ; EMAC level1
+j   handle_interrupt_level1 ; EMAC level1			(0x5)
 #endif
 
 .rept   25
-j   handle_interrupt_level1 ; top level interrupt handler
+j   handle_interrupt_level1 ; Other devices
 .endr
-j   EV_MachineCheck         ; 0x100, fatal Machine check exception
-j   EV_TLBMissI             ; 0x108, Intruction TLB miss
-j   EV_TLBMissD             ; 0x110, Data TLB miss
-j   EV_TLBProtV             ; 0x118, Protection Violation
-j   EV_PrivilegeV           ; 0x120, Privilege Violation
-j   EV_Trap                 ; 0x128, Trap exception
-j   EV_Extension            ; 0x130, Extension intruction exception
+
+; ******************** Exceptions **********************
+j   EV_MachineCheck         ; 0x100, Fatal Machine check 	(0x20)
+j   EV_TLBMissI             ; 0x108, Intruction TLB miss 	(0x21)
+j   EV_TLBMissD             ; 0x110, Data TLB miss		 	(0x22)
+j   EV_TLBProtV             ; 0x118, Protection Violation 	(0x23)
+							;         or Misaligned Access
+j   EV_PrivilegeV           ; 0x120, Privilege Violation	(0x24)
+j   EV_Trap                 ; 0x128, Trap exception			(0x25)
+j   EV_Extension            ; 0x130, Extn Intruction Excp	(0x26)
 .rept   24
 j   reserved                ; Reserved Exceptions
 .endr
 
 
-#include <linux/sys.h>       /* contains the declaration of NR_syscalls */
 #include <linux/linkage.h>   /* contains declarations of SYMBOL_NAME */
 #include <asm/entry.h>       /* For the SAVE_* macros */
-#include <asm/ptrace.h>      /* For the PT_* offsets */
-#include <asm/unistd.h>      /* For SYSCALL_IRQ  */
 #include <asm/errno.h>
-#include <asm/system.h>
 #include <asm/arcregs.h>
-#include <asm/arcdefs.h>
-#include <asm/thread_info.h>
-#include <asm/mmu.h>
+#include <asm/arcdefs.h>	/* PT_TRACESYS */
+
 #include <asm/event-log-asm.h>
 
 ; ---------------------------------------------
@@ -421,10 +422,8 @@ ARC_ENTRY EV_TLBProtV
     ;   -Unaligned Access (READ/WRITE on odd boundary)
     ;
     ; Handling for these 2 are completely difft in Linux
-    ;   -Access Violation may be completely legitimate as Linux
-    ;     uses this for implementing COW.
-    ;   -Unaligned Access is always wrong and causes process to be
-    ;     terminated.
+    ;   -Access Violation may be legitimate as Linux implements COW using it.
+    ;   -Unaligned Access is always wrong and causes process to be terminated.
     ;
     cmp r3, 0x230400    ; Misaligned data access ?
     beq 4f

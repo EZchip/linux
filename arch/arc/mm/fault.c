@@ -36,15 +36,7 @@
 #include <asm/uaccess.h>
 
 extern void die(const char *,struct pt_regs *,long,long);
-extern void show_fault_diagnostics(const char *str, struct pt_regs *regs,
-  struct callee_regs *cregs, unsigned long address, unsigned long cause_reg);
-
 extern int fixup_exception(struct pt_regs *regs);
-
-//Display disgnostics on user faults
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
-int debug_user_faults = 1;
-#endif
 
 asmlinkage int do_page_fault(struct pt_regs *regs, int write,
                   unsigned long address, unsigned long cause)
@@ -97,6 +89,12 @@ asmlinkage int do_page_fault(struct pt_regs *regs, int write,
     if (expand_stack(vma, address))
         goto bad_area;
 
+	// vineetg-TODO:
+	//shady_area:
+	// Check if we ever land HERE, when address doesn't belong to vma,
+	// but it's not BAD either
+	// when we just fall thru into good_area
+
     /*
      * Ok, we have a good vm_area for this memory access, so
      * we can handle it..
@@ -144,6 +142,7 @@ survive:
     }
 #endif
 
+	/* Fault Handled Gracefully, back to what user was trying to do */
     up_read(&mm->mmap_sem);
     return 0;
 
@@ -157,15 +156,10 @@ bad_area:
       bad_area_nosemaphore:
     /* User mode accesses just cause a SIGSEGV */
     if (user_mode(regs)) {
-        tsk->thread.fault_address = address;
-
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
-        if (debug_user_faults) {
-            show_fault_diagnostics("Sending SIGSEGV to task", regs, NULL,
+        show_user_fault_diag("Sending SIGSEGV to task", regs, NULL,
                                     address, cause);
-        }
-#endif
 
+        tsk->thread.fault_address = address;
         info.si_signo = SIGSEGV;
         info.si_errno = 0;
         /* info.si_code has been set above */
@@ -204,22 +198,22 @@ out_of_memory:
         goto survive;
     }
     up_read(&mm->mmap_sem);
-    printk(KERN_NOTICE "VM: killing process %s\n", tsk->comm);
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
-    printk
-        ("do_page_fault(): sending SIGKILL to %s",
-         "for illegal %s %08lx (eret = %08lx)\n",
-         tsk->comm, write ? "write access to" : "read access from",
-         address, regs->ret);
-    show_regs(regs);
-#endif
+
+	show_user_fault_diag("OOM: VM Sending SIGKILL to task", regs, NULL,
+                                    address, cause);
 
     if (user_mode(regs))
-        do_exit(SIGKILL);
+        do_exit(SIGKILL);	/* This will never return */
+
     goto no_context;
 
 do_sigbus:
     up_read(&mm->mmap_sem);
+
+    if (user_mode(regs)) {
+		show_user_fault_diag("Sending SIGBUS to task", regs, NULL,
+                                    address, cause);
+	}
 
     /*
      * Send a sigbus, regardless of whether we were in kernel

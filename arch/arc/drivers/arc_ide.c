@@ -35,7 +35,6 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/ide.h>
-#include <linux/hdreg.h>
 #include <linux/mm.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -71,27 +70,24 @@
 #define IDE_DRIVE_STAT_BSY  0x80
 #define IDE_DRIVE_STAT_DRDY 0x40
 
-/* IDE device interrupt routes into this ARC700 interrupt */
-#define ARC_IDE_INTERRUPT 13
-
-/* Extracting the version from the ID reg */
-#define ARC_IDE_REVMASK 0x00ff0000
-#define ARC_IDE_REVSHIFT 15
-
 /* First version supporting DMA modes */
 #define ARC_IDE_FIRST_DMA_VERSION 2
 
+/* Revision is 3rd byte in ID register */
+#define IDE_REV(x)  (((x) & 0xff0000) >> 15)
+
 /* ARC IDE Controller */
-typedef struct {
-    volatile unsigned long ID;
-    volatile unsigned long timing;
-    volatile unsigned long statctrl;
+typedef volatile struct {
+
+    unsigned long ID;
+    unsigned long timing;
+    unsigned long statctrl;
 
     // Version 2 registers
-    volatile unsigned long dma_timing;
-    volatile unsigned long dma_address;
-    volatile unsigned long dma_command;
-    volatile unsigned long dma_status;
+    unsigned long dma_timing;
+    unsigned long dma_address;
+    unsigned long dma_command;
+    unsigned long dma_status;
 } ARC_IDE_if;
 
 #ifdef DEBUG
@@ -603,8 +599,7 @@ int arc_ide_dma_init(ide_hwif_t *hwif, const struct ide_port_info *d)
     DBG("%s:\n", __FUNCTION__);
 
     // Check controller version and decide whether or not to enable DMA modes.
-    if (((controller->ID & ARC_IDE_REVMASK) >> ARC_IDE_REVSHIFT)
-                                                >= ARC_IDE_FIRST_DMA_VERSION)
+    if ( IDE_REV(controller->ID) >= ARC_IDE_FIRST_DMA_VERSION)
     {
         printk("Enabling DMA...\n");
 
@@ -675,16 +670,34 @@ int __init arc_ide_init(void)
 {
     hw_regs_t hw, *hws[] = {&hw, NULL, NULL, NULL};
     struct ide_host *host;
+    unsigned int id_word;
+    struct ID_REG {
+	     unsigned int id:6,reserved:2,
+				     nid:6,reserved2:2,
+				     rev:8,
+				     cfg:8;
+    }
+    * id_reg;
 
     DBG("%s:\n", __FUNCTION__);
 
-    if (controller->ID == 0) {
-        printk("ARC IDE Controller not detected\n");
+	/* ID Register:
+	 * --------------------------------------------------------------------
+	 * | 31    	24  | 23      16 | 15 | 14 | 13       8 | 7 | 6 | 5      0|
+	 * | CFG = 0x00 | REV = 0x1  |  1 |  1 | NID = 0x36 | 0 | 0 | ID = 0x9|
+	 * --------------------------------------------------------------------
+	 */
+
+    id_word = controller->ID;
+    id_reg = (struct ID_REG *) &id_word;
+
+    printk_init(KERN_INFO "ARC IDE interface driver, Controller ID[%d] REV[%d]\n",
+                     id_reg->id, id_reg->rev);
+
+    if ( ! ((id_reg->id == 0x9) && (id_reg->nid == 0x36 )) ) {
+        printk_init("***ARC IDE [NOT] detected, skipping IDE init\n");
         return -1;
     }
-
-    printk(KERN_INFO "ARC IDE interface driver, controller version %ld\n",
-                     ((controller->ID & ARC_IDE_REVMASK) >> ARC_IDE_REVSHIFT));
 
     cycles_per_nanosec = ((double)clk_speed)/1000000000.0;
 

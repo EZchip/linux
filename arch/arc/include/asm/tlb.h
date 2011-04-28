@@ -90,6 +90,6 @@ void tlb_find_asid(unsigned int asid);
 
 /* MMU PID Register contains 1 bit for MMU Enable and 8 bits of ASID */
 #define MMU_ENABLE          0x80000000
-#define ASID_EXTRACT_MASK   (~MMU_ENABLE_BIT)
+#define ASID_EXTRACT_MASK   (~MMU_ENABLE)
 
 #endif  /* _ASM_ARC_TLB_H */

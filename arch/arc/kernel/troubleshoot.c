@@ -7,7 +7,12 @@
 #include <linux/ptrace.h>
 #include <linux/module.h>
 #include <asm/arcregs.h>
+#include <asm/traps.h>		/* defines for Reg values */
 #include <asm/utils.h>
+
+#ifdef CONFIG_ARC_USER_FAULTS_DBG
+volatile int debug_user_faults = 1; /* Display Reg file etc on user faults */
+#endif
 
 void show_regs(struct pt_regs *regs)
 {
@@ -57,11 +62,22 @@ void show_callee_regs(struct callee_regs *cregs)
     printk("\n\n");
 }
 
+/************************************************************************
+ *  Verbose Display of Exception
+ ***********************************************************************/
+
 void show_fault_diagnostics(const char *str, struct pt_regs *regs,
     struct callee_regs *cregs, unsigned long address, unsigned long cause_reg)
 {
     struct task_struct *tsk = current;
     int cause_vec, cause_code;
+
+    if (user_mode(regs)) {
+#ifdef CONFIG_ARC_USER_FAULTS_DBG
+        if (!debug_user_faults)
+#endif
+		return;
+	}
 
     printk("%s\n[ECR]: 0x%08lx\n", str, cause_reg);
     printk("Faulting Instn : 0x%08lx\n", regs->ret);

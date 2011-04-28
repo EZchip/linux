@@ -27,7 +27,7 @@ export PLATFORM
 #LDFLAGS_vmlinux :=-X -T arch/$(ARCH)/kernel/vmlinux.lds
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
-KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin -D__linux__
+KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin -D__linux__ -O3
 KBUILD_AFLAGS		+= $(KBUILD_CFLAGS)
 
 MODFLAGS	+= -mlong-calls
@@ -62,10 +62,6 @@ endif
 LIBGCC		:= $(shell $(CC) $(KBUILD_CFLAGS) --print-libgcc-file-name)
 
 TEXTADDR	 = 0x80002000
-
-# Sameer: We don't need this now. Its replaced by vmlinux-lds in
-#         top level Makefile in 2.6
-#LDSCRIPT         = arch/$(ARCH)/proc/$(PROCESSOR)/linux.lds.in
 
 export	LDFLAGS LIBGCC TEXTADDR GZFLAGS
 

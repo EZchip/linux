@@ -213,7 +213,7 @@ struct proc_dir_entry *myproc;
 		printk (fmt, ## args);
 #else
 #define dbg_printk(fmt, args...)
-#endif				/* ARCTANGENT_EMAC_DEBUG */
+#endif
 
 #define __mdio_write(priv, mdio_data_reg, phy_id, phy_reg, val)	\
 {                                                   \
@@ -291,7 +291,7 @@ priv->mdio_complete = 0;				\
 	int             aa3_emac_set_address(struct net_device * dev, void *p);
 	int             aa3_emac_init(struct net_device * dev);
 
-	static void     dump_phy_status(unsigned int status)
+static void     dump_phy_status(unsigned int status)
 {
 
 /* Intel LXT971A STATUS2, bit 5 says "Polarity" is reversed if set. */
@@ -837,10 +837,7 @@ aa3_emac_open(struct net_device * dev)
 	int             i;
 	unsigned int    temp, duplex;
 	int             noauto;
-	/* Sameer: Obsolte */
-	/* #ifdef MODULE */
-	/* MOD_INC_USE_COUNT; */
-	/* #endif */
+
 	ap = netdev_priv(dev);
 	if (ap == NULL)
 		return -ENODEV;
@@ -1047,10 +1044,6 @@ aa3_emac_stop(struct net_device * dev)
 
 	netif_stop_queue(dev);	/* stop the queue for this device */
 
-	/* Sameer: obsolete */
-	/* #ifdef MODULE */
-	/* MOD_DEC_USE_COUNT; */
-	/* #endif */
 	free_irq(dev->irq, dev);
 
 	/* close code here */
@@ -1240,8 +1233,8 @@ aa3_emac_set_address(struct net_device * dev, void *p)
 }
 
 
-int
-aa3_emac_probe(int num)
+static int
+__init aa3_emac_probe(int num)
 {
 	volatile unsigned int *reg_base_addr;
 	unsigned int   *id_reg;
@@ -1324,16 +1317,18 @@ aa3_module_init(void)
 
 		/* Set EMAC hardware address */
 		aa3_emac_set_address(dev, &mac_addr);
-#ifdef MODULE
-		SET_MODULE_OWNER(dev);
-#endif				/* MODULE */
 
 		spin_lock_init(&((struct aa3_emac_priv *)netdev_priv(dev))->lock);
 		//Amit 's hack
 			break;
 	}
 
-	printk("ARCTangent emac: Probed and found %u vmac's\n", vmacs);
+	printk_init("ARCTangent emac: Probed and found %u vmac's\n", vmacs);
+	if (vmacs == 0 )  {
+		printk_init("***ARC EMAC [NOT] detected, skipping EMAC init\n");
+		return -ENODEV;
+	}
+
 #ifdef ARCTANGENT_EMAC_SETUP
 	strcpy(ifr.ifr_name, "eth0");
 	addr = (struct sockaddr_in *) & ifr.ifr_addr;
@@ -1486,10 +1481,7 @@ int aa3_emac_reset()
 	int             i;
 	unsigned int    temp, duplex;
 	int             noauto;
-	/* Sameer: Obsolte */
-	/* #ifdef MODULE */
-	/* MOD_INC_USE_COUNT; */
-	/* #endif */
+
 	ap = netdev_priv(dev);
 
 	if (ap == NULL)

@@ -36,14 +36,11 @@
 
     .cpu A7
 
-#include <linux/init.h>
 #include <linux/linkage.h>
-#include <asm/entry.h>
-#include <asm/ptrace.h>
-#include <asm/mmu.h>
-#include <asm/traps.h>
 #include <asm/arcregs.h>
+#include <asm/entry.h>
 #include <asm/tlb.h>
+#include <asm/traps.h>	/* DATA_TLB_STORE */
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <asm/asm-offsets.h>
@@ -79,19 +76,6 @@ ex_saved_reg2:
 mmu_write_cmd:
     .zero 4
 
-
-#ifdef CONFIG_ARC_TLB_PARANOIA
-
-    .global ex_saved_reg_dbg
-    .align 4
-    .type   ex_saved_reg_dbg, @object
-    .size   ex_saved_reg_dbg, 4
-ex_saved_reg_dbg:
-
-#endif
-
-;-----------------------------------------------------------------------------
-;TLB Miss handling Code
 
 .section .text, "ax",@progbits
 
@@ -132,23 +116,9 @@ ex_saved_reg_dbg:
     ld  sp, [sp, TASK_THREAD_INFO]
     add sp, sp, ( 0x2000 - 4 )
 
-#ifdef CONFIG_ARC_DBG_EVENT_TIMELINE
-    ; Call the sort function to stop capturing events and halt CPU
-    mov r0, 1
-    j sort_snaps
-#else
     ; Call printk to shoutout aloud
-    GET_CURR_TASK_ON_CPU  r0
-    ld r0, [r0, TASK_ACT_MM]
-    ld r0, [r0, MM_CTXT+MM_CTXT_ASID]
-
-    lr r1, [ARC_REG_PID]
-    and r1, r1, ASID_EXTRACT_MASK
-
-    mov r2, 0
+    mov r0, 1
     j print_asid_mismatch
-
-#endif
 
 5:   ; ASIDs match so proceed normally
     nop
@@ -167,46 +137,42 @@ ex_saved_reg_dbg:
 
 #ifdef CONFIG_ARC_TLB_PARANOIA
 
-    st r10, [SYMBOL_NAME(ex_saved_reg_dbg)]
-    ld r10, [_current_task]
-    ld r10, [r10, TASK_ACT_MM]
-    ld r10, [r10, MM_PGD]
-    cmp  r10, \ptr
+    lr r0, [ARC_REG_SCRATCH_DATA0]
+    GET_CURR_TASK_ON_CPU  r1
+    ld r1, [r1, TASK_ACT_MM]
+    ld r1, [r1, MM_PGD]
+    cmp  r1, r0
     beq  59f
 
     ; We sure are in troubled waters, Flag the error, but to do so
     ; need to switch to kernel mode stack to call error routine
-    ld  sp, [SYMBOL_NAME(_current_task)]
+    GET_CURR_TASK_ON_CPU  sp
     ld  sp, [sp, TASK_THREAD_INFO]
     add sp, sp, ( 0x2000 - 4 )
 
     j print_pgd_mismatch
-    flag 1
 
 59:
-    ld r10, [SYMBOL_NAME(ex_saved_reg_dbg)]
 
 #endif
 
 .endm
 
 
-;---------------------------------------------------------------------
+;-----------------------------------------------------------------------------
+;TLB Miss handling Code
+;-----------------------------------------------------------------------------
 
 /* This macro does the page-table lookup for the faulting address.
  * At the end of the macro pte faulted on will be in register pte
  * and the table in which pte belongs will be in ptr.
  */
 .macro LOAD_PTE pte, ptr, label
+
     lr  \pte, [efa]          /* faulting address */
 
 #ifndef CONFIG_SMP
     lr  \ptr, [ARC_REG_SCRATCH_DATA0] /* current pgd */
-
-    ; VERIFY if the cached PGD ptr in MMU-SCRATCH Reg is same as
-    ; one in Linux data structures
-    DBG_PDG_MISMATCH
-
 #else
     GET_CURR_TASK_ON_CPU  \ptr
     ld  \ptr, [\ptr, TASK_ACT_MM]
@@ -443,7 +409,15 @@ ex_saved_reg_dbg:
     ; take a snapshot of upon entering FAST Path TLB Hdlr
     TAKE_SNAP_ASM r0, r1, SNAP_EXCP_IN
 
+    ; VERIFY if the ASID in MMU-PID Reg is same as
+    ; one in Linux data structures
+
     DBG_ASID_MISMATCH
+
+    ; VERIFY if the cached PGD ptr in MMU-SCRATCH Reg is same as
+    ; one in Linux data structures
+
+	DBG_PDG_MISMATCH
 .endm
 
 .macro RESTORE_TEMP
@@ -451,12 +425,25 @@ ex_saved_reg_dbg:
     ld  r1, [ex_saved_reg2]
 .endm
 
+; branch range is -255 to 256 hence won't work with inline debug code
+; Need a jmp costing an extra instruction in Fast Path
+
+.macro BR_OR_JMP_IF_HS  reg,  val, addr
+
+#ifdef CONFIG_ARC_TLB_PARANOIA
+    cmp     \reg, \val
+    jhs    	\addr
+#else
+    brhs    \reg, \val, \addr
+#endif
+.endm
+
 ARC_ENTRY EV_TLBMissI
 
     SAVE_TEMP
 
     lr  r0, [efa]
-    brhs    r0, VMALLOC_START, kernel_inst_miss
+    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_inst_miss
 
     LOAD_PTE r0, r1, no_page_itlb
     PTE_PRESENTEXEC r0, r1, no_page_itlb
@@ -477,10 +464,7 @@ no_page_itlb:
 SYMBOL_NAME_LABEL(data_tlb_miss_load)
 
     lr  r0, [efa]
-
-    ;cmp     r0, VMALLOC_START
-    ;jhs    kernel_data_miss_load
-    brhs    r0, VMALLOC_START, kernel_data_miss_load
+    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_data_miss_load
 
     LOAD_PTE r0, r1, no_page_dtlb_load
     PTE_PRESENT r0, r1, no_page_dtlb_load
@@ -501,10 +485,7 @@ no_page_dtlb_load:
 SYMBOL_NAME_LABEL(data_tlb_miss_store)
 
     lr  r0, [efa]
-
-    ;cmp     r0, VMALLOC_START
-    ;jhs    kernel_data_miss_store
-    brhs    r0, VMALLOC_START, kernel_data_miss_store
+    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_data_miss_store
 
     LOAD_PTE r0, r1, no_page_dtlb_store
     PTE_WRITABLE r0, r1, no_page_dtlb_store
@@ -525,10 +506,7 @@ no_page_dtlb_store:
 SYMBOL_NAME_LABEL(data_tlb_miss_xchg)
 
     lr  r0, [efa]
-
-    ;cmp     r0, VMALLOC_START
-    ;jhs    kernel_data_miss_xchg
-    brhs    r0, VMALLOC_START, kernel_data_miss_xchg
+    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_data_miss_xchg
 
     LOAD_PTE r0, r1, no_page_dtlb_xchg
     PTE_READWRITABLE r0, r1, no_page_dtlb_xchg
