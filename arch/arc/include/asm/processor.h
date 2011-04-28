@@ -76,6 +76,9 @@
  */
 #define TASK_UNMAPPED_BASE      (TASK_SIZE / 3)
 
+/* For mmap randomisation and Page coloring for share code pages */
+#define HAVE_ARCH_PICK_MMAP_LAYOUT
+
 /* Arch specific stuff which needs to be saved per task.
  * However these items are not so important so as to earn a place in
  * struct thread_info

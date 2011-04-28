@@ -59,7 +59,7 @@
 #include <asm/arcregs.h>    // For aux_regs
 #include <linux/tick.h>     // for tick_nohz_xx
 #include <asm/bug.h>
-
+#include <linux/random.h>
 
 /* Sameer: We don't have small-data support yet.
            I am trying to fix it by defining here. */
@@ -479,4 +479,25 @@ unsigned long thread_saved_pc(struct task_struct *t)
     }
 
     return blink;
+}
+
+unsigned long arch_align_stack(unsigned long sp)
+{
+    //unsigned long orig_sp = sp;
+
+#ifdef CONFIG_ARCH_ARC_SPACE_RND
+    /* ELF loader sets this flag way early.
+     * So no need to check for multiple things like
+     *   !(current->personality & ADDR_NO_RANDOMIZE)
+     *   randomize_va_space
+     */
+    if (current->flags & PF_RANDOMIZE) {
+
+        /* Stack grows down for ARC */
+		sp -= get_random_int() & ~PAGE_MASK;
+        sp &= ~0xF;
+    }
+#endif
+    //printk("RAND: SP orig %x rnd %x\n", orig_sp, sp);
+    return sp;
 }

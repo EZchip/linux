@@ -6,10 +6,7 @@
 
 USE_STANDARD_AS_RULE := true
 
-#O_TARGET	:= mm.o
+obj-y		+= extable.o iomap.o ioremap.o fault.o paging.o tlb.o tlbex.o
 
-# Object file lists.
+obj-y		+= init.o cache_arc700.o dma.o mmap.o
 
-obj-y		+= extable.o init.o iomap.o ioremap.o fault.o paging.o tlb.o tlbex.o cache_arc700.o dma.o
-
-#include $(TOPDIR)/Rules.make

@@ -132,6 +132,14 @@ config ARCH_ARC_CURR_IN_REG
           This reserved Register R25 to point to Current Task in
                 kernel mode. This saves memory access for each such access
 
+config ARCH_ARC_SPACE_RND
+        bool "Address Space Randomisation (mmap/SP)"
+        default N
+        help
+          This feature enables Address space randomisation for mmap and SP
+          Note that it could lead to some performance degradation especially
+          for shared libraries so use it only if needed
+
 config SMP
         bool "Symmetric Multi-Processing (Incomplete)"
     default y

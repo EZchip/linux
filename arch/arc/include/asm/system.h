@@ -305,7 +305,7 @@ static inline void sched_cacheflush(void)
 {
 }
 
-#define arch_align_stack(x) (x)
+extern unsigned long arch_align_stack(unsigned long sp);
 
 /******************************************************************
  * Piggyback stuff
