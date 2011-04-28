@@ -185,6 +185,7 @@ int __init read_arc_build_cfg_regs(void)
 
     READ_BCR(ARC_REG_XY_MEM_BCR, p_cpu->extn_xymem);
 
+    read_decode_mmu_bcr();
     read_decode_cache_bcr();
 
     READ_BCR(ARC_REG_FP_BCR, p_cpu->fp);
@@ -435,7 +436,7 @@ void __init setup_processor(void)
     printk(arc_cpu_mumbojumbo(cpu_id, str));
 
     /* Enable MMU */
-    tlb_init();
+    arc_mmu_init();
 
     arc_cache_init();
 

@@ -34,6 +34,7 @@
 
 #define TLB_LKUP_ERR    0x80000000      // Error code if Probe Fails
 #define MMU_VER_2       2
+#define MMU_VER_3       3
 
 
 /*************************************
@@ -48,7 +49,7 @@
  * New Cmds because of MMU Changes
  *************************************/
 
-#ifdef CONFIG_ARCH_ARC_MMU_V2
+#if (CONFIG_ARC_MMU_VER >=2)
 
 #define TLBWriteNI  0x5     // JH special -- write JTLB without inv uTLBs
 #define TLBIVUTLB   0x6     //JH special -- explicitly inv uTLBs
@@ -77,8 +78,9 @@
 
 #ifndef __ASSEMBLY__
 
-void tlb_init(void);
+void arc_mmu_init(void);
 void tlb_find_asid(unsigned int asid);
+void __init read_decode_mmu_bcr(void);
 
 #define tlb_flush(tlb) local_flush_tlb_mm((tlb)->mm)
 

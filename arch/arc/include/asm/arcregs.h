@@ -230,28 +230,41 @@
  * Register Layouts using bitfields so that we dont have to write
  * bit fiddling ourselves; the compiler can do that for us
  */
-struct cpuinfo_arc_processor {
+struct bcr_identity {
     unsigned int
         family: 8,
         cpu_id: 8,
         chip_id:16;
 };
 
-struct cpuinfo_arc_mmu {
+struct bcr_mmu_1_2 {
     unsigned int
-        num_dTLB        :8,
-        num_iTLB        :8,
-        entries_per_way :4,
-        num_ways        :4,
-        ver             :8;
+        u_dtlb  :8,
+        u_itlb  :8,
+        sets    :4,
+        ways    :4,
+        ver     :8;
 };
+
+struct bcr_mmu_3 {
+    unsigned int
+        u_dtlb  :4,
+        u_itlb  :4,
+        pg_sz   :4,
+        reserv  :3,
+        osm     :1,
+        sets    :4,
+        ways    :4,
+        ver     :8;
+};
+
 
 #define EXTN_SWAP_VALID     0x1
 #define EXTN_NORM_VALID     0x2
 #define EXTN_MINMAX_VALID   0x2
 #define EXTN_BARREL_VALID   0x2
 
-struct cpuinfo_arc_extn {
+struct bcr_extn {
     unsigned int
 
         /* Prog Ref Manual */
@@ -265,11 +278,11 @@ struct cpuinfo_arc_extn {
 };
 
 /* DSP Options Ref Manual */
-struct cpuinfo_arc_extn_mac_mul {
+struct bcr_extn_mac_mul {
     int ver:8, type:8;
 };
 
-struct cpuinfo_arc_extn_xymem {
+struct bcr_extn_xymem {
     unsigned int   ver:8,
                     bank_sz:4, num_banks:4,
                     ram_org:2;
@@ -279,7 +292,7 @@ struct bcr_cache {
     unsigned long ver:8, config:4, sz:4, line_len:4, pad:12;
 };
 
-struct bcr_uncached_space {
+struct bcr_perip {
     unsigned long pad:8, sz:8, pad2:8, start:8;
 };
 struct bcr_iccm {
@@ -302,19 +315,27 @@ struct bcr_fp {
                  fast:1;
 };
 
-struct cpuinfo_arc_ccm {
+struct bcr_ccm {
     unsigned int base_addr;
     unsigned int sz;
 };
 
 #ifdef CONFIG_ARCH_ARC800
-struct cpuinfo_arc800 {
+struct bcr_mp {
     unsigned int ver:8, scu:1, idu:1, sdu:1, padding:5, mp_arch:16;
 };
 #endif
 
 struct cpuinfo_arc_cache {
     unsigned int has_aliasing, sz, line_len, assoc;
+};
+
+struct cpuinfo_arc_mmu {
+    unsigned int ver,
+                 pg_sz,           /* MMU Page Size */
+                 sets, ways,      /* JTLB Geometry */
+                 u_dtlb, u_itlb,  /* entries in Full-assoc I-uTLB, D-uTLB */
+                 num_tlb;         /* sets x ways */
 };
 
 
@@ -324,18 +345,18 @@ struct cpuinfo_arc_cache {
  */
 struct cpuinfo_arc {
     struct cpuinfo_arc_cache icache, dcache;
-    struct cpuinfo_arc_processor cpu;
+    struct cpuinfo_arc_mmu mmu;
+    struct bcr_identity cpu;
     unsigned int timers;
     unsigned int vec_base;
     unsigned int perip_base;
-    struct bcr_uncached_space uncached_space;   // For mapping Periph Regs etc
-    struct cpuinfo_arc_mmu mmu;
-    struct cpuinfo_arc_extn extn;
-    struct cpuinfo_arc_extn_xymem extn_xymem;
-    struct cpuinfo_arc_extn_mac_mul extn_mac_mul;// DCCM RAM SZ
-    struct cpuinfo_arc_ccm iccm, dccm;
+    struct bcr_perip uncached_space;   // For mapping Periph Regs etc
+    struct bcr_extn extn;
+    struct bcr_extn_xymem extn_xymem;
+    struct bcr_extn_mac_mul extn_mac_mul;// DCCM RAM SZ
+    struct bcr_ccm iccm, dccm;
 #ifdef CONFIG_ARCH_ARC800
-    struct cpuinfo_arc800  mp;
+    struct bcr_mp  mp;
 #endif
     struct bcr_fp  fp, dpfp;
 };

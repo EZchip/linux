@@ -142,10 +142,6 @@ struct mm_struct *asid_mm_map[NUM_ASID + 1];
 /* Needed to avoid Cache aliasing */
 unsigned int ARC_shmlba;
 
-// vineetg TODO: In SMP need to evaluate if we need this per CPU
-// If we do, then a whole bunch of changes required in other places too
-struct cpuinfo_arc_mmu  mmu_info;
-
 void print_asid_mismatch(int fast_or_slow_path);
 unsigned int tlb_entry_erase(unsigned int vaddr_n_asid);
 
@@ -208,7 +204,7 @@ unsigned int tlb_entry_erase(unsigned int vaddr_n_asid)
 
 static void utlb_invalidate(void)
 {
-#if (METAL_FIX || defined(CONFIG_ARCH_ARC_MMU_V2))
+#if (METAL_FIX || CONFIG_ARC_MMU_VER >= 2)
     {
         unsigned int idx;
 
@@ -469,82 +465,84 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t 
     flush_cache_page(vma, vaddress, pfn);
 }
 
+
+/* Read the Cache Build Confuration Registers, Decode them and save into
+ * the cpuinfo structure for later use.
+ * No Validation is done here, simply read/convert the BCRs
+ */
+void __init read_decode_mmu_bcr(void)
+{
+    unsigned int tmp;
+    struct bcr_mmu_1_2  *mmu2;      // encoded MMU2 attributes
+    struct bcr_mmu_3    *mmu3;      // encoded MMU3 attributes
+    struct cpuinfo_arc_mmu *mmu;    // simplified attributes
+
+    mmu = &cpuinfo_arc700[0].mmu;
+
+    tmp = read_new_aux_reg(ARC_REG_MMU_BCR);
+    mmu->ver = (tmp >>24);
+
+    if (mmu->ver <= MMU_VER_2) {
+        mmu2 = (struct bcr_mmu_1_2 *)&tmp;
+        mmu->pg_sz = PAGE_SIZE;
+        mmu->sets = 1 << mmu2->sets;
+        mmu->ways = 1 << mmu2->ways;
+        mmu->u_dtlb = mmu2->u_dtlb;
+        mmu->u_itlb = mmu2->u_itlb;
+    }
+    else {
+        mmu3 = (struct bcr_mmu_3 *)&tmp;
+        mmu->pg_sz = 512 << mmu3->pg_sz;
+        mmu->sets = 1 << mmu3->sets;
+        mmu->ways = 1 << mmu3->ways;
+        mmu->u_dtlb = mmu3->u_dtlb;
+        mmu->u_itlb = mmu3->u_itlb;
+    }
+
+    mmu->num_tlb = mmu->sets * mmu->ways;
+
+}
+
 char * arc_mmu_mumbojumbo(int cpu_id, char *buf)
 {
     int num=0;
-    struct cpuinfo_arc_mmu *p_mmu = &mmu_info;
+    struct cpuinfo_arc_mmu *p_mmu = &cpuinfo_arc700[0].mmu;
 
     num += sprintf(buf+num, "ARC700 MMU Ver [%x]\n",p_mmu->ver);
 
-    num += sprintf(buf+num, "   uDTLB %d entr, uITLB %d entr, "
-						"JTLB %d entry/way, %d ways\n",
-					p_mmu->num_dTLB, p_mmu->num_iTLB,
-					1 << p_mmu->entries_per_way,
-					1 << p_mmu->num_ways);
-
+    num += sprintf(buf+num, "   PAGE SIZE %x\n",p_mmu->pg_sz);
+    num += sprintf(buf+num, "   JTLB %d x %d = %d entries\n",
+                        p_mmu->sets, p_mmu->ways, p_mmu->num_tlb);
+    num += sprintf(buf+num, "   uDTLB %d entr, uITLB %d entr\n",
+                        p_mmu->u_dtlb, p_mmu->u_itlb);
+    num += sprintf(buf+num,"TLB Refill \"will %s\" Flush uTLBs\n",
+                        p_mmu->ver >= MMU_VER_2 ? "NOT":"");
 	return buf;
 }
 
-/*
- *  Probe H/W to get a Flavour of MMU we are dealing with
- */
-
-static void __init probe_tlb(void)
+void __init arc_mmu_init(void)
 {
-    unsigned int tmp;
-	char str[256];
+    int i;
+    static int one_time_init;
+    char str[512];
+    struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[0].mmu;
 
-    /* Read MMU Build Configuration Register */
-    tmp = read_new_aux_reg(ARC_REG_MMU_BCR);
-    mmu_info = *((struct cpuinfo_arc_mmu *)&tmp);
+    printk(arc_mmu_mumbojumbo(0, str));
 
-	printk(arc_mmu_mumbojumbo(0, str));
-
-    /* Find the MMU TLB confguration
-     * H/W TLB Size = "ways" * "sets", each encoded in BCR as power of 2
-     */
-    tmp = (1 << mmu_info.num_ways) * (1 << mmu_info.entries_per_way);
-
-    /* Linux is compiled with #define TLB_SIZE = 256
-     * Make sure Linux's idea of TLB_SIZE as same as H/W
-     */
-    if (tmp != TLB_SIZE) {
-        panic("Linux TLB sz (%d) mismatches H/W (%d)\n", TLB_SIZE,tmp);
-    }
-
-    /* By default, Linux is built for older MMU V1.
+    /* For efficiency sake, kernel is compile time built for a MMU ver
      * This must match the hardware it is running on.
      * Linux built for MMU V2, if run on MMU V1 will break down because V1
      *  hardware doesn't understand cmds such as WriteNI, or IVUTLB
      * On the other hand, Linux built for V1 if run on MMU V2 will do
      *   un-needed workarounds to prevent memcpy thrashing.
+     * Similarly MMU V3 has new features which won't work on older MMU
      */
-#ifdef CONFIG_ARCH_ARC_MMU_V2
-    if ( mmu_info.ver != MMU_VER_2 ) {
-        panic("Linux built for MMU V2, won't function. please rebuild...\n");
-    }
-#else
-    if ( mmu_info.ver == MMU_VER_2 ) {
-        panic("Linux not optimsed for MMU V2. please rebuild...\n");
+    if (mmu->ver != CONFIG_ARC_MMU_VER) {
+        panic("MMU ver %d doesn't match kernel built for %d...\n",
+            mmu->ver, CONFIG_ARC_MMU_VER);
     }
 
-#endif
-
-    printk("TLB Refill \"will %s\" Flush uTLBs\n",
-                mmu_info.ver == MMU_VER_2 ? "NOT":"");
-
-}
-
-void __init tlb_init(void)
-{
-    int i;
-    static int one_time_init;
-
-    probe_tlb();
-
-    /* All CPUs call tlb_init ( ), so need this for protecting
-        one time stuff
-     */
+    /* Setup data structures for ASID management */
     if ( ! one_time_init ) {
 
         asid_cache = FIRST_ASID;

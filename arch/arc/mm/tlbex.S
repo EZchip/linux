@@ -47,13 +47,10 @@
     .cpu A7
 
 #include <linux/linkage.h>
-#include <asm/arcregs.h>
 #include <asm/entry.h>
 #include <asm/tlb.h>
-#include <asm/traps.h>  /* DATA_TLB_STORE */
-#include <asm/page.h>
+#include <asm/traps.h>
 #include <asm/pgtable.h>
-#include <asm/asm-offsets.h>
 #include <asm/event-log-asm.h>
 
 ;--------------------------------------------------------------------------
@@ -254,7 +251,7 @@ ex_saved_reg1:
 
 .macro TLB_WRITE_HEURISTICS
 
-#if !(METAL_FIX || defined(CONFIG_ARCH_ARC_MMU_V2))
+#if (METAL_FIX || (CONFIG_ARC_MMU_VER == 1))
 
 #define JH_HACK1
 //#define JH_HACK2
@@ -362,7 +359,7 @@ ex_saved_reg1:
 .endm
 
 .macro COMMIT_WRITE_CMD
-#ifdef CONFIG_ARCH_ARC_MMU_V2
+#if (CONFIG_ARC_MMU_VER >= 2)
     sr TLBWriteNI, [ARC_REG_TLBCOMMAND]
 #else
     sr TLBWrite, [ARC_REG_TLBCOMMAND]

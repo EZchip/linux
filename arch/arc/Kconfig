@@ -194,18 +194,19 @@ config ARCH_ARC_DCCM
         Single Cycle RAMS to store Fast Path Data
         default n
 
-config ARCH_ARC_MMU_V2
-        bool "Build Linux for MMU V2"
-        default n
+config ARC_MMU_VER
+        int "ARC700 MMU Version 1,2,3"
+        range 1 3
+        default "2"
         depends on MMU
         help
-        ARC MMU V1 has a 2 way set assoc J-TLB. This suffers thrashing in a
-        memcpy scenario where 2 D-TLB and 1 I-TLB entries compete for 2 ways
-        of same set. This requires workarounds in TLB refill code which can
-        adversely affect normal case performance. MMU V2 solves this problem
-        in hardware (using the 8 way set assoc uD-TLBs) hence we don't need
-        software workaround. Doing it at runtime was getting costly hence
-        this build option.
+        V1: Orig MMU (suffers from possible thrashing in memcpy scenario
+            when 2 D-TLB and 1 I-TLB entries index into same 2way set)
+        V2: A new TLBWriteNi cmd which doesn't flush the uTLBS (used in
+            miss handlers. Orig TLBWrite for shooting down stale entries
+        V3: Introduced with ARC700 4.10: New Features
+            Variable Page size (1k-16k), var JTLB size 128 x (2 or 4)
+            changes to programming model
 
 config ARCH_ARC_LV2_INTR
         bool "Enable two levels of Interrupts high(2)low(1)"
