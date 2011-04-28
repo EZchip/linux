@@ -309,29 +309,12 @@ static inline void __arc_dcache_entire_op(int aux_reg, int cacheop)
 
 static inline void __arc_dcache_per_line_op(unsigned long start, unsigned long sz, int aux_reg)
 {
-    // round off non-line sized flushes correctly
-    int num_lines = (sz + DCACHE_COMPILE_LINE_LEN - 1)/DCACHE_COMPILE_LINE_LEN;
+    int num_lines, slack;
 
-    /* If @start address is not cache line aligned, do so.
-     *
-     * However instead of doing this unconditionally, we can optimise a bit.
-     * Page sized flush ops can be assumed to begin on a cache line (if not
-     * page aligned). Thus alignment check can be avoided when @sz = PAGE_SIZE
-     * Since page wise flush ops pass a constant @sz = PAGE_SIZE, and this
-     * function is inline, gcc can do "constant propagation" and compile away
-     * the entire alignment code block.
-     *      -outer "if" will be eliminated by constant propagation
-     *      -this automatically eliminates inner block as dead code
-     *
-     * However when @sz is not constant, the exta size check is superflous
-     * as we want to unconditionally do the aligment check, hence the
-     * __builtin_constant_p.
-     */
-    if ( ! __builtin_constant_p(sz) || sz != PAGE_SIZE ) {
-        if (start & ~DCACHE_LINE_MASK) {
-            start &= DCACHE_LINE_MASK;
-        }
-    }
+    slack = start & ~DCACHE_LINE_MASK;
+    sz += slack;
+    start -= slack;
+    num_lines = (sz + DCACHE_COMPILE_LINE_LEN - 1)/DCACHE_COMPILE_LINE_LEN;
 
     while (num_lines-- > 0) {
         write_new_aux_reg(aux_reg, start);
@@ -491,13 +474,12 @@ static void __arc_icache_inv_lines_64k(unsigned long start, int num_lines)
 static void __arc_icache_inv_lines(unsigned long start, unsigned long sz)
 {
     unsigned long flags;
-    int num_lines = (sz + ICACHE_COMPILE_LINE_LEN - 1)/ICACHE_COMPILE_LINE_LEN;
+    int num_lines, slack;
 
-    if ( ! __builtin_constant_p(sz) || sz != PAGE_SIZE ) {
-        if (start & ~ICACHE_LINE_MASK) {
-            start &= ICACHE_LINE_MASK;
-        }
-    }
+    slack = start & ~ICACHE_LINE_MASK;
+    sz += slack;
+    start -= slack;
+    num_lines = (sz + ICACHE_COMPILE_LINE_LEN - 1)/ICACHE_COMPILE_LINE_LEN;
 
     local_irq_save(flags);
     (*___flush_icache_rtn)(start, num_lines);
