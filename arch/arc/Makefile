@@ -25,7 +25,7 @@ export PLATFORM
 #LDFLAGS_vmlinux :=-X -T arch/$(ARCH)/kernel/vmlinux.lds
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
-KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin \
+KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
 						-D__linux__  -fcall-used-gp
 
 # Idea is to use -O3 for our builds (Default kernel makefile uses -O2)
@@ -91,6 +91,13 @@ head-y		:= arch/arc/proc/$(PROCESSOR)/head.o \
 
 core-y		+= arch/arc/kernel/ arch/arc/mm/ \
 			arch/arc/proc/$(PROCESSOR)/
+
+# vineetg Feb 2010:
+# We switched to -mno-long-calls for overall kernel build
+# However lib/decompress_inflate.o (.init.text) calls
+# zlib_inflate_workspacethere (.text) causing relocation error.
+# Thus forcing all exten calls in this file to be long calls
+export CFLAGS_decompress_inflate.o = -mlong-calls
 
 core-$(CONFIG_OPROFILE)		+= arch/arc/oprofile/
 
