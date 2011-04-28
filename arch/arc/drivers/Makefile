@@ -1,0 +1,21 @@
+#
+# linux/arch/arc/drivers/Makefile
+#
+#
+
+
+#O_TARGET	:= peripherals.o
+
+obj-$(CONFIG_ARC700_SERIAL) += arc700_serial.o
+obj-$(CONFIG_ARCTANGENT_EMAC) += arctangent_emac.o
+obj-$(CONFIG_ARC_IDE) += arc_ide.o
+obj-$(CONFIG_ARCPGU) += arc_pgufb.o arc_vsync.o
+obj-$(CONFIG_SOUND_ARC_AC97)    += arc_ac97.o
+obj-$(CONFIG_VFB_SIM) += arc_vfb.o
+
+# if AA4 + if XBF has PCI
+ifeq ($(PLATFORM),AA4)
+obj-$(CONFIG_ARC_AHB_PCI_BRIDGE) += arc700_pci.o
+endif
+
+#include $(TOPDIR)/Rules.make

@@ -1,0 +1,50 @@
+#
+# Makefile for the linux kernel.
+#
+# Note! Dependencies are done automagically by 'make dep', which also
+# removes any old dependencies. DON'T put your own dependencies here
+# unless it's something special (ie not a .c file).
+#
+# Copyright (C) 2003, ARC International
+#
+
+# Sameer: export-objs is obsolete in 2.6 now. We need to investigate
+# if we need something else here.
+
+#export-objs     := arcksyms.o
+
+obj-$(CONFIG_MODULES)   += arcksyms.o module.o
+# Object file lists.
+
+obj-y		+= arcksyms.o ptrace.o sys_arc.o setup.o irq.o
+obj-y		+= troubleshoot.o stacktrace.o event-log.o
+
+ifdef CONFIG_SMP
+obj-y		+= atomic_lock.o bitops_lock.o
+endif
+
+ifeq ($(CONFIG_GENERIC_CLOCKEVENTS),y)
+    obj-y += time.o
+else
+    obj-y += time-jiff.o
+endif
+
+ifeq ($(CONFIG_EARLY_PRINTK),y)
+    obj-y += early_printk.o
+endif
+
+obj-m		:=
+obj-n		:=
+obj-		:=
+
+ifdef CONFIG_ARC700_ISS
+obj-y		+= simulator.o
+endif
+
+ifdef CONFIG_ARC_STACK_UNWIND
+obj-y		+= unwind.o
+endif
+
+extra-y := init_task.o vmlinux.lds
+
+#include $(TOPDIR)/Rules.make

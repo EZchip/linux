@@ -1,0 +1,479 @@
+#
+# For a description of the syntax of this configuration file,
+# see Documentation/kbuild/kconfig-language.txt.
+#
+#   vineetg: Oct 4th 2007 : Added Config Options for 800/SMP
+#
+
+mainmenu "Linux Kernel Configuration"
+
+# Need to know why do we need these variables
+
+config RWSEM_GENERIC_SPINLOCK
+        def_bool y
+
+config UID16
+        bool
+        default y
+
+# This definition is temporarily lying here
+
+config SPLIT_PTLOCK_CPUS
+        int
+        default 4096
+
+
+config FLATMEM
+        bool
+        default y
+
+# Reminder: We need to restructure the menuconfig
+#            and get lots of options in.
+
+config LOG_BUF_SHIFT
+        int
+        default 14
+
+# Sameer: Hardcoding this variable as y for a while
+#         This is the variable to be used to to switch
+#         between linux and uclinux
+
+config MMU
+        bool
+        default y
+
+config NO_IOPORT
+	bool
+	default y
+
+config GENERIC_CALIBRATE_DELAY
+        bool
+        default y
+
+# for generic Time of day implementation
+config GENERIC_TIME
+        bool
+        default y
+
+config GENERIC_FIND_NEXT_BIT
+        bool
+        default y
+
+config GENERIC_HWEIGHT
+        bool
+        default y
+
+config BINFMT_ELF
+        bool
+        default y
+
+# CONFIG common to all ARC cores (700+800) under this
+#    config option instead of existing ARCH_ARC700
+# Need corresponding change in include/asm-arc/linkage.h
+config ARCH_ARC
+    bool
+    default y
+    select HAVE_OPROFILE
+    select NO_IOPORT
+
+# end of temporary definitions section
+
+source "init/Kconfig"
+
+menu "Bus options (PCI etc.)"
+
+config PCI
+	bool "PCI support"
+	default n
+	help
+	  If you have PCI, say Y, otherwise N.
+
+source "drivers/pci/Kconfig"
+source "drivers/pci/hotplug/Kconfig"
+source "drivers/pcmcia/Kconfig"
+
+endmenu
+
+menu "Processor Type and features"
+
+config GENERIC_CLOCKEVENTS
+    bool "Generic clock events"
+    default y
+
+source "kernel/time/Kconfig"
+
+choice
+        prompt "ARC Processor"
+        default ARCH_ARC700
+
+config ARCH_ARC700
+        bool "ARC700"
+        help
+          Support for ARC700 core processors.
+
+config ARCH_ARC800
+        bool "ARC800"
+        help
+          Support for ARC800 core processors.
+
+endchoice
+
+config ARCH_ARC_CURR_IN_REG
+        bool "Dedicate Register r25 for current_task pointer"
+        default N
+        help
+          This reserved Register R25 to point to Current Task in
+                kernel mode. This saves memory access for each such access
+
+config SMP
+        bool "Symmetric Multi-Processing (Incomplete)"
+    default y
+    depends on ARCH_ARC800
+        help
+          This enables support for systems with more than one CPU. If you have
+          a system with only one CPU, like most personal computers, say N. If
+          you have a system with more than one CPU, say Y.
+
+          If you say N here, the kernel will run on single and multiprocessor
+          machines, but will use only one CPU of a multiprocessor machine. If
+          you say Y here, the kernel will run on many, but not all, single
+          processor machines. On a single processor machine, the kernel will
+          run faster if you say N here.
+
+          See also the <file:Documentation/smp.txt>,
+          <file:Documentation/i386/IO-APIC.txt>,
+          <file:Documentation/nmi_watchdog.txt> and the SMP-HOWTO available at
+          <http://www.linuxdoc.org/docs.html#howto>.
+
+          If you don't know what to do here, say N.
+
+config NR_CPUS
+        int "Maximum number of CPUs (2-32)"
+        range 2 32
+        depends on SMP
+    default "2"
+
+config ARC700_CLK
+        int "Clock speed"
+        default "12000000"
+
+config SRAM_BASE
+        hex "SRAM Base Address"
+        default "0x00000000"
+
+config SRAM_SIZE
+        hex "SRAM Size"
+        default "0x00400000"
+
+config VMALLOC_SIZE
+        int "VMALLOC_SIZE(in MB)"
+        default "256"
+        help
+        Kernel Virtual Memory Size
+
+menuconfig ARC700_CACHE
+    bool "Enable Cache Support"
+    default y
+
+if ARC700_CACHE
+
+config ARC700_USE_ICACHE
+        bool "Use Instruction Cache"
+        default y
+
+config ARC700_USE_DCACHE
+        bool "Use Data Cache"
+        default y
+
+config ARC700_CACHE_PAGES
+        bool "Per Page Cache Control"
+#        default y if ARC700_USE_ICACHE || ARC700_USE_DCACHE
+        depends on ARC700_USE_ICACHE || ARC700_USE_DCACHE
+        help
+        This can be used to over-ride the global I/D Cache Enable on a
+        per-page basis (but only for pages accessed via MMU such as
+        Kernel Virtual address or User Virtual Address)
+        TLB entries have a per-page Cache Enable Bit.
+        Note that Global I/D ENABLE + Per Page DISABLE works but corollary
+        Global DISABLE + Per Page ENABLE won't work
+
+endif #ARC700_CACHE
+
+menu "ARC Pheripheral Support"
+
+config ARC_AHB_PCI_BRIDGE
+    bool "Host PCI Bridge on AA4 Board"
+    default n
+    depends on PCI
+    help
+    To Enable a PCI device to work on AA4 Ref Board a AHB to PCI Host Bridge
+    is needed.
+
+config ARC700_ISS
+	bool "Run on ARC700 Simulator"
+    select NO_DMA
+	default n
+
+config NO_DMA
+    bool
+    default n
+
+
+config ARC_IDE
+	tristate "Enable ARC IDE"
+    select HAVE_IDE
+    select IDE
+    select BLK_DEV_IDE
+    select BLK_DEV_IDEDISK
+	default y
+
+config ARC_BLK_DEV_IDEDMA
+        bool "ARC IDE DMA support"
+        default y
+        select BLK_DEV_IDEDMA
+        depends on ARC_IDE
+
+config ARC700_SERIAL
+        bool "ARC700 UART driver support"
+        default y
+
+config ARC700_NUM_SERIAL_PORTS
+    int 'Number of ports'
+    default 1
+    depends on ARC700_SERIAL
+
+config ARC700_SERIAL_BAUD
+        int "Baud rate"
+        default "57600"
+        depends on ARC700_SERIAL
+
+config SERIAL_LV2
+        bool "Configure serial interrupt on level 2"
+        default n
+        depends on ARC700_SERIAL
+
+config TIMER_LV2
+        bool "Configure Timer0 interrupt on level 2"
+        default n
+
+config ARC700_HLINK
+        bool "ARC700 Host Link support"
+        default n
+
+config ARCTANGENT_EMAC
+        tristate "ARCTangent EMAC support"
+        select NET
+        select INET
+        select NETDEVICES
+        select NET_ETHERNET
+        default n
+
+config EMAC_LV2
+        bool "Configure EMAC interrupt on level 2"
+        default n
+        depends on ARCTANGENT_EMAC
+
+config EMAC_NAPI
+        bool "Use NAPI ?"
+        default n
+        depends on ARCTANGENT_EMAC
+
+
+config ARCH_ARC_LV2_INTR
+        bool
+        default y if EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
+        depends on EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
+
+config ARCPGU
+        tristate "Use ARC Pixel Graphics Unit"
+        select FB
+        select FB_CFB_FILLRECT
+        select FB_CFB_COPYAREA
+        select FB_CFB_IMAGEBLIT
+
+config VFB_SIM
+        bool "Use ISS/xISS framebuffer"
+        select FB
+        select FB_CFB_FILLRECT
+        select FB_CFB_COPYAREA
+        select FB_CFB_IMAGEBLIT
+        select FB_SYS_FOPS
+config VFB_SIM_BASE
+        hex "Base address of Frame Buffer in Pysical memory"
+        default "0x88000000"
+        depends on VFB_SIM
+
+config VFB_SIM_SIZE
+        hex "Size of memory buffer"
+        default "0x400000"
+        depends on VFB_SIM
+
+config VFB_SIM_XRES
+        int "X-Resolution"
+        default "640"
+        depends on VFB_SIM
+
+config VFB_SIM_YRES
+        int "Y-Resolution"
+        default "480"
+        depends on VFB_SIM
+
+config VFB_SIM_BPP
+        int "Bits per pixel"
+        default "16"
+        depends on VFB_SIM
+
+config FORCE_MAX_ZONEORDER
+        int
+        depends on ARCPGU || PGU_SIM
+        default "13"
+
+config ARCPGU_YUVBUFS
+    int 'Number of YUV Buffers'
+    default 18
+    depends on ARCPGU || PGU_SIM
+
+config ARCPGU_RGBBUFS
+    int 'Number of RGB Buffers'
+    default 2
+    depends on ARCPGU || PGU_SIM
+
+config ARCPGU_DISPTYPE
+    int 'Display selector (0 - VGA, 1 - QVGA)'
+    default 0
+    depends on ARCPGU || PGU_SIM
+
+config ARCPGU_XRES
+    int 'Default YUV X resolution'
+    default 640
+    depends on ARCPGU || PGU_SIM
+
+config ARCPGU_YRES
+    int 'Default YUV Y resolution'
+    default 480
+    depends on ARCPGU || PGU_SIM
+
+config ARCPGU_VCLK
+    bool 'PLL-driven pixel clock'
+    default 0
+    depends on ARCPGU || PGU_SIM
+
+config ARC_PGU_CONSOLE
+    bool 'Console on the ARC PGU'
+    depends on ARCPGU || PGU_SIM
+    select FRAMEBUFFER_CONSOLE
+    select FONTS
+    select FONT_8x8
+    select FONT_8x16
+    select LOGO
+    select LOGO_LINUX_MONO
+    select LOGO_LINUX_VGA16
+    select LOGO_LINUX_CLUT224
+    select BACKLIGHT_LCD_SUPPORT
+
+
+config FB_ARCPGU
+    bool
+    depends on ARC_PGU_CONSOLE
+    default y
+
+config ARCVSYNC
+    bool
+    depends on ARC_PGU_CONSOLE
+    default y
+
+config SOUND_ARC_AC97
+        tristate "Enable AC97 interface"
+        select SOUND
+        select SOUND_PRIME
+
+endmenu
+
+menuconfig ARC_DBG
+    bool "ARC debugging"
+    default y
+
+if ARC_DBG
+
+config ARC_STACK_UNWIND
+    bool "Enable DWARF specific kernel stack unwind"
+    default y
+    select KALLSYMS
+    help
+    Compiles the kernel with DWARF unwind information and can be used
+    to get stack backtraces.
+
+    If you say Y here the resulting kernel image will be slightly larger
+    but not slower, and it will give very useful debugging information.
+    If you don't debug the kernel, you can say N, but we may not be able
+    to solve problems without frame unwind information
+
+config ARC_TLB_PARANOIA
+    bool "Paranoia Checks in Low Level TLB Handlers"
+    default n
+
+config ARC_USER_FAULTS_DBG
+    bool "Debug User Faults"
+    default n
+    help
+    This make debugging user programs easier in absence of debugger
+    It prints Diagnostic information when user program crashes due to
+    "Illegal Instrn" or "Segmantation faults" or "unhandled Protection Violation"
+
+config ARC_DBG_EVENT_TIMELINE
+    bool "Low level event capture"
+    default n
+    help
+    Capture low level events: IRQ/Trap/Exception
+
+endif #ARC_DBG
+
+config ARC_UBOOT_CMDLINE
+    bool "Support U-boot kernel command line passing"
+    default n
+    help
+    If you are using U-boot (www.denx.de) and wish to pass the kernel
+    command line from the U-boot environment to the Linux kernel then
+    switch this option on.
+    U-boot will pass the command_line variable at the beginning of the
+    .bss section.  The kernel copies this variable into the correct place
+    during it's boot.
+
+    If you are unsure "N" is a good choice.
+
+config ARC_PROFILING
+    bool "Support ARC Hardware Profiling"
+    default n
+    help
+    If you have the ARC hardware support built into your hardware and
+    wish to use the "task mode" profiling support then switch this on.
+    This will enable an architecture specific context switch hook that
+    will enable / disable the hardware counting while not running the specific
+    process you are interested in.
+
+    If you are unsure "N" is a good choice.
+
+config HZ
+    int "Timer Frequency"
+    default 100
+
+source "kernel/Kconfig.preempt"
+
+endmenu
+
+source "mm/Kconfig"
+
+
+source "net/Kconfig"
+
+source "drivers/Kconfig"
+
+source "fs/Kconfig"
+
+source "arch/arc/Kconfig.debug"
+
+source "security/Kconfig"
+
+source "crypto/Kconfig"
+
+source "lib/Kconfig"

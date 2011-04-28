@@ -1,0 +1,703 @@
+/******************************************************************************
+ * Copyright ARC International (www.arc.com) 2007-2009
+ *
+ * rajeshwarr: Feb 2009
+ *  - Support for Realtime Signals
+ *
+ * vineetg: Feb 2009
+ *  -small goofup in calculating if Frame straddles 2 pages
+ *    now SUPER efficient
+ *
+ * vineetg: Aug 11th 2008: Bug #94183
+ *  -ViXS were still seeing crashes when using insmod to load drivers.
+ *   It turned out that the code to change Execute permssions for TLB entries
+ *   of user was not guarded for interrupts (mod_tlb_permission)
+ *   This was cauing TLB entries to be overwritten on unrelated indexes
+ *
+ * Vineetg: July 15th 2008: Bug #94183
+ *  -Exception happens in Delay slot of a JMP, and before user space resumes,
+ *   Signal is delivered (Ctrl + C) = >SIGINT.
+ *   setup_frame( ) sets up PC,SP,BLINK to enable user space signal handler
+ *   to run, but doesn't clear the Delay slot bit from status32. As a result,
+ *   on resuming user mode, signal handler branches off to BTA of orig JMP
+ *  -FIX: clear the DE bit from status32 in setup_frame( )
+ *
+ *****************************************************************************/
+/******************************************************************************
+ * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ *****************************************************************************/
+
+/* arch/arc/proc/arc700/signal.c
+ *
+ * Author(s) :  Rahul Trivedi, Kanika Nema
+ */
+#include <linux/sys.h>      /* for NR_syscalls */
+#include <linux/sched.h>
+#include <linux/mm.h>
+#include <linux/smp.h>
+#include <linux/smp_lock.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+#include <linux/signal.h>
+#include <linux/wait.h>
+#include <linux/ptrace.h>
+#include <linux/unistd.h>
+#include <linux/personality.h>
+#include <linux/syscalls.h> /* Sameer: For sys_wait4() */
+#include <linux/freezer.h>
+#include <asm/ucontext.h>
+#include <asm/uaccess.h>
+
+/* for changing permissions of stackpage*/
+#include <asm/pgtable.h>
+#include <asm/arcregs.h>
+#include <asm/tlb.h>
+
+#define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
+int do_signal(struct pt_regs *, sigset_t *);
+
+#define EXEC_DISABLE 0
+#define EXEC_ENABLE 1
+void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
+               int exec_or_not);
+
+void set_frame_exec(unsigned long vaddr, unsigned long size, bool exec_enable);
+
+#if 0
+#define ASID_DBG_DEFS int asid_dbg1, asid_dbg2;
+
+#define ASID_DBG1 \
+    asid_dbg1 = current->mm->context.asid;              \
+    if ( asid_dbg1 ==  256)                             \
+            printk("Error #1 in ASID in signals 0x%x\n",  \
+                        asid_dbg1);
+
+#define ASID_DBG2                                           \
+        asid_dbg2 = current->mm->context.asid;              \
+        if ( asid_dbg2 == 256 || asid_dbg2 != asid_dbg1 )   \
+            printk("Error #2 in ASID in signals 0x%x 0x%x\n",   \
+                        asid_dbg1, asid_dbg2);
+
+#else
+#define ASID_DBG_DEFS
+#define ASID_DBG1
+#define ASID_DBG2
+#endif
+
+
+/*
+ * atomically swap in the new signal mask, and wait for a signal.
+ */
+asmlinkage int sys_sigsuspend(int restart, unsigned long oldmask,
+                  old_sigset_t mask, struct pt_regs *regs)
+{
+    sigset_t saveset;
+
+    mask &= _BLOCKABLE;
+    spin_lock_irq(&current->sighand->siglock);
+    saveset = current->blocked;
+    siginitset(&current->blocked, mask);
+    recalc_sigpending();
+    spin_unlock_irq(&current->sighand->siglock);
+    regs->r0 = -EINTR;
+
+    while (1) {
+        current->state = TASK_INTERRUPTIBLE;
+        schedule();
+        if (do_signal(regs, &saveset))
+            return regs->r0;
+    }
+}
+
+asmlinkage int
+sys_rt_sigsuspend(sigset_t __user * unewset, size_t sigsetsize,
+          struct pt_regs *regs)
+{
+    sigset_t saveset, newset;
+
+    /* XXX: Don't preclude handling different sized sigset_t's. */
+    if (sigsetsize != sizeof(sigset_t))
+        return -EINVAL;
+
+    if (copy_from_user(&newset, unewset, sizeof(newset)))
+        return -EFAULT;
+    sigdelsetmask(&newset, ~_BLOCKABLE);
+
+    spin_lock_irq(&current->sighand->siglock);
+    saveset = current->blocked;
+    current->blocked = newset;
+    recalc_sigpending();
+    spin_unlock_irq(&current->sighand->siglock);
+    regs->r0 = -EINTR;
+
+    while (1) {
+        current->state = TASK_INTERRUPTIBLE;
+        schedule();
+        if (do_signal(regs, &saveset))
+            return regs->r0;
+    }
+}
+
+asmlinkage int
+sys_sigaction(int sig, const struct old_sigaction __user * act,
+          struct old_sigaction __user * oact)
+{
+    struct k_sigaction new_ka, old_ka;
+    int ret;
+    int err;
+
+    if (act) {
+        old_sigset_t mask;
+
+        if (!access_ok(VERIFY_READ, act, sizeof(*act)))
+            return -EFAULT;
+
+        err = __get_user(new_ka.sa.sa_handler, &act->sa_handler);
+        err |= __get_user(new_ka.sa.sa_restorer, &act->sa_restorer);
+        err |= __get_user(new_ka.sa.sa_flags, &act->sa_flags);
+        err |= __get_user(mask, &act->sa_mask);
+        if (err)
+            return -EFAULT;
+
+        siginitset(&new_ka.sa.sa_mask, mask);
+    }
+
+    ret = do_sigaction(sig, act ? &new_ka : NULL, oact ? &old_ka : NULL);
+
+    if (!ret && oact) {
+        if (!access_ok(VERIFY_WRITE, oact, sizeof(*oact)))
+            return -EFAULT;
+
+        err = __put_user(old_ka.sa.sa_handler, &oact->sa_handler);
+        err |= __put_user(old_ka.sa.sa_restorer, &oact->sa_restorer);
+        err |= __put_user(old_ka.sa.sa_flags, &oact->sa_flags);
+        err |= __put_user(old_ka.sa.sa_mask.sig[0], &oact->sa_mask);
+        if (err)
+            return -EFAULT;
+    }
+
+    return ret;
+}
+
+asmlinkage int
+sys_sigaltstack(const stack_t * uss, stack_t * uoss, struct pt_regs *regs)
+{
+    return do_sigaltstack(uss, uoss, regs->sp);
+}
+
+/*
+ * Do a signal return; undo the signal stack.  These are aligned to 64-bit.
+ */
+struct sigframe {
+    struct ucontext uc;
+    unsigned long retcode[5];
+};
+
+struct rt_sigframe {
+    struct siginfo info;
+    struct sigframe sig;
+};
+
+static int restore_sigframe(struct pt_regs *regs, struct sigframe __user * sf)
+{
+    sigset_t set;
+    int err;
+
+    err = __copy_from_user(&set, &sf->uc.uc_sigmask, sizeof(set));
+    if (err == 0) {
+        sigdelsetmask(&set, ~_BLOCKABLE);
+        spin_lock_irq(&current->sighand->siglock);
+        current->blocked = set;
+        recalc_sigpending();
+        spin_unlock_irq(&current->sighand->siglock);
+    }
+
+    err |= __get_user(regs->r0, &sf->uc.uc_mcontext.r0);
+    err |= __get_user(regs->r1, &sf->uc.uc_mcontext.r1);
+    err |= __get_user(regs->r2, &sf->uc.uc_mcontext.r2);
+    err |= __get_user(regs->r3, &sf->uc.uc_mcontext.r3);
+    err |= __get_user(regs->r4, &sf->uc.uc_mcontext.r4);
+    err |= __get_user(regs->r5, &sf->uc.uc_mcontext.r5);
+    err |= __get_user(regs->r6, &sf->uc.uc_mcontext.r6);
+    err |= __get_user(regs->r7, &sf->uc.uc_mcontext.r7);
+    err |= __get_user(regs->r8, &sf->uc.uc_mcontext.r8);
+    err |= __get_user(regs->r9, &sf->uc.uc_mcontext.r9);
+    err |= __get_user(regs->r10, &sf->uc.uc_mcontext.r10);
+    err |= __get_user(regs->r11, &sf->uc.uc_mcontext.r11);
+    err |= __get_user(regs->r12, &sf->uc.uc_mcontext.r12);
+    err |= __get_user(regs->r26, &sf->uc.uc_mcontext.r26);
+    err |= __get_user(regs->fp, &sf->uc.uc_mcontext.fp);
+    err |= __get_user(regs->blink, &sf->uc.uc_mcontext.blink);
+    err |= __get_user(regs->ret, &sf->uc.uc_mcontext.ret);
+    err |= __get_user(regs->status32, &sf->uc.uc_mcontext.status32);
+    err |= __get_user(regs->lp_count, &sf->uc.uc_mcontext.lp_count);
+    err |= __get_user(regs->lp_end, &sf->uc.uc_mcontext.lp_end);
+    err |= __get_user(regs->lp_start, &sf->uc.uc_mcontext.lp_start);
+    err |= __get_user(regs->bta, &sf->uc.uc_mcontext.bta);
+    err |= __get_user(regs->sp, &sf->uc.uc_mcontext.sp);
+
+    return err;
+}
+
+asmlinkage int sys_sigreturn(struct pt_regs *regs)
+{
+    struct sigframe __user *frame;
+
+    /* Always make any pending restarted system calls return -EINTR */
+    current_thread_info()->restart_block.fn = do_no_restart_syscall;
+
+    /* Since we stacked the signal on a word boundary,
+     * then 'sp' should be word aligned here.  If it's
+     * not, then the user is trying to mess with us.
+     */
+    if (regs->sp & 3)
+        goto badframe;
+
+    frame = (struct sigframe __user *)regs->sp;
+
+    if (!access_ok(VERIFY_READ, frame, sizeof(*frame)))
+        goto badframe;
+
+    if (restore_sigframe(regs, frame))
+        goto badframe;
+
+    set_frame_exec((unsigned long)&frame->retcode, sizeof(frame->retcode),
+                                                                EXEC_DISABLE);
+
+    return regs->r0;
+
+    badframe:
+    force_sig(SIGSEGV, current);
+    return 0;
+}
+
+asmlinkage int sys_rt_sigreturn(struct pt_regs *regs)
+{
+    struct rt_sigframe __user *frame;
+
+    /* Always make any pending restarted system calls return -EINTR */
+    current_thread_info()->restart_block.fn = do_no_restart_syscall;
+
+    /* Since we stacked the signal on a word boundary,
+     * then 'sp' should be word aligned here.  If it's
+     * not, then the user is trying to mess with us.
+     */
+    if (regs->sp & 3)
+        goto badframe;
+
+    frame = ((struct rt_sigframe __user *)regs->sp);
+
+    if (!access_ok(VERIFY_READ, frame, sizeof(*frame)))
+        goto badframe;
+
+    if (restore_sigframe(regs, &frame->sig))
+        goto badframe;
+
+    if (do_sigaltstack(&frame->sig.uc.uc_stack, NULL, regs->sp) == -EFAULT)
+        goto badframe;
+
+    set_frame_exec((unsigned long)&frame->sig.retcode,
+                            sizeof(frame->sig.retcode), EXEC_DISABLE);
+
+    return regs->r0;
+
+  badframe:
+    force_sig(SIGSEGV, current);
+    return 0;
+}
+
+static int
+setup_sigframe(struct sigframe __user * sf, struct pt_regs *regs,
+           sigset_t * set)
+{
+
+    int err;
+
+    err = __put_user(regs->r0, &sf->uc.uc_mcontext.r0);
+    err |= __put_user(regs->r1, &sf->uc.uc_mcontext.r1);
+    err |= __put_user(regs->r2, &sf->uc.uc_mcontext.r2);
+    err |= __put_user(regs->r3, &sf->uc.uc_mcontext.r3);
+    err |= __put_user(regs->r4, &sf->uc.uc_mcontext.r4);
+    err |= __put_user(regs->r5, &sf->uc.uc_mcontext.r5);
+    err |= __put_user(regs->r6, &sf->uc.uc_mcontext.r6);
+    err |= __put_user(regs->r7, &sf->uc.uc_mcontext.r7);
+    err |= __put_user(regs->r8, &sf->uc.uc_mcontext.r8);
+    err |= __put_user(regs->r9, &sf->uc.uc_mcontext.r9);
+    err |= __put_user(regs->r10, &sf->uc.uc_mcontext.r10);
+    err |= __put_user(regs->r11, &sf->uc.uc_mcontext.r11);
+    err |= __put_user(regs->r12, &sf->uc.uc_mcontext.r12);
+    err |= __put_user(regs->r26, &sf->uc.uc_mcontext.r26);
+    err |= __put_user(regs->fp, &sf->uc.uc_mcontext.fp);
+    err |= __put_user(regs->blink, &sf->uc.uc_mcontext.blink);
+    err |= __put_user(regs->ret, &sf->uc.uc_mcontext.ret);
+    err |= __put_user(regs->status32, &sf->uc.uc_mcontext.status32);
+    err |= __put_user(regs->lp_count, &sf->uc.uc_mcontext.lp_count);
+    err |= __put_user(regs->lp_end, &sf->uc.uc_mcontext.lp_end);
+    err |= __put_user(regs->lp_start, &sf->uc.uc_mcontext.lp_start);
+    err |= __put_user(regs->bta, &sf->uc.uc_mcontext.bta);
+    err |= __put_user(regs->sp, &sf->uc.uc_mcontext.sp);
+
+    err |= __copy_to_user(&sf->uc.uc_sigmask, set, sizeof(sigset_t));
+
+    return err;
+}
+
+static inline void *get_sigframe(struct k_sigaction *ka, struct pt_regs *regs,
+                 unsigned long framesize)
+{
+    unsigned long sp = regs->sp;
+    void __user *frame;
+
+    /* This is the X/Open sanctioned signal stack switching */
+    if ((ka->sa.sa_flags & SA_ONSTACK) && !sas_ss_flags(sp))
+        sp = current->sas_ss_sp + current->sas_ss_size;
+
+    /* No matter what happens, 'sp' must be word
+     * aligned otherwise nasty things could happen
+     */
+
+    /* ATPCS B01 mandates 8-byte alignment */
+    frame = (void __user *)((sp - framesize) & ~7);
+
+    /* Check that we can actually write to the signal frame */
+    if (!access_ok(VERIFY_WRITE, frame, framesize))
+        frame = NULL;
+
+    return frame;
+}
+
+/* Set up to return from userspace */
+static int
+setup_mode_change(int usig, struct k_sigaction *ka, struct pt_regs *regs,
+                                                        void __user *frame)
+{
+    unsigned long *retcode;
+    int err = 0;
+
+    if (ka->sa.sa_flags & SA_SIGINFO)
+        retcode = ((struct rt_sigframe *)frame)->sig.retcode;
+    else
+        retcode = ((struct sigframe *)frame)->retcode;
+
+
+    /* Setup for returning from signal handler(USER Mode => KERNEL Mode)*/
+
+    /* If provided, use a stub already in userspace */
+    if (ka->sa.sa_flags & SA_RESTORER) {
+        retcode = (unsigned long *)ka->sa.sa_restorer;
+    } else {
+        unsigned int code;
+
+        /* A7 is middle endian ! */
+        if (ka->sa.sa_flags & SA_SIGINFO)
+            code = 0x1b42208a;        /* code for mov r8, __NR_RT_SIGRETURN */
+        else
+            code = 0x1dc1208a;        /* code for mov r8, __NR_SIGRETURN */
+        err = __put_user(code, retcode);
+
+        code = 0x003f226f;            /* code for trap0 */
+        err |= __put_user(code, retcode + 1);
+        code = 0x7000264a;            /* code for nop */
+        err |= __put_user(code, retcode + 2);
+        code = 0x7000264a;            /* code for nop */
+        err |= __put_user(code, retcode + 3);
+    }
+
+    if (err)
+        return err;
+
+    /* To be able execute the code on the stack(retcode), we need to enable the
+     * execute permissions of the stack: In the pte entry and in the TLB entry.
+     */
+    set_frame_exec((unsigned long)retcode,
+                        sizeof(((struct sigframe *)0)->retcode), EXEC_ENABLE);
+
+
+    /* Setup for invoking the signal handler (KERNEL Mode => USER Mode) */
+
+    /* Arguements to the user Signal handler */
+    regs->r0 = usig;
+    if (ka->sa.sa_flags & SA_SIGINFO) {
+        struct rt_sigframe *rt_frame = frame;
+        regs->r1 = (unsigned long)&rt_frame->info;
+        regs->r2 = (unsigned long)&rt_frame->sig.uc;
+    }
+
+    /* Modify critical regs, so that when control goes back to user-mode
+     * it starts executing the user space Signal handler
+     */
+    regs->sp = ((unsigned long)frame);
+    regs->blink = (unsigned long)retcode;
+    regs->ret = (unsigned long)ka->sa.sa_handler;
+
+    /* Bug 94183, Clear the DE bit, so that when signal handler
+     * starts to run, it doesn't use BTA
+     */
+    regs->status32 &= ~STATUS_DE_MASK;
+
+    return 0;
+}
+
+
+static int setup_frame(int sig, struct k_sigaction *ka,
+            sigset_t * set, struct pt_regs *regs)
+{
+    struct sigframe __user *frame;
+    int err;
+
+    frame = get_sigframe(ka, regs, sizeof(struct sigframe));
+
+    if (!frame)
+        return 1;
+
+    err = setup_sigframe(frame, regs, set);
+
+    if(!err)
+        err |= setup_mode_change(sig, ka, regs, frame);
+
+    return err;
+}
+
+static int setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t * info,
+               sigset_t * set, struct pt_regs *regs)
+{
+    struct rt_sigframe __user *frame;
+    stack_t stack;
+    int err;
+
+    frame = get_sigframe(ka, regs, sizeof(struct rt_sigframe));
+
+    if (!frame)
+        return 1;
+
+    err = copy_siginfo_to_user(&frame->info, info);
+    err |= __put_user(0, &frame->sig.uc.uc_flags);
+    err |= __put_user(NULL, &frame->sig.uc.uc_link);
+
+    memset(&stack, 0, sizeof(stack));
+    stack.ss_sp = (void __user *)current->sas_ss_sp;
+    stack.ss_flags = sas_ss_flags(regs->sp);
+    stack.ss_size  = current->sas_ss_size;
+    err |= __copy_to_user(&frame->sig.uc.uc_stack, &stack, sizeof(stack));
+
+    err |= setup_sigframe(&frame->sig, regs, set);
+
+    if (!err)
+        err |= setup_mode_change(sig, ka, regs, frame);
+
+    return err;
+}
+
+/*
+ * OK, we're invoking a handler
+ */
+static void
+handle_signal(unsigned long sig, struct k_sigaction *ka,
+          siginfo_t * info, sigset_t * oldset, struct pt_regs *regs)
+{
+    struct thread_info *thread = current_thread_info();
+    unsigned long usig = sig;
+    int ret;
+
+    if (thread->exec_domain && thread->exec_domain->signal_invmap && usig < 32)
+        usig = thread->exec_domain->signal_invmap[usig];
+
+    /* Set up the stack frame */
+    if (ka->sa.sa_flags & SA_SIGINFO)
+        ret = setup_rt_frame(usig, ka, info, oldset, regs);
+    else
+        ret = setup_frame(usig, ka, oldset, regs);
+
+    if (ret) {
+        force_sigsegv(sig, current);
+        return;
+    }
+
+    /* Block the signal if we are successful */
+    spin_lock_irq(&current->sighand->siglock);
+    sigorsets(&current->blocked, &current->blocked, &ka->sa.sa_mask);
+    if (!(ka->sa.sa_flags & SA_NODEFER))
+        sigaddset(&current->blocked, sig);
+    recalc_sigpending();
+    spin_unlock_irq(&current->sighand->siglock);
+}
+
+/* Note that 'init' is a special process: it doesn't get signals it doesn't
+ * want to handle. Thus you cannot kill init even with a SIGKILL even by
+ * mistake.
+ *
+ * Note that we go through the signals twice: once to check the signals that
+ * the kernel can handle, and then we build all the user-level signal handling
+ * stack-frames in one go after that.
+ */
+int do_signal(struct pt_regs *regs, sigset_t * oldset)
+{
+    struct k_sigaction ka;
+    siginfo_t info;
+    int signr;
+
+    if (try_to_freeze())
+        goto no_signal;
+
+    if(!oldset)
+        oldset = &current->blocked;
+
+    signr = get_signal_to_deliver(&info, &ka, regs, NULL);
+
+    /* Are we from a system call? */
+    if (regs->orig_r8 >= 0 && regs->orig_r8 <= NR_syscalls) {
+        switch (regs->r0) {
+            case -ERESTARTNOHAND:
+                regs->r0 = -EINTR;
+                break;
+
+            case -ERESTARTSYS:
+                if (!(ka.sa.sa_flags & SA_RESTART)) {
+                    regs->r0 = -EINTR;
+                    break;
+                }
+                /* fallthrough */
+
+            case -ERESTARTNOINTR:
+                /* We don't need to restore r8, as its value will be restored
+                 * anyway
+                 */
+                regs->r0 = regs->orig_r0;
+                regs->ret -= 4;
+        }
+    }
+
+    if (signr > 0) {
+        handle_signal(signr, &ka, &info, oldset, regs);
+        return 1;
+    }
+
+    no_signal:
+    if ((regs->orig_r8 >= 0 && regs->orig_r8 <= NR_syscalls) &&
+            (regs->r0 == -ERESTARTNOHAND ||
+                regs->r0 == -ERESTARTSYS || regs->r0 == -ERESTARTNOINTR)) {
+        regs->r0 = regs->orig_r0;
+        regs->ret -= 4;
+    }
+    return 0;
+}
+
+void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
+               int exec_or_not)
+{
+    unsigned long frame_tlbpd1;
+    unsigned int flags, asid;
+
+    if (!mm) return;
+    local_irq_save(flags);
+
+    asid = mm->context.asid;
+
+    frame_vaddr = frame_vaddr & PAGE_MASK;
+    /* get the ASID */
+    frame_vaddr = frame_vaddr | (asid & 0xff);
+    write_new_aux_reg(ARC_REG_TLBPD0, frame_vaddr);
+    write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBProbe);
+
+    if (read_new_aux_reg(ARC_REG_TLBINDEX) != TLB_LKUP_ERR) {
+        write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBRead);
+        frame_tlbpd1 = read_new_aux_reg(ARC_REG_TLBPD1);
+
+        if (EXEC_DISABLE == exec_or_not) {
+            /* disable execute permissions for the user stack */
+            frame_tlbpd1 = frame_tlbpd1 & ~_PAGE_EXECUTE;
+        }
+        else {
+            /* enable execute */
+            frame_tlbpd1 = frame_tlbpd1 | _PAGE_EXECUTE;
+        }
+
+        write_new_aux_reg(ARC_REG_TLBPD1, frame_tlbpd1);
+        write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBWrite);
+    }
+
+    local_irq_restore(flags);
+}
+
+
+void set_frame_exec(unsigned long vaddr, unsigned long size, bool exec_enable)
+{
+    unsigned long paddr, vaddr_pg;
+    pte_t *ptep, pte;
+    unsigned long size_on_pg1, size_on_pg2;
+    ASID_DBG_DEFS;
+
+    size_on_pg2 = ~PAGE_MASK & (vaddr + size);
+    if (size_on_pg2 >= size) {
+        /* entire frame can never goto 2nd page
+         * this means all of it lies in 1st page
+         */
+        size_on_pg2 = 0;
+    }
+    size_on_pg1 = size - size_on_pg2;
+
+    vaddr_pg = vaddr & PAGE_MASK;       /* Get the virtual page address */
+
+    /* Get the physical page address for the virtual page address*/
+    ptep = pte_offset(
+                    pmd_offset (
+                            pgd_offset(current->mm, vaddr_pg),
+                            vaddr_pg),
+                    vaddr_pg);
+
+    /* Set the Execution Permission in the pte entry*/
+    pte = *ptep;
+    if (exec_enable)
+        pte = pte_mkexec(pte);
+    else
+        pte = pte_exprotect(pte);
+    set_pte(ptep, pte);
+
+    /* Get the physical page address */
+    paddr = (vaddr & ~PAGE_MASK) | (pte_val(pte) & PAGE_MASK);
+
+    /* Flush dcache line, and inv Icache line for frame->retcode */
+    if (exec_enable)
+        flush_dcache_range(paddr, paddr + size_on_pg1);
+    flush_icache_range(paddr, paddr + size_on_pg1);
+
+    ASID_DBG1;
+    mod_tlb_permission(vaddr_pg, current->mm, exec_enable);
+
+
+    if (size_on_pg2) {
+        vaddr_pg = (vaddr + size) & PAGE_MASK;
+
+        /* Get the physical page address for the virtual page address*/
+        ptep = pte_offset(
+                    pmd_offset (
+                            pgd_offset(current->mm, vaddr_pg),
+                            vaddr_pg),
+                    vaddr_pg);
+
+        /* Set the Execution Permission in the pte entry*/
+        pte = *ptep;
+        if (exec_enable)
+            pte = pte_mkexec(pte);
+        else
+            pte = pte_exprotect(pte);
+        set_pte(ptep, pte);
+
+        /* Get the physical page address */
+        paddr = pte_val(pte) & PAGE_MASK;
+
+        /* Flush dcache line, and inv Icache line for frame->retcode */
+        if (exec_enable)
+            flush_dcache_range(paddr, paddr + size_on_pg2);
+        flush_icache_range(paddr, paddr + size_on_pg2);
+
+        ASID_DBG2;
+        mod_tlb_permission(vaddr_pg, current->mm, exec_enable);
+    }
+}
