@@ -358,7 +358,7 @@ ARC_ENTRY EV_MachineCheck
    cmp     r0, 0x200100 /* Is this an overlapping TLB ? */
    bne     not_tlb_overlap
    bl      do_tlb_overlap_fault
-   j       ret_from_exception
+   b       ret_from_exception
 
 not_tlb_overlap:
 
@@ -477,7 +477,7 @@ ARC_ENTRY EV_Extension
 tracesys:
 
     ; PRE Sys Call Ptrace hook
-    jl  SYMBOL_NAME(syscall_trace)
+    bl  SYMBOL_NAME(syscall_trace)
 
     ; Do the Sys Call as we normally would.
     ; Validate the Sys Call number
@@ -503,7 +503,7 @@ tracesys:
 tracesys_exit:
 
     ;POST Sys Call Ptrace Hook
-    jl  SYMBOL_NAME(syscall_trace)
+    bl  SYMBOL_NAME(syscall_trace)
     j   ret_from_system_call
 
 ;################### Break Point TRAP ##########################
@@ -538,7 +538,7 @@ trap_with_param:
     ; unwind stack to discard Callee saved Regs
     DISCARD_CALLEE_SAVED_USER
 
-    j   ret_from_exception
+    b   ret_from_exception
 
 ;##################### Trap Handling ##############################
 ;
@@ -566,7 +566,7 @@ ARC_ENTRY EV_Trap
     ;------- (4) What caused the Trap --------------
     lr     r12, [ecr]
     and.f  0, r12, ECAUSE_PARAMETER_MASK
-    jnz    trap_with_param
+    bnz    trap_with_param
 
     ; ======= (5a) Trap is due to System Call ========
 
@@ -635,7 +635,7 @@ resume_user_mode:
     bbit0  r9, TIF_NEED_RESCHED, skip_user_resched
 
     ; User Task Preemption
-    jl  schedule
+    bl  schedule
     b   ret_from_exception
 
 skip_user_resched:
@@ -660,7 +660,7 @@ skip_user_resched:
     GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
     st  sp,[r10, THREAD_CALLEE_REG]
 
-    jl  SYMBOL_NAME(do_signal)
+    bl  SYMBOL_NAME(do_signal)
 
     ; unwind stack to discard Callee saved Regs
     DISCARD_CALLEE_SAVED_USER
@@ -835,32 +835,32 @@ ARC_ENTRY ret_from_fork
     ; when the forked child comes here from the __switch_to function
     ; r0 has the last task pointer.
     ; put last task in scheduler queue
-    jl  SYMBOL_NAME(schedule_tail)
-    jal SYMBOL_NAME(ret_from_exception)
+    bl  SYMBOL_NAME(schedule_tail)
+    b SYMBOL_NAME(ret_from_exception)
 
 ;################### Special Sys Call Wrappers ##########################
 
 ARC_ENTRY sys_execve_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r3, sp
-    jl  SYMBOL_NAME(sys_execve)
-    jal ret_from_system_call
+    bl  SYMBOL_NAME(sys_execve)
+    b ret_from_system_call
 
 ARC_ENTRY sys_fork_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
     SAVE_CALLEE_SAVED_USER
-    jl  SYMBOL_NAME(sys_fork)
+    bl  SYMBOL_NAME(sys_fork)
     DISCARD_CALLEE_SAVED_USER
-    jal ret_from_system_call
+    b ret_from_system_call
 
 ARC_ENTRY sys_vfork_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
     SAVE_CALLEE_SAVED_USER
-    jl  SYMBOL_NAME(sys_vfork)
+    bl  SYMBOL_NAME(sys_vfork)
     DISCARD_CALLEE_SAVED_USER
-    jal ret_from_system_call
+    b ret_from_system_call
 
 ARC_ENTRY sys_clone_wrapper
     ; clone sys-call takes 2 mandatary args: @flags and @child-stack
@@ -870,27 +870,27 @@ ARC_ENTRY sys_clone_wrapper
     ; this is cheap since our args are in regs, not on stack
     mov r5, sp  ; pt_regs
     SAVE_CALLEE_SAVED_USER
-    jl  SYMBOL_NAME(sys_clone)
+    bl  SYMBOL_NAME(sys_clone)
     DISCARD_CALLEE_SAVED_USER
-    jal ret_from_system_call
+    b ret_from_system_call
 
 ARC_ENTRY sys_rt_sigreturn_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
-    jl  SYMBOL_NAME(sys_rt_sigreturn)
-    jal ret_from_system_call
+    bl  SYMBOL_NAME(sys_rt_sigreturn)
+    b ret_from_system_call
 
 ARC_ENTRY sys_sigreturn_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
-    jl  SYMBOL_NAME(sys_sigreturn)
-    jal ret_from_system_call
+    bl  SYMBOL_NAME(sys_sigreturn)
+    b ret_from_system_call
 
 ARC_ENTRY sys_sigaltstack_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r2, sp
-    jl  SYMBOL_NAME(sys_sigaltstack)
-    jal ret_from_system_call
+    bl  SYMBOL_NAME(sys_sigaltstack)
+    b ret_from_system_call
 
 ;################### Sys Call Table ##########################
 

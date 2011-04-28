@@ -315,7 +315,7 @@
     /* Go to end of page pointed to by task->thread_info.
      *  This is start of THE kernel stack (grows upwards remember)
      */
-    add r9, r9, (THREAD_SIZE - 4)   // 0ne word GUTTER
+    add2 r9, r9, (THREAD_SIZE - 4)/4   // 0ne word GUTTER
 
     /* Save Pre Intr/Exception User SP on kernel stack */
     st.a    sp, [r9, -4]

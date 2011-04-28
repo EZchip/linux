@@ -502,8 +502,8 @@ do_slow_path_pf:
 
     FAKE_RET_FROM_EXCPN  r9
 
-    jl  do_page_fault
-    j   ret_from_user_faults
+    bl  do_page_fault
+    b   ret_from_user_faults
 
 
 ARC_EXIT EV_TLBMissD
