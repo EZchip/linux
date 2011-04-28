@@ -108,8 +108,8 @@ void take_snap2(int event)
         timeline_log[timeline_ctr].fault_addr = x;
     }
     else if (event == SNAP_INTR_IN ) {
-        timeline_log[timeline_ctr].cause = read_new_aux_reg(0x40A); //icause2
-        timeline_log[timeline_ctr].extra = read_new_aux_reg(0x0B); // statsu32_l2
+        timeline_log[timeline_ctr].cause = read_new_aux_reg(0x40A); //icause1
+        timeline_log[timeline_ctr].extra = read_new_aux_reg(0x0B); // statsu32_l1
         __asm__ __volatile__(
                 "mov %0, ilink1   \r\n"
                 :"=r" (x));

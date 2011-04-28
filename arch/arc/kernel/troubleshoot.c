@@ -14,7 +14,7 @@ static void show_ecr_verbose(struct pt_regs *regs);
 void show_callee_regs(struct callee_regs *cregs);
 
 /* For dumping register file (r0-r12) or (r13-r25), instead of 13 printks,
- * we simply loop as compiler genrates 13 calls to printk each with it's
+ * we simply loop otherwise gcc generates 13 calls to printk each with it's
  * own arg setup
  */
 void noinline print_reg_file(unsigned long *last_reg, int num)
@@ -23,7 +23,7 @@ void noinline print_reg_file(unsigned long *last_reg, int num)
 
     for (i = num; i < num + 13; i++) {
         printk("r%02u: %08lx\t", i, *last_reg);
-        if ( i && ( ( i % 3) == 0 )) printk("\n");
+        if ( ( (i+1) % 3) == 0 ) printk("\n");
         last_reg--;
     }
 }

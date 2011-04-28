@@ -23,10 +23,10 @@
 #define MAX_SNAPS  1024
 #define MAX_SNAPS_MASK (MAX_SNAPS-1)
 
-#define SNAP_INTR_IN            SYS_EVENT(0)
-#define SNAP_EXCP_IN            SYS_EVENT(1)
-#define SNAP_TRAP_IN            SYS_EVENT(2)
-#define SNAP_INTR_IN2           SYS_EVENT(3)
+#define SNAP_INTR_IN            SYS_EVENT(0)    //1
+#define SNAP_EXCP_IN            SYS_EVENT(1)    //2
+#define SNAP_TRAP_IN            SYS_EVENT(2)    //4
+#define SNAP_INTR_IN2           SYS_EVENT(3)    //8
 
 #define SNAP_OUT                0xF00
 #define SNAP_INTR_OUT           SYS_EVENT(8)

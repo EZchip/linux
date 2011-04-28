@@ -29,6 +29,19 @@ GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin -D__linux__ -O3
 
+# vineetg, Oct 2009
+# Low level event tracing is sort of crude, as it relies on visualisation
+# of log-buffer as a global array in Metaware debugger's "globals" Pane and
+# then manually saving it to a file. However w/o -g, debugger can't show the
+# non-scalar globals, hence this switch.
+# Ideally we must use something like relay FS, but can't, because this tracing
+# is generally done in case of weird faults like Machine check, to capture the
+# dying kernel's last few events. Thus expecting multiple kernel/user
+# daemons to haul data out of kernel in that state would be really stupid !
+ifeq ($(CONFIG_ARC_DBG_EVENT_TIMELINE),y)
+KBUILD_CFLAGS += -g
+endif
+
 MODFLAGS	+= -mlong-calls
 
 KBUILD_CFLAGS	+= $(shell if [ $(call cc-version, $(CC)) -gt 0400 ] ; then echo $(call cc-option,-mno-sdata); fi ;)
