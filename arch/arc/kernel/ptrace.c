@@ -1,4 +1,14 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2010-2011
+ *
+ *  vineetg: Jan 2010
+ *      -Enabling dynamic printk for fun
+ *      -str to id conversion for ptrace requests and reg names
+ *
+ *
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -26,17 +36,98 @@
 #include <asm/uaccess.h>
 #include <asm/arcdefs.h>
 
-/* OFFSET(x,y) is the offset of y in x */
-#define OFFSET(x,y) ( &((x *)0)->y )
+#define DBG(fmt, args...) pr_debug(fmt , ## args)
 
-//#define PTRACE_DEBUG
-int ptrace_dbg = 0;
-#ifdef PTRACE_DEBUG
-#define DBG(fmt, args...) if (ptrace_dbg) printk(KERN_INFO fmt , ## args)
-#else
-#define DBG(fmt, args...)
-#endif
+typedef struct {
+    int num_entries;
+    struct {
+        int id;
+        char *str;
+    } entry [ ];
+}
+id_to_str_tbl_t;
 
+char *get_str_from_id(int id, id_to_str_tbl_t *tbl)
+{
+    int i;
+    for ( i=0; i < tbl->num_entries; i++) {
+        if ( id == tbl->entry[i].id )
+            return tbl->entry[i].str;
+    }
+
+    return "(null)";
+}
+
+static id_to_str_tbl_t  req_names = {
+    //.num_entries = (sizeof(req_names) - sizeof(req_names.num_entries))/sizeof(req_names.entry[0]),
+    .num_entries = 16,
+    {
+        {PTRACE_PEEKTEXT, "peek-text"},
+        {PTRACE_PEEKDATA, "peek-data"},
+        {PTRACE_PEEKUSR, "peek-user"},
+        {PTRACE_POKETEXT, "poke-text"},
+        {PTRACE_POKEDATA, "poke-data"},
+        {PTRACE_POKEUSR, "poke-user"},
+        {PTRACE_CONT, "continue...."},
+        {PTRACE_KILL, "kill $#%#$$"},
+        {PTRACE_ATTACH, "attach"},
+        {PTRACE_DETACH, "detach"},
+        {PTRACE_GETREGS, "getreg"},
+        {PTRACE_SETREGS, "setreg"},
+        {PTRACE_SETOPTIONS, "set-option"},
+        {PTRACE_SETSIGINFO, "set-siginfo"},
+        {PTRACE_GETSIGINFO, "get-siginfo"},
+        {PTRACE_GETEVENTMSG, "get-event-msg"}
+    }
+};
+
+static id_to_str_tbl_t  reg_names = {
+    .num_entries = 42,
+    {
+        {0, "res1"},
+        {4, "BTA"},
+        {8, "LPS"},
+        {12, "LPE"},
+        {16, "LPC"},
+        {20, "STATUS3"},
+        {24, "PC"},
+        {28, "BLINK"},
+        {32, "FP"},
+        {36, "GP"},
+        {40, "r12"},
+        {44, "r11"},
+        {48, "r10"},
+        {52, "r9"},
+        {56, "r8"},
+        {60, "r7"},
+        {64, "r6"},
+        {68, "r5"},
+        {72, "r4"},
+        {76, "r3"},
+        {80, "r2"},
+        {84, "r1"},
+        {88, "r0"},
+        {92, "ORIG r0 (sys-call only)"},
+        {96, "ORIG r8 (event type)"},
+        {100, "SP"},
+        {104, "res2"},
+        {108, "r25"},
+        {112, "r24"},
+        {116, "r23"},
+        {120, "r22"},
+        {124, "r21"},
+        {128, "r20"},
+        {132, "r19"},
+        {136, "r18"},
+        {140, "r17"},
+        {144, "r16"},
+        {148, "r15"},
+        {152, "r14"},
+        {156, "r13"},
+        {160, "(EFA) Break Pt addr"},
+        {164, "STOP PC"}
+    }
+};
 
 void ptrace_disable(struct task_struct *child)
 {
@@ -50,57 +141,59 @@ getreg(unsigned int offset,struct task_struct *child)
     struct callee_regs *calleeregs = (struct callee_regs *)child->thread.callee_reg;
     struct pt_regs *ptregs = (struct pt_regs *)(calleeregs + 1);
     BUG_ON(ptregs != task_pt_regs(child));
-
-    DBG("    %s( 0x%x, 0x%x, 0x%x, 0x%x) \n", __FUNCTION__, ptregs, calleeregs, offset, child);
+    unsigned int data = 0;
 
     if(offset < sizeof(*ptregs))
-        return *(unsigned long *)(((char *)ptregs) + offset);
+        data = *(unsigned long *)(((char *)ptregs) + offset);
 
-    if((offset-sizeof(*ptregs)) < sizeof(*calleeregs) )
-        return *(unsigned long *)(((char *)calleeregs) + offset - sizeof(*ptregs));
+    else if((offset-sizeof(*ptregs)) < sizeof(*calleeregs) )
+        data = *(unsigned long *)(((char *)calleeregs) + offset - sizeof(*ptregs));
 
-    if(offset ==(int) OFFSET(struct user_regs_struct,stop_pc))
+    else if(offset ==offsetof(struct user_regs_struct,efa))
+    {
+        data = child->thread.fault_address;
+    }
+    else if(offset == offsetof(struct user_regs_struct,stop_pc))
     {
         if(in_brkpt_trap(ptregs))
         {
-            DBG("Reading stop_pc(efa) %08lx\n",child->thread.fault_address);
-            return child->thread.fault_address;
+            DBG(" stop_pc (Syscall) ********  \n");
+            data = child->thread.fault_address;
         }
-        /* orig_r8 -1 for int1 and -2 for int2 and NR_SYSCALLS + 1
-           is for a non-trap_s exception*/
         else
         {
-            DBG("Reading stop_pc(ret) %08lx\n",ptregs->ret);
-            return ptregs->ret;
+            DBG(" stop_pc (NORMAL) ********  \n");
+            data = ptregs->ret;
         }
     }
-    if(offset ==(int) OFFSET(struct user_regs_struct,efa))
-    {
-        DBG("Reading efa %08lx\n",child->thread.fault_address);
-        return child->thread.fault_address;
-    }
 
-    return 0;                /* can't happen */
+    DBG("  %s:0x%2x (%s) = %x\n", __FUNCTION__,offset, get_str_from_id(offset, &reg_names), data);
+
+    return data;
 }
 
 
 void
-setreg(int offset, int data, struct task_struct *child)
+setreg(unsigned int offset, unsigned int data, struct task_struct *child)
 {
     struct callee_regs *calleeregs = (struct callee_regs *)child->thread.callee_reg;
     struct pt_regs *ptregs = (struct pt_regs *)(calleeregs + 1);
     BUG_ON(ptregs != task_pt_regs(child));
 
-    if(offset ==(int) OFFSET(struct user_regs_struct, reserved1) ||
-        offset == (int) OFFSET(struct user_regs_struct, reserved2) ||
-        offset == (int) OFFSET(struct user_regs_struct,efa))
-        return;
+    DBG("  %s:0x%2x (%s) = 0x%x\n", __FUNCTION__,offset, get_str_from_id(offset, &reg_names),data);
 
-    if(offset ==(int) OFFSET(struct user_regs_struct,stop_pc))
+    if(offset ==offsetof(struct user_regs_struct, reserved1) ||
+        offset == offsetof(struct user_regs_struct, reserved2) ||
+        offset ==  offsetof(struct user_regs_struct,efa)) {
+        printk("Bogus ptrace setreg request\n");
+        return;
+    }
+
+    if(offset == offsetof(struct user_regs_struct,stop_pc))
     {
-        DBG("   [setreg]: writing to stop_pc(ret) %08lx\n",data);
+        DBG("   ******** @@@@ ********  \n");
         ptregs->ret = data;
-        return ;
+        return;
     }
 
     if(offset < sizeof(*ptregs))
@@ -122,7 +215,12 @@ setreg(int offset, int data, struct task_struct *child)
 long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 {
     int ret;
-    DBG("---- ptrace(0x%x, %ld,%lx,%lx) ----\n", child, request, addr, data);
+
+    if (! (request == PTRACE_PEEKUSR || request == PTRACE_POKEUSR)) {
+        DBG("Tsk 0x%p, ptregs 0x%p: REQ=%ld (%s), ADDR =%lx, DATA=%lx)\n",
+            child, task_pt_regs(child),request,
+            get_str_from_id(request, &req_names),addr, data);
+    }
 
     switch (request) {
     case PTRACE_PEEKTEXT: /* read word at location addr. */
@@ -135,13 +233,12 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         if (copied != sizeof(tmp))
             break;
         ret = put_user(tmp,(unsigned long *) data);
-        DBG("    Peek @ 0x%x = 0x%x \n",addr, tmp);
+        DBG("    Peek @ 0x%lx = 0x%lx \n",addr, tmp);
         break;
     }
 
     case PTRACE_POKETEXT: /* write the word at location addr. */
     case PTRACE_POKEDATA:
-        DBG("    @ POKE @ 0x%x = 0x%x \n",addr, data);
         ret = 0;
         if (access_process_vm(child, addr, &data, sizeof(data), 1) == sizeof(data))
             break;
@@ -226,14 +323,14 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         int tmp;
 
         /* user regs */
-        if(addr > (unsigned)OFFSET(struct user,regs) &&
-           addr < (unsigned)OFFSET(struct user,regs) + sizeof(struct user_regs_struct))
+        if(addr > (unsigned)offsetof(struct user,regs) &&
+           addr < (unsigned)offsetof(struct user,regs) + sizeof(struct user_regs_struct))
         {
             tmp = getreg(addr,child);
             ret = put_user(tmp, ((unsigned long *)data));
         }
         /* signal */
-        else if(addr == (unsigned)OFFSET(struct user, signal))
+        else if(addr == (unsigned)offsetof(struct user, signal))
         {
             tmp = current->exit_code; /* set by syscall_trace */
             ret = put_user(tmp, ((unsigned long *)data));
@@ -251,11 +348,11 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 
     case PTRACE_POKEUSR: {
         ret = 0;
-        if(addr ==(int) OFFSET(struct user_regs_struct,efa))
+        if(addr ==(int) offsetof(struct user_regs_struct,efa))
             return -EIO;
 
-        if(addr > (unsigned)OFFSET(struct user,regs) &&
-           addr < (unsigned)OFFSET(struct user,regs) + sizeof(struct user_regs_struct))
+        if(addr > (unsigned)offsetof(struct user,regs) &&
+           addr < (unsigned)offsetof(struct user,regs) + sizeof(struct user_regs_struct))
         {
             setreg(addr, data, child);
         }
@@ -310,7 +407,7 @@ static int arc_regs_get(struct task_struct *target,
 			 unsigned int pos, unsigned int count,
 			 void *kbuf, void __user *ubuf)
 {
-    DBG("arc_regs_get %x %d %d\n", target, pos, count);
+    DBG("arc_regs_get %p %d %d\n", target, pos, count);
 
     if (kbuf) {
         unsigned long *k = kbuf;
@@ -340,7 +437,7 @@ static int arc_regs_set(struct task_struct *target,
 {
     int ret = 0;
 
-    DBG("arc_regs_set %x %d %d\n", target, pos, count);
+    DBG("arc_regs_set %p %d %d\n", target, pos, count);
 
     if (kbuf) {
         const unsigned long *k = kbuf;
