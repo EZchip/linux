@@ -28,13 +28,14 @@
 #ifdef __KERNEL__
 
 /* These are extension BCR's*/
+#define ARC_REG_DCCMBASE_BCR 0x61   // DCCM Base Addr
 #define ARC_REG_CRC_BCR      0x62
 #define ARC_REG_DVFB_BCR     0x64
 #define ARC_REG_EXTARITH_BCR 0x65
 #define ARC_REG_VECBASE_BCR  0x68
 #define ARC_REG_PERIBASE_BCR 0x69
 #define ARC_REG_MMU_BCR      0x6f
-#define ARC_REG_DCCM_BCR     0x74
+#define ARC_REG_DCCM_BCR     0x74   // DCCM Present + SZ
 #define ARC_REG_TIMERS_BCR   0x75
 #define ARC_REG_ICCM_BCR     0x78
 #define ARC_REG_XY_MEM_BCR   0x79
@@ -220,7 +221,6 @@ struct cpuinfo_arc_extn {
         swap:1, norm:2, minmax:2, barrel:2, mul:2, ext_arith:2,
 
         crc:1,              /* DSP-LIB Ref Manual */
-        dccm:1, iccm:1,
         dvfb:1,             /* Dual Viterbi Butterfly Instrn:
                                Exotic but not supported by 700
                              */
@@ -244,6 +244,24 @@ struct bcr_cache {
 
 struct bcr_uncached_space {
     unsigned long pad:8, sz:8, pad2:8, start:8;
+};
+struct bcr_iccm {
+    unsigned long ver:8, sz:3, reserved:5, base:16;
+};
+
+/* DCCM Base Address Register: ARC_REG_DCCMBASE_BCR */
+struct bcr_dccm_base {
+    unsigned long ver:8, addr:24;
+};
+
+/* DCCM RAM Configuration Register : ARC_REG_DCCM_BCR */
+struct bcr_dccm {
+    unsigned long ver:8, sz: 3, res:21;
+};
+
+struct cpuinfo_arc_ccm {
+    unsigned int base_addr;
+    unsigned int sz;
 };
 
 #ifdef CONFIG_ARCH_ARC800
@@ -270,12 +288,15 @@ struct cpuinfo_arc {
     struct cpuinfo_arc_mmu mmu;
     struct cpuinfo_arc_extn extn;
     struct cpuinfo_arc_extn_xymem extn_xymem;
-    struct cpuinfo_arc_extn_mac_mul extn_mac_mul;
+    struct cpuinfo_arc_extn_mac_mul extn_mac_mul;// DCCM RAM SZ
+    struct cpuinfo_arc_ccm iccm, dccm;
     struct arc_cache *cache;
 #ifdef CONFIG_ARCH_ARC800
     struct cpuinfo_arc800  mp;
 #endif
 };
+
+#define TO_KB(x) (x >> 10)
 
 #endif  /* __KERNEL__ */
 

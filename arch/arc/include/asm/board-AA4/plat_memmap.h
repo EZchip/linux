@@ -20,4 +20,8 @@
 #define PGU_BASEADDR            0xC0FC8000
 #define VLCK_ADDR               0xC0FCF028
 
+#define DCCM_COMPILE_BASE       0xA0000000
+#define DCCM_COMPILE_SZ         (64 * 1024)
+#define ICCM_COMPILE_SZ         (64 * 1024)
+
 #endif

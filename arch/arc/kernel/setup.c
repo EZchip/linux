@@ -165,8 +165,33 @@ int __init read_arc_build_cfg_regs(void)
 
     p_cpu->extn.ext_arith = read_new_aux_reg(ARC_REG_EXTARITH_BCR);
     p_cpu->extn.crc = read_new_aux_reg(ARC_REG_CRC_BCR);
-    p_cpu->extn.dccm = read_new_aux_reg(ARC_REG_DCCM_BCR);
-    p_cpu->extn.iccm = read_new_aux_reg(ARC_REG_ICCM_BCR);
+
+    /* Note that we read the CCM BCRs independent of kernel config
+     * This is to catch the cases where user doesn't know that
+     * CCMs are present in hardware build
+     */
+    {
+        struct bcr_iccm iccm;
+        struct bcr_dccm dccm;
+        struct bcr_dccm_base dccm_base;
+        unsigned int bcr_32bit_val;
+
+        bcr_32bit_val = read_new_aux_reg(ARC_REG_ICCM_BCR);
+        if (bcr_32bit_val) {
+            iccm = *((struct bcr_iccm *)&bcr_32bit_val);
+            p_cpu->iccm.base_addr = iccm.base << 16;
+            p_cpu->iccm.sz = 0x2000 << (iccm.sz-1);
+        }
+
+        bcr_32bit_val = read_new_aux_reg(ARC_REG_DCCM_BCR);
+        if (bcr_32bit_val) {
+            dccm = *((struct bcr_dccm *)&bcr_32bit_val);
+            p_cpu->dccm.sz = 0x800 << (dccm.sz);
+
+            READ_BCR(ARC_REG_DCCMBASE_BCR, dccm_base);
+            p_cpu->dccm.base_addr = dccm_base.addr << 8;
+        }
+    }
 
     READ_BCR(ARC_REG_XY_MEM_BCR, p_cpu->extn_xymem);
 
@@ -242,7 +267,8 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
 
 
-#define IS_AVAIL1(var)   ((var)? "Present" :"NA")
+#define IS_AVAIL1(var)   ((var)? "Present" :"N/A")
+#define IS_AVAIL3(var)   ((var)? "" :"N/A")
 
     num += sprintf(buf+num, "Extensions:\n");
 
@@ -252,18 +278,20 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
     num += sprintf(buf+num, "   MAC Multiplier: %s\n",
                         mac_mul_nm[p_cpu->extn_mac_mul.type].str);
 
-    num += sprintf(buf+num, "DCCM: %s,", IS_AVAIL1(p_cpu->extn.dccm));
-    if (p_cpu->extn.dccm)
-        num += sprintf(buf+num, " (%x)\n", p_cpu->extn.dccm);
+    num += sprintf(buf+num, "DCCM: %s", IS_AVAIL3(p_cpu->dccm.sz));
+    if (p_cpu->dccm.sz)
+        num += sprintf(buf+num, "@ %x, %d KB ",
+                        p_cpu->dccm.base_addr, TO_KB(p_cpu->dccm.sz));
 
-    num += sprintf(buf+num, "   ICCM: %s\n", IS_AVAIL1(p_cpu->extn.iccm));
-    if (p_cpu->extn.iccm)
-        num += sprintf(buf+num, " (%x)\n", p_cpu->extn.iccm);
+    num += sprintf(buf+num, "  ICCM: %s", IS_AVAIL3(p_cpu->iccm.sz));
+    if (p_cpu->iccm.sz)
+        num += sprintf(buf+num, "@ %x, %d KB",
+                        p_cpu->iccm.base_addr, TO_KB(p_cpu->iccm.sz));
 
-    num += sprintf(buf+num, "CRC  Instrn: %s,", IS_AVAIL1(p_cpu->extn.crc));
+    num += sprintf(buf+num, "\nCRC  Instrn: %s,", IS_AVAIL1(p_cpu->extn.crc));
     num += sprintf(buf+num, "   SWAP Instrn: %s", IS_AVAIL1(p_cpu->extn.swap));
 
-#define IS_AVAIL2(var)   ((var == 0x2)? "Present" :"NA")
+#define IS_AVAIL2(var)   ((var == 0x2)? "Present" :"N/A")
 
     num += sprintf(buf+num, "   NORM Instrn: %s\n", IS_AVAIL2(p_cpu->extn.norm));
     num += sprintf(buf+num, "Min-Max Instrn: %s,", IS_AVAIL2(p_cpu->extn.minmax));
@@ -277,13 +305,38 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
     num += sprintf(buf+num, "MP Extensions: Ver (%d), Arch (%d)\n",
                     p_cpu->mp.ver, p_cpu->mp.mp_arch);
 
-    num += sprintf(buf+num, "    SCU %s, IDU %s, SDU %s\n", IS_AVAIL1(p_cpu->mp.scu),
+    num += sprintf(buf+num, "    SCU %s, IDU %s, SDU %s\n",
+                    IS_AVAIL1(p_cpu->mp.scu),
                     IS_AVAIL1(p_cpu->mp.idu), IS_AVAIL1(p_cpu->mp.sdu));
 #endif
 
     return buf;
 }
 
+void arc_chk_ccms(void)
+{
+#if defined(CONFIG_ARCH_ARC_DCCM) || defined(CONFIG_ARCH_ARC_ICCM)
+    struct cpuinfo_arc *p_cpu = &cpuinfo_arc700[smp_processor_id()];
+#endif
+
+#ifdef CONFIG_ARCH_ARC_DCCM
+    extern unsigned int __arc_dccm_base;
+
+    /* DCCM can be arbit placed in hardware
+     * Make sure it's placement/sz matches what Linux is built with
+     */
+    if ( (unsigned int)&__arc_dccm_base != p_cpu->dccm.base_addr)
+        panic("Linux built with incorrect DCCM Base address\n");
+
+    if (DCCM_COMPILE_SZ != p_cpu->dccm.sz)
+        panic("Linux built with incorrect DCCM Size\n");
+#endif
+
+#ifdef CONFIG_ARCH_ARC_ICCM
+    if (ICCM_COMPILE_SZ != p_cpu->iccm.sz)
+        panic("Linux built with incorrect ICCM Size\n");
+#endif
+}
 
 /*
  * Initialize and setup the processor core
@@ -304,6 +357,8 @@ void __init setup_processor(void)
     tlb_init();
 
     a7_cache_init();
+
+    arc_chk_ccms();
 
     printk(arc_extn_mumbojumbo(cpu_id, str));
 }

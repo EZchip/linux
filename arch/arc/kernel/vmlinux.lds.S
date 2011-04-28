@@ -8,6 +8,7 @@
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/vmlinux.lds.h>
 #include <asm/page.h>
+#include <asm/board/plat_memmap.h>
 
 OUTPUT_ARCH(arc)
 ENTRY(_stext)
@@ -33,16 +34,10 @@ SECTIONS
 #ifdef CONFIG_ARCH_ARC_ICCM
     .text.arcfp : {
         ARCFP_CCM_TEXT
+        . = ALIGN(ICCM_COMPILE_SZ);
     }
 #endif
 
-#ifdef CONFIG_ARCH_ARC_DCCM
-    . = 0x80100000;
-    .data.arcfp : {
-        ARCFP_CCM_DATA
-    }
-    . = ALIGN(PAGE_SIZE * 4);
-#endif
 
 /************************************************************************
  * vineetg: Feb 2010: Responsibe for the weird arrangement of .init stuff
@@ -204,4 +199,13 @@ SECTIONS
     .debug_str 0 : { *(.debug_str) }
     .debug_loc 0 : { *(.debug_loc) }
     .debug_macinfo 0 : { *(.debug_macinfo) }
+
+#ifdef CONFIG_ARCH_ARC_DCCM
+    . = DCCM_COMPILE_BASE;
+    __arc_dccm_base = .;
+    .data.arcfp : {
+        ARCFP_CCM_DATA
+    }
+    . = ALIGN(DCCM_COMPILE_SZ);
+#endif
 }
