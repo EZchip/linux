@@ -271,7 +271,6 @@ int arc_ide_ack_irq(ide_hwif_t *hwif)
     return 1;
 }
 
-
 /* DMA mode operations */
 void arc_ide_set_dma_mode(ide_drive_t * drive, const u8 speed)
 {
@@ -628,13 +627,6 @@ int arc_ide_dma_init(ide_hwif_t *hwif, const struct ide_port_info *d)
     avoid this we are overwriting the generic ide_read_status.
 */
 
-u8 arc_ide_read_status(struct hwif_s *hwif)
-{
-    u8 ret = ide_read_status(hwif);
-    arc_ide_ack_irq(NULL);
-    return ret;
-}
-
 static const struct ide_dma_ops arc_ide_dma_ops = {
     .dma_host_set     = arc_ide_dma_host_set,
     .dma_setup        = arc_ide_dma_setup,
@@ -645,13 +637,19 @@ static const struct ide_dma_ops arc_ide_dma_ops = {
 };
 #endif
 
-
 static const struct ide_port_ops arc_ide_port_ops =
 {
     .set_pio_mode   = arc_ide_set_pio_mode,
     .set_dma_mode   = arc_ide_set_dma_mode,
 };
 
+
+u8 arc_ide_read_status(struct hwif_s *hwif)
+{
+    u8 ret = ide_read_status(hwif);
+    arc_ide_ack_irq(NULL);
+    return ret;
+}
 
 const struct ide_tp_ops arc_ide_tp_ops = {
     .exec_command = ide_exec_command,
