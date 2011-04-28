@@ -1,6 +1,12 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ * vineetg: May 2010
+ *  -Reduced foot-print of the main ISR (handling for error cases moved out
+ *      into a separate non-inline function).
+ *  -Driver Tx path optimized for small packets (which fit into 1 BD = 2K).
+ *      Any specifics for chaining are in a separate block of code.
+ *
  * vineetg: Nov 2009
  *  -Unified NAPI and Non-NAPI Code.
  *  -API changes since 2.6.26 for making NAPI independent of netdevice
@@ -88,9 +94,9 @@ volatile unsigned int skb_count = 0;
 	unsigned int    emac_defr = 0;
 	unsigned int    emac_ltcl = 0;
 	unsigned int    emac_uflo = 0;
-	unsigned int    emac_rtry = 0;
 	unsigned int    skb_not_preallocated = 0;
 #endif
+    unsigned int    emac_txfull = 0;
 
 
 /*
@@ -295,8 +301,10 @@ struct arc_emac_priv
 	extern struct sockaddr mac_addr;
 
 
+static void noinline emac_nonimp_intr(struct arc_emac_priv *ap,
+        unsigned int status);
 static int arc_thread(void *unused);
-static int arc_emac_tx_clean(struct net_device *dev);
+static int arc_emac_tx_clean(struct arc_emac_priv *ap);
 void arc_emac_update_stats(struct arc_emac_priv * ap);
 
 static int arc_emac_clean(struct net_device *dev
@@ -373,6 +381,8 @@ static int arc_emac_poll (struct napi_struct *napi, int budget)
 
 #endif
 
+//int debug_emac = 1;
+
 static int arc_emac_clean(struct net_device *dev
 #ifdef CONFIG_EMAC_NAPI
     ,unsigned int work_to_do
@@ -396,7 +406,7 @@ static int arc_emac_clean(struct net_device *dev
 		info = arc_read_uncached_32(&ap->rxbd[i].info);
 
         /* BD contains a packet for CPU to grab */
-        if ((info & OWN_MASK) == FOR_CPU)
+        if (likely((info & OWN_MASK) == FOR_CPU))
         {
             /* Make a note that we saw a pkt at this BD.
              * So next time, driver starts from this + 1
@@ -404,7 +414,7 @@ static int arc_emac_clean(struct net_device *dev
             ap->last_rx_bd = i;
 
             /* Packet fits in one BD (Non Fragmented) */
-			if ((info & (FRST_MASK|LAST_MASK)) == (FRST_MASK|LAST_MASK))
+			if (likely((info & (FRST_MASK|LAST_MASK)) == (FRST_MASK|LAST_MASK)))
 			{
 				len = info & LEN_MASK;
 				ap->stats.rx_packets++;
@@ -412,7 +422,7 @@ static int arc_emac_clean(struct net_device *dev
                 skb = ap->rx_skbuff[i];
 
                 /* Get a new SKB for replenishing BD for next cycle */
-				if (skb_count) { /* Cached skbs ready to go */
+				if (likely(skb_count)) { /* Cached skbs ready to go */
 					skbnew = skb_prealloc[skb_count];
 					skb_count--;
 				}
@@ -453,6 +463,21 @@ static int arc_emac_clean(struct net_device *dev
 				skb_put(skb, len - 4);	/* Make room for data */
 				skb->protocol = eth_type_trans(skb, dev);
 
+#if 0
+                if (debug_emac) {
+
+extern void print_hex_dump(const char *level, const char *prefix_str,
+    int prefix_type, int rowsize, int groupsize,
+    const void *buf, size_t len, bool ascii);
+extern void print_hex_dump_bytes(const char *prefix_str, int prefix_type,
+   const void *buf, size_t len);
+                            printk("\n--------------\n");
+                            print_hex_dump_bytes("", DUMP_PREFIX_NONE,
+                                skb->data, 64);
+
+                }
+#endif
+
 #ifdef CONFIG_EMAC_NAPI
 		        /* Correct NAPI smenatics: If work quota exceeded return
                  * don't dequeue any further packets
@@ -465,6 +490,12 @@ static int arc_emac_clean(struct net_device *dev
 #endif
             }
             else {
+	/*
+	 * We dont allow chaining of recieve packets. We want to do "zero
+	 * copy" and sk_buff structure is not chaining friendly when we dont
+	 * want to copy data. We preallocate buffers of MTU size so incoming
+	 * packets wont be chained
+	 */
 				printk(KERN_INFO "Rx chained, Packet bigger than device MTU\n");
 				/* Return buffer to VMAC */
 				arc_write_uncached_32(&ap->rxbd[i].info,
@@ -488,12 +519,7 @@ static irqreturn_t arc_emac_intr (int irq, void *dev_instance)
     EMAC_REG(ap)->status = status;
     enable = EMAC_REG(ap)->enable;
 
-	/*
-	 * We dont allow chaining of recieve packets. We want to do "zero
-	 * copy" and sk_buff structure is not chaining friendly when we dont
-	 * want to copy data. We preallocate buffers of MTU size so incoming
-	 * packets wont be chained
-	 */
+    if (likely(status & (RXINT_MASK|TXINT_MASK))) {
 	if (status & RXINT_MASK)
 	{
 
@@ -507,7 +533,20 @@ static irqreturn_t arc_emac_intr (int irq, void *dev_instance)
         arc_emac_clean(dev);
 #endif
     }
+    if (status & TXINT_MASK)
+    {
+        arc_emac_tx_clean(ap);
+    }
+    }
+    else {
+        emac_nonimp_intr(ap, status);
+    }
+    return IRQ_HANDLED;
+}
 
+static void noinline
+emac_nonimp_intr(struct arc_emac_priv *ap, unsigned int status)
+{
     if (status & MDIO_MASK)
 	{
 		/* Mark the mdio operation as complete.
@@ -516,10 +555,6 @@ static irqreturn_t arc_emac_intr (int irq, void *dev_instance)
 		ap->mdio_complete = 1;
 	}
 
-    if (status & TXINT_MASK)
-    {
-        arc_emac_tx_clean(dev);
-    }
 
 	if (status & ERR_MASK)
 	{
@@ -549,13 +584,11 @@ static irqreturn_t arc_emac_intr (int irq, void *dev_instance)
 			printk(KERN_ERR "ARCTangent Vmac: Unkown Error status = 0x%x\n", status);
 		}
 	}
-    return IRQ_HANDLED;
 }
 
 
-static int arc_emac_tx_clean(struct net_device *dev)
+static int arc_emac_tx_clean(struct arc_emac_priv *ap)
 {
-	struct arc_emac_priv *ap = netdev_priv(dev);
 	unsigned int i, info;
 	struct sk_buff *skb;
 
@@ -582,17 +615,13 @@ static int arc_emac_tx_clean(struct net_device *dev)
 			    if (info & UFLO) emac_uflo++;
             }
 #endif
-			if (info & OWN_MASK)
+			if ((info & FOR_EMAC) ||
+			    !(arc_read_uncached_32(&ap->txbd[ap->txbd_dirty].data)))
 			{
-				dbg_printk("TXINT, OWN_MASK set\n");
-				goto err_int;
+	            return IRQ_HANDLED;
 			}
-			if (!(arc_read_uncached_32(&ap->txbd[ap->txbd_dirty].data)))
-			{
-				dbg_printk("TXINT, no data !!!\n");
-				goto err_int;
-			}
-			if (info & FRST_MASK)
+
+			if (info & LAST_MASK)
 			{
 				skb = ap->tx_skbuff[ap->txbd_dirty];
 				ap->stats.tx_packets++;
@@ -604,7 +633,7 @@ static int arc_emac_tx_clean(struct net_device *dev)
 			arc_write_uncached_32(&ap->txbd[ap->txbd_dirty].info, 0x0);
 			ap->txbd_dirty = (ap->txbd_dirty + 1) % TX_BDT_LEN;
 		}
-err_int:
+
 	return IRQ_HANDLED;
 }
 
@@ -854,38 +883,34 @@ arc_emac_update_stats(struct arc_emac_priv * ap)
 int
 arc_emac_tx(struct sk_buff * skb, struct net_device * dev)
 {
-	int             len, data_len, bitmask;
+	int             len, bitmask;
 	unsigned int    info;
-	char           *data;
+	char           *pkt;
 	struct arc_emac_priv *ap = netdev_priv(dev);
-	int             inpacket;
 
 	len = skb->len < ETH_ZLEN ? ETH_ZLEN : skb->len;
-	data = skb->data;
+	pkt = skb->data;
 	dev->trans_start = jiffies;
 
-	flush_dcache_range((unsigned long)data, (unsigned long)data + len);
+	flush_dcache_range((unsigned long)pkt, (unsigned long)pkt + len);
 
 	/* Set First bit */
 	bitmask = FRST_MASK;
-	inpacket = 1;
 
-	while (len)
+tx_next_chunk:
+
+    info = arc_read_uncached_32(&ap->txbd[ap->txbd_curr].info);
+	if (likely((info & OWN_MASK) == FOR_CPU))
 	{
-		data_len = (len > MAX_TX_BUFFER_LEN) ? MAX_TX_BUFFER_LEN : len;
-		info = arc_read_uncached_32(&ap->txbd[ap->txbd_curr].info);
-		if ((info & OWN_MASK) == FOR_CPU)
-		{
-			arc_write_uncached_32(&ap->txbd[ap->txbd_curr].data, data);
-			/* Set Last bit */
-			len -= data_len;
-			if (len <= 0)
-			{
-				bitmask |= LAST_MASK;
-				inpacket = 0;
-			}
-			/* Set tx_skbuff here */
-			ap->tx_skbuff[ap->txbd_curr] = skb;
+		arc_write_uncached_32(&ap->txbd[ap->txbd_curr].data, pkt);
+
+        /* This case handles 2 scenarios:
+         * 1. pkt fits into 1 BD (2k)
+         * 2. Last chunk of pkt (in multiples of 2k)
+         */
+        if (likely(len <= MAX_TX_BUFFER_LEN))
+        {
+	        ap->tx_skbuff[ap->txbd_curr] = skb;
 
 			/*
 			 * Set data length, bit mask and give ownership to
@@ -893,38 +918,45 @@ arc_emac_tx(struct sk_buff * skb, struct net_device * dev)
 			 * might immediately start sending
 			 */
 			arc_write_uncached_32(&ap->txbd[ap->txbd_curr].info,
-					      FOR_EMAC | bitmask | data_len);
+					      FOR_EMAC | bitmask | LAST_MASK | len);
 
-			ap->txbd_curr = (ap->txbd_curr + 1) % TX_BDT_LEN;
+	        /* Set TXPOLL bit to force a poll */
+	        EMAC_REG(ap)->status |= TXPL_MASK;
 
-			data += data_len;
-			bitmask = 0;
+		    ap->txbd_curr = (ap->txbd_curr + 1) % TX_BDT_LEN;
+            return 0;
+        }
+        else {
+            /* if pkt > 2k, this case handles all non last chunks */
 
-		} else
-		{
-           if (!netif_queue_stopped(dev))
-            {
-			    printk(KERN_INFO "Out of TX buffers\n");
+			arc_write_uncached_32(&ap->txbd[ap->txbd_curr].info,
+					      FOR_EMAC | bitmask | (len & (MAX_TX_BUFFER_LEN-1)));
 
-            }
-            return NETDEV_TX_BUSY;
-		}
-     }
-	if (inpacket)
-		printk("Incomplete packet\n");
+            /* clear the FIRST CHUNK bit */
+            bitmask = 0;
 
-	/* Set TXPOLL bit to force a poll */
-	EMAC_REG(ap)->status |= TXPL_MASK;
+            len -= MAX_TX_BUFFER_LEN;
+        }
 
-	/* Success */
-	return 0;
+		ap->txbd_curr = (ap->txbd_curr + 1) % TX_BDT_LEN;
+        goto tx_next_chunk;
+
+	}
+    else
+	{
+        //if (!netif_queue_stopped(dev))
+        //{
+		//    printk(KERN_INFO "Out of TX buffers\n");
+        //}
+        emac_txfull++;
+        return NETDEV_TX_BUSY;
+    }
 }
 
 /* the transmission timeout function */
 void
 arc_emac_tx_timeout(struct net_device * dev)
 {
-	dbg_printk("transmission timed out\n");
 	printk(KERN_CRIT "transmission timeout\n");
 	return;
 }
@@ -1123,6 +1155,7 @@ static int read_proc(char *sysbuf, char **start,
 	len += sprintf(sysbuf + len, "EMAC DROP count : %u\n", emac_drop);
 	len += sprintf(sysbuf + len, "EMAC LTCL count : %u\n", emac_ltcl);
 	len += sprintf(sysbuf + len, "EMAC UFLO count : %u\n", emac_uflo);
+	len += sprintf(sysbuf + len, "EMAC TxFull count : %u\n", emac_txfull);
 	return (len);
 }
 #endif
