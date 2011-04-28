@@ -59,7 +59,7 @@
  * (see above)
  */
 
-#define KERNEL_DS   MAKE_MM_SEG(0xFFFFFFFF)
+#define KERNEL_DS   MAKE_MM_SEG(0)
 #define USER_DS     MAKE_MM_SEG(TASK_SIZE)
 
 #define get_ds()    (KERNEL_DS)
@@ -72,8 +72,11 @@
 #define segment_eq(a,b) ((a) == (b))
 
 #define __kernel_ok (segment_eq(get_fs(), KERNEL_DS))
-#define __user_ok(addr,size) (((size) <= TASK_SIZE)&&((addr) <= TASK_SIZE-(size)))
-#define __access_ok(addr,size) (__kernel_ok || __user_ok((addr),(size)))
+#define __user_ok(addr,size) (\
+                ((size) <= TASK_SIZE) && \
+                (((addr)+(size)) <= get_fs()) \
+                )
+#define __access_ok(addr,size) (unlikely(__kernel_ok) || likely(__user_ok((addr),(size))))
 #define access_ok(type,addr,size) __access_ok((unsigned long)(addr),(size))
 
 extern inline int verify_area(int type, const void * addr, unsigned long size)
