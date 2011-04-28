@@ -96,9 +96,6 @@ typedef volatile struct {
 #define DBG(fmt, args...)
 #endif
 
-/* Need to know the system clock frequency for timing set-up */
-extern unsigned long clk_speed;
-
 #ifdef CONFIG_ARC_BLK_DEV_IDEDMA
 static void * bounce_buffer = 0;
 static int timeout_count = 0;
@@ -166,15 +163,12 @@ static unsigned long dma_timings[3][5] = {
 #define DMA_TIMING_TD  3
 #define DMA_TIMING_TM  4
 
-
-static double cycles_per_nanosec;
-
 /* Convert nanoseconds to clock cycles */
-static __inline__ unsigned long ns_to_cycles(unsigned long t)
+#define cycles_per_usec  (CONFIG_ARC700_CLK/1000000)
+
+static __inline__ unsigned long ns_to_cycles(unsigned long ns)
 {
-    unsigned long tmp;
-    tmp = (unsigned long) (cycles_per_nanosec * ((double) t));
-    return tmp;
+    return ns * cycles_per_usec / 1000;
 }
 
 #define TIMING_REG_FORMAT(t1,t2,t2l)  \
@@ -728,8 +722,6 @@ int __init arc_ide_init(void)
         printk_init("***ARC IDE [NOT] detected, skipping IDE init\n");
         return -1;
     }
-
-    cycles_per_nanosec = ((double)clk_speed)/1000000000.0;
 
     // Reset the IDE Controller
     arc_ide_reset_controller(0);
