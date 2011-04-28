@@ -411,16 +411,16 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 orig_n = orig_n % 16;
 
                 __asm__ __volatile__ (
-                "       lsr   lp_count, %3,4            \n"  // 16byte iters
+                "       lsr   lp_count, %7,4            \n"  // 16byte iters
                 "       lp    3f                        \n"
-                "1:     ld.ab   %5, [%2, 4]             \n"
-                "11:    ld.ab   %6, [%2, 4]             \n"
-                "12:    ld.ab   %7, [%2, 4]             \n"
-                "13:    ld.ab   %8, [%2, 4]             \n"
+                "1:     ld.ab   %3, [%2, 4]             \n"
+                "11:    ld.ab   %4, [%2, 4]             \n"
+                "12:    ld.ab   %5, [%2, 4]             \n"
+                "13:    ld.ab   %6, [%2, 4]             \n"
+                "       st.ab   %3, [%1, 4]             \n"
+                "       st.ab   %4, [%1, 4]             \n"
                 "       st.ab   %5, [%1, 4]             \n"
                 "       st.ab   %6, [%1, 4]             \n"
-                "       st.ab   %7, [%1, 4]             \n"
-                "       st.ab   %8, [%1, 4]             \n"
                 "       sub     %0,%0,16                \n"
                 "3:     nop                             \n"
                 "   .section .fixup, \"ax\"             \n"
@@ -435,9 +435,9 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "   .word   13b,4b                      \n"
                 "   .previous                           \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                :"+r"(res), "+r"(to), "+r"(from),
                  "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res)
+                :"ir"(n)
                 :"lp_count");
             }
             if (orig_n / 8)
@@ -445,10 +445,10 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 orig_n = orig_n % 8;
 
                 __asm__ __volatile__ (
-                "14:    ld.ab   %5, [%2,4]              \n"
-                "15:    ld.ab   %6, [%2,4]              \n"
-                "       st.ab   %5, [%1,4]              \n"
-                "       st.ab   %6, [%1,4]              \n"
+                "14:    ld.ab   %3, [%2,4]              \n"
+                "15:    ld.ab   %4, [%2,4]              \n"
+                "       st.ab   %3, [%1,4]              \n"
+                "       st.ab   %4, [%1,4]              \n"
                 "       sub.f   %0,%0,8                 \n"
                 "31:     nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
@@ -461,17 +461,17 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "   .word   15b,4b                      \n"
                 "   .previous                           \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1),"=r"(tmp2)
+                );
             }
             if (orig_n / 4)
             {
                 orig_n = orig_n % 4;
 
                 __asm__ __volatile__ (
-                "16:    ld.ab   %5, [%2,4]              \n"
-                "       st.ab   %5, [%1,4]              \n"
+                "16:    ld.ab   %3, [%2,4]              \n"
+                "       st.ab   %3, [%1,4]              \n"
                 "       sub.f   %0,%0,4                 \n"
                 "32:     nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
@@ -483,17 +483,17 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "   .word   16b,4b                      \n"
                 "   .previous                           \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1)
+               );
             }
             if (orig_n / 2)
             {
                 orig_n = orig_n % 2;
 
                 __asm__ __volatile__ (
-                "17:    ldw.ab   %5, [%2,2]              \n"
-                "       stw.ab   %5, [%1,2]              \n"
+                "17:    ldw.ab   %3, [%2,2]              \n"
+                "       stw.ab   %3, [%1,2]              \n"
                 "       sub.f   %0,%0,2                 \n"
                 "33:     nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
@@ -505,15 +505,15 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "   .word   17b,4b                      \n"
                 "   .previous                           \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1)
+                );
             }
             if (orig_n & 1)
             {
                 __asm__ __volatile__ (
-                "18:    ldb.ab   %5, [%2,2]             \n"
-                "       stb.ab   %5, [%1,2]             \n"
+                "18:    ldb.ab   %3, [%2,2]             \n"
+                "       stb.ab   %3, [%1,2]             \n"
                 "       sub.f   %0,%0,1                 \n"
                 "34:     nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
@@ -525,9 +525,9 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "   .word   18b,4b                      \n"
                 "   .previous                           \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1)
+                );
             }
         }
         else       /* n is NOT constant, so laddered copy of 16x,8,4,2,1  */
@@ -775,16 +775,16 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 orig_n = orig_n % 16;
 
                 __asm__ __volatile__ (
-                "     lsr lp_count, %3,4        \n"  // 16byte iters
+                "     lsr lp_count, %7,4        \n"  // 16byte iters
                 "     lp  3f                    \n"
+                "     ld.ab %3, [%2, 4]         \n"
+                "     ld.ab %4, [%2, 4]         \n"
                 "     ld.ab %5, [%2, 4]         \n"
                 "     ld.ab %6, [%2, 4]         \n"
-                "     ld.ab %7, [%2, 4]         \n"
-                "     ld.ab %8, [%2, 4]         \n"
-                "1:   st.ab %5, [%1, 4]         \n"
-                "11:  st.ab %6, [%1, 4]         \n"
-                "12:  st.ab %7, [%1, 4]         \n"
-                "13:  st.ab %8, [%1, 4]         \n"
+                "1:   st.ab %3, [%1, 4]         \n"
+                "11:  st.ab %4, [%1, 4]         \n"
+                "12:  st.ab %5, [%1, 4]         \n"
+                "13:  st.ab %6, [%1, 4]         \n"
                 "     sub   %0, %0, 16          \n"
                 "3:   nop                       \n"
                 "   .section .fixup, \"ax\"     \n"
@@ -799,9 +799,9 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "   .word   13b,4b              \n"
                 "   .previous                   \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val),
+                :"+r"(res), "+r"(to), "+r"(from),
                  "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res)
+                :"ir"(n)
                 :"lp_count");
 
             }
@@ -810,10 +810,10 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 orig_n = orig_n % 8;
 
                 __asm__ __volatile__ (
-                "     ld.ab   %5, [%2,4]        \n"
-                "     ld.ab   %6, [%2,4]        \n"
-                "14:  st.ab   %5, [%1,4]        \n"
-                "15:  st.ab   %6, [%1,4]        \n"
+                "     ld.ab   %3, [%2,4]        \n"
+                "     ld.ab   %4, [%2,4]        \n"
+                "14:  st.ab   %3, [%1,4]        \n"
+                "15:  st.ab   %4, [%1,4]        \n"
                 "     sub.f   %0, %0, 8         \n"
                 "31:  nop                       \n"
                 "   .section .fixup, \"ax\"     \n"
@@ -826,17 +826,17 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "   .word   15b,4b              \n"
                 "   .previous                   \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1),"=r"(tmp2)
+                );
             }
             if (orig_n / 4)
             {
                 orig_n = orig_n % 4;
 
                 __asm__ __volatile__ (
-                "     ld.ab   %5, [%2,4]        \n"
-                "16:  st.ab   %5, [%1,4]        \n"
+                "     ld.ab   %3, [%2,4]        \n"
+                "16:  st.ab   %3, [%1,4]        \n"
                 "     sub.f   %0, %0, 4         \n"
                 "32:  nop                       \n"
                 "   .section .fixup, \"ax\"     \n"
@@ -848,17 +848,17 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "   .word   16b,4b              \n"
                 "   .previous                   \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1)
+                );
             }
             if (orig_n / 2)
             {
                 orig_n = orig_n % 2;
 
                 __asm__ __volatile__ (
-                "     ldw.ab    %5, [%2,2]      \n"
-                "17:  stw.ab    %5, [%1,2]      \n"
+                "     ldw.ab    %3, [%2,2]      \n"
+                "17:  stw.ab    %3, [%1,2]      \n"
                 "     sub.f %0, %0, 2           \n"
                 "33:  nop                       \n"
                 "   .section .fixup, \"ax\"     \n"
@@ -870,15 +870,15 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "   .word   17b,4b              \n"
                 "   .previous                   \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1)
+                );
             }
             if (orig_n & 1)
             {
                 __asm__ __volatile__ (
-                "     ldb.ab    %5, [%2,1]      \n" // just one byte left
-                "18:  stb.ab  %5, [%1,1]        \n"
+                "     ldb.ab  %3, [%2,1]      \n" // just one byte left
+                "18:  stb.ab  %3, [%1,1]        \n"
                 "     sub.f %0, %0, 1           \n"
                 "34:  nop                       \n"
                 "   .section .fixup, \"ax\"     \n"
@@ -890,9 +890,9 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "   .word   18b,4b              \n"
                 "   .previous                   \n"
 
-                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
-                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
-                :"3"(n), "1"(to), "2"(from),"0"(res));
+                :"+r"(res), "+r"(to), "+r"(from),
+                 "=r"(tmp1)
+                );
             }
         }
         else       /* n is NOT constant, so laddered copy of 16x,8,4,2,1  */
