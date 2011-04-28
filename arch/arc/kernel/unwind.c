@@ -963,8 +963,8 @@ int arc_unwind(struct unwind_frame_info *frame)
 #ifdef CONFIG_FRAME_POINTER
 		unsigned long top, bottom;
 
-		top = STACK_TOP(frame->task);
-		bottom = STACK_BOTTOM(frame->task);
+		top = STACK_TOP_UNW(frame->task);
+		bottom = STACK_BOTTOM_UNW(frame->task);
 # if FRAME_RETADDR_OFFSET < 0
 		if (UNW_SP(frame) < top
 		    && UNW_FP(frame) <= UNW_SP(frame)
