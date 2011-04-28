@@ -938,7 +938,7 @@ static void receive_chars(struct arc_serial_dev *info, unsigned short rx)
     int status;
 
     //Originally added by Sameer, serial I/O slow without this
-    tty->low_latency = 1;
+    tty->low_latency = 0;
 
     if(!tty)
     {
