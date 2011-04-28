@@ -153,6 +153,11 @@ extern __inline__ int get_order(unsigned long size)
 #define VMALLOC_END	(PAGE_OFFSET)
 #define VMALLOC_VMADDR(x) ((unsigned long)(x))
 
+#define clear_page(page)  {   \
+    unsigned int *pg = page;  \
+    memset(pg, 0, PAGE_SIZE); \
+}
+
 #endif  /* __KERNEL__ */
 
 #endif /* __ASM_ARC_PAGE_H */

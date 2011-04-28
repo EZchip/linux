@@ -15,29 +15,13 @@
 
 /* page functions */
 
-void clear_page(void *page)
-{
-	__asm__ __volatile__(
-                 "lsr.f     lp_count,%1, 4\n"
-                 "lpnz      1f\n"
-			     "st.ab     0, [%0, 4]\n"
-			     "st.ab     0, [%0, 4]\n"
-			     "st.ab     0, [%0, 4]\n"
-			     "st.ab     0, [%0, 4]\n"
-                 "1:\n"
-                 ::"r"(page), "r"(PAGE_SIZE)
-			     :"memory","lp_count");
-}
-
-EXPORT_SYMBOL(clear_page);
-
 void copy_page(void *to, void *from)
 {
 	unsigned long reg1, reg2, reg3, reg4;
 
 	__asm__ __volatile__(
-			     "lsr.f lp_count,%6,4\n"
-                 "lpnz 1f\n"
+			     "mov lp_count,%6\n"
+                 "lp 1f\n"
 			     "ld.ab  %0, [%5, 4]\n\t"
 			     "ld.ab  %1, [%5, 4]\n\t"
 			     "ld.ab  %2, [%5, 4]\n\t"
@@ -48,8 +32,8 @@ void copy_page(void *to, void *from)
 			     "st.ab  %3, [%4, 4]\n\t"
                  "1:\n"
                  :"=&r"(reg1), "=&r"(reg2), "=&r"(reg3), "=&r"(reg4)
-			     :"r"(to), "r"(from), "r"(PAGE_SIZE)
-                 :"memory","lp_count"
+			     :"r"(to), "r"(from), "ir"(PAGE_SIZE/4/4)
+                 :"lp_count"
 	    );
 
 }
