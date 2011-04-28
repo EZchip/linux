@@ -85,10 +85,17 @@ static struct fb_var_screeninfo vfb_default __initdata = {
 	.xres_virtual =	CONFIG_VFB_SIM_XRES,
 	.yres_virtual =	CONFIG_VFB_SIM_YRES,
 	.bits_per_pixel = CONFIG_VFB_SIM_BPP,
+#if (CONFIG_VFB_SIM_BPP == 24)
+    .red = {0,8,0},
+    .green = {0,8,0},
+    .blue = {0,8,0},
+#else
+    .red = {0,5,0},
+    .green = {0,6,0},
+    .blue = {0,5,0},
+#endif
+
 /*
-	.red =		{ 0, 8, 0 },
-	.green =	{ 0, 8, 0 },
-	.blue =		{ 0, 8, 0 },
 	.activate =	FB_ACTIVATE_TEST,
 	.height =	-1,
 	.width =	-1,

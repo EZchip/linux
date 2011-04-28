@@ -51,8 +51,8 @@
 
 #include <asm/uaccess.h>
 
-#include <asm-arc/arc_pgu.h>
-#include <asm-arc/arc_vsync.h>
+#include <asm/arc_pgu.h>
+#include <asm/arc_vsync.h>
 
 /*--------------------------------------------------------------------------------*/
 #define DRIVER_NAME "arc_pgu"

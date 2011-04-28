@@ -28,8 +28,8 @@
 #include <linux/kfifo.h>
 #include <linux/proc_fs.h>
 #include <asm/uaccess.h>
-#include <asm-arc/arc_vsync.h>
-#include <asm-arc/arc_pgu.h>
+#include <asm/arc_vsync.h>
+#include <asm/arc_pgu.h>
 
 #define DEFAULT_FRAME_RATE 30
 
