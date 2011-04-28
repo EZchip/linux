@@ -30,7 +30,15 @@ export PLATFORM
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin \
-						-D__linux__ -O3 -fcall-used-gp
+						-D__linux__  -fcall-used-gp
+
+# Idea is to use -O3 for our builds (Default kernel makefile uses -O2)
+# However doing that unconditionally here breaks -Os:
+#    our -O3 over-rides -Os set by top-level-makefile
+#
+ifndef CONFIG_CC_OPTIMIZE_FOR_SIZE
+KBUILD_CFLAGS  += -O3
+endif
 
 # vineetg, Oct 2009
 # Low level event tracing is sort of crude, as it relies on visualisation
