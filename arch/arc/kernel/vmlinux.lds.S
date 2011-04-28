@@ -120,10 +120,14 @@ SECTIONS
         EXIT_TEXT
         EXIT_DATA
         *(.exitcall.exit)
-        *(.gnu.linkonce.arcextmap.*)
     }
 
     STABS_DEBUG
+
+    .arcextmap 0 : {
+        *(.gnu.linkonce.arcextmap.*)
+        *(.arcextmap.*)
+     }
 
     .debug_aranges 0 : { *(.debug_aranges) }
     .debug_pubnames 0 : { *(.debug_pubnames) }
