@@ -264,6 +264,11 @@ config ARC700_SERIAL_BAUD
         default "57600"
         depends on ARC700_SERIAL
 
+config ARC_UART_CONSOLE
+        bool
+        depends on !ARC_PGU_CONSOLE
+        default y
+
 config SERIAL_LV2
         bool "Configure serial interrupt on level 2"
         default n

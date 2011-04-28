@@ -80,12 +80,19 @@ struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
 #ifdef CONFIG_ROOT_NFS
 
 // Example of NFS root booting.
-char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=172.16.0.196:/shared,nolock ip=dhcp" };
+char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=172.16.0.196:/shared,nolock ip=dhcp,console=ttyS0" };
+
+#elif CONFIG_ARC_UART_CONSOLE
+
+/* with console=tty0, arc uart console will be prefered console and
+ * registrations will be successful, otherwise dummy console will be
+ * registered if CONFIG_VT_CONSOLE is enabled
+ */
+char __initdata command_line[COMMAND_LINE_SIZE] = {"console=ttyS0"};
 
 #else
 
 // Clean, no kernel command line.
-
 char __initdata command_line[COMMAND_LINE_SIZE];
 
 // Use this next line to temporarily switch on "earlyprintk"
@@ -575,9 +582,16 @@ void __init setup_arch(char **cmdline_p)
     root_mountflags &= ~MS_RDONLY;
 
     console_verbose();
-#ifdef CONFIG_ARC_PGU_CONSOLE
-       conswitchp = &dummy_con;
+
+#ifdef CONFIG_VT
+#if defined(CONFIG_ARC_PGU_CONSOLE)
+    /* Arc PGU Console */
+    #error "FIXME: enable PGU Console"
+#elif defined(CONFIG_DUMMY_CONSOLE)
+    conswitchp = &dummy_con;
 #endif
+#endif
+
     paging_init();
 
     arc_verify_sig_sz();

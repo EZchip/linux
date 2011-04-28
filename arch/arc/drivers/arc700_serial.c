@@ -1256,13 +1256,13 @@ void unregister_serial(int line)
 module_init(arcserial_init);
 
 
+#ifdef CONFIG_ARC_UART_CONSOLE
 
 /******************************************************************************
  *
  * CONSOLE DRIVER : We use VUART0 as the console device
  *
  *****************************************************************************/
-
 
 /* have we initialized the console already? */
 static int console_inited = 0;
@@ -1273,7 +1273,6 @@ static int console_inited = 0;
 
 void arcconsole_put_char(char ch)
 {
-
     arc_uart_dev *uart = UART_REG(0);
 
     /*
@@ -1313,25 +1312,15 @@ int arcconsole_setup(struct console *cp, char *arg)
 }
 
 
-//static kdev_t aa3_console_device(struct console *c)
-//{
-//  return MKDEV(TTY_MAJOR, 64 + c->index);
-//}
-
 static struct tty_driver *arcconsole_device(struct console *c, int *index)
 {
         *index = c->index;
         return serial_driver;
 }
 
-
 void arcconsole_write(struct console *cp, const char *p, unsigned len)
 {
-    if (!console_inited)
-        arcconsole_setup(cp, NULL);
-
     while (len-- > 0) {
-
         if (*p == '\n')
             arcconsole_put_char('\r');
 
@@ -1347,7 +1336,7 @@ struct console arc_console = {
     .unblank = NULL,
     .setup   = arcconsole_setup,
     .flags   = CON_PRINTBUFFER,
-    .index   = -1,
+    .index   = 0,
     .cflag   = 0,
     .next    = NULL
 };
@@ -1358,9 +1347,7 @@ static int __init arcconsole_init(void)
     return 0;
 }
 
-//#ifndef CONFIG_ARC_PGU_CONSOLE
-        console_initcall(arcconsole_init);
-//#endif
+console_initcall(arcconsole_init);
 
 /************************************************************************
  * Interrupt Safe Raw Printing Routine so we dont have to worry about
@@ -1468,3 +1455,4 @@ void raw_printk5(const char *str, unsigned int n1, unsigned int n2,
     local_irq_restore(flags);
 }
 EXPORT_SYMBOL(raw_printk5);
+#endif
