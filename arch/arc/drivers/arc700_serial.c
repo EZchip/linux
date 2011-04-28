@@ -1,6 +1,11 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: Nov 2009
+ *  -Rewrote the driver register access macros so that multiple accesses
+ *   in same function use "anchor" reg to save the base addr causing
+ *   shorter instructions
+ *
  * Vineetg: Mar 2009
  *  -For common case of 1 UART instance, Reg base addr embedded as long immed
  *    within code rather than accessed from globals
@@ -181,6 +186,13 @@ static unsigned int uart_irqs[NR_PORTS] = {
 #endif
 };
 
+/*--------------------------------------------------------------------
+ * UART Register Access Wrappers:
+ *  -Implement Optimal access w/o affecting rest of driver
+ *  -Hide platform caveats such as cached/uncached access etc
+ *-------------------------------------------------------------------*/
+
+#ifdef ARC_SIMPLE_REG_ACCESS
 /* Small optimisn trick:
  * base address can be used as long immediate and it will be embedded in
  * code itself instead of fetching from globals
@@ -189,6 +201,47 @@ static unsigned int uart_irqs[NR_PORTS] = {
 #define UART_REG(line)  ((arc_uart_dev *)(UART_BASE0))
 #else
 #define UART_REG(line)  ((arc_uart_dev *)(UART_BASE0 + (line * 0x100)))
+#endif
+
+#else  /* !ARC_SIMPLE_REG_ACCESS */
+
+/* This is even more optimised register access.
+ * For back-back accesses, above code (even for 1 UART case) generates
+ * 8 byte instructions
+ *      ld  r0, [0xC0FC1000]
+ *      ld  r1, [0xC0FC1014]
+ * This piece of inline asm "fixes/anchors" the UART address, so multiple
+ * accesses in a high level function, generate a anchorage and reg-relative
+ * access, like this
+ *      mov gp, 0xC0FC1000
+ *      ld r0, [gp, 0]
+ *      ld r1, [gp, 0x14]
+ */
+
+#if NR_PORTS == 1
+static inline arc_uart_dev *const UART_REG(int line)    \
+{                                                       \
+    arc_uart_dev *p = (arc_uart_dev *) UART_BASE0;      \
+    asm ("; fix %0": "+r" (p));                         \
+    return p;                                           \
+}
+#else   /* !NR_PORTS == 1*/
+
+arc_uart_dev *const arc_uart_reg_tbl[ ] = {
+    (arc_uart_dev *) (UART_BASE0),
+    (arc_uart_dev *) (UART_BASE0 + 1 * 0x100),
+    (arc_uart_dev *) (UART_BASE0 + 2 * 0x100),
+    (arc_uart_dev *) (UART_BASE0 + 3 * 0x100)
+};
+
+static inline arc_uart_dev *const UART_REG(int line)    \
+{                                                       \
+    arc_uart_dev *p = arc_uart_reg_tbl[line];           \
+    asm ("; fix %0": "+r" (p));                         \
+    return p;                                           \
+}
+#endif
+
 #endif
 
 static struct tty_driver *serial_driver;

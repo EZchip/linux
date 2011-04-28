@@ -1,4 +1,13 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2009-2010
+ *
+ * vineetg: Nov 2009
+ *  -Rewrote the driver register access macros so that multiple accesses
+ *   in same function use "anchor" reg to save the base addr causing
+ *   shorter instructions
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -56,17 +65,19 @@ static struct net_device *aa3_root_dev;
 #define NAPI_WEIGHT 40      /* workload for NAPI */
 
 
-void            arc_thread(void);
+static int arc_thread(void *unused);
+
+#ifdef CONFIG_EMAC_NAPI
 static int aa3_poll (struct napi_struct *napi, int budget);
 static int  aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigned int work_to_do);
-void spinlock_test(void );
 static int aa3_tx_clean(struct net_device *netdev);
-void thread2 (void);
+#endif
 static irqreturn_t aa3_emac_intr (int irq, void *dev_instance);
 
 //Stats proc file system
 
-int             read_proc(char *sysbuf, char **p_mybuf, off_t offset, int l_sysbuf, int zero);
+static int read_proc(char *sysbuf, char **start,
+			    off_t off, int count, int *eof, void *data);
 struct proc_dir_entry *myproc;
 //debug interface.
 
@@ -87,7 +98,6 @@ struct proc_dir_entry *myproc;
 	unsigned int    emac_ltcl = 0;
 	unsigned int    emac_uflo = 0;
 	unsigned int    emac_rtry = 0;
-	unsigned int    skb_preallocated_used = 0;
 	unsigned int    skb_not_preallocated = 0;
 
 
@@ -109,21 +119,34 @@ struct proc_dir_entry *myproc;
  */
 #define	VMAC_BUFFER_PAD ETH_HLEN + 8
 
-/* VMAC register definitions, offsets in the ref manual are in bytes */
-#define ID_OFFSET 0x0/0x4
-#define MDIO_DATA_OFFSET 0x34/0x4
-#define ADDRL_OFFSET 0x24/0x4
-#define ADDRH_OFFSET 0x28/0x4
-#define RXRINGPTR_OFFSET 0x20/0x4
-#define TXRINGPTR_OFFSET 0x1c/0x4
-#define POLLRATE_OFFSET	0x10/0x4
-#define ENABLE_OFFSET	0x08/0x4
-#define STAT_OFFSET	0x04/0x4
-#define CONTROL_OFFSET	0x0c/0x4
-#define LAFL_OFFSET	0x2c/0x4
-#define LAFH_OFFSET	0x30/0x4
-#define RXERR_OFFSET	0x14/0x4
-#define MISS_OFFSET	0x18/0x4
+/* VMAC register definitions */
+typedef volatile struct
+{
+    unsigned int id, status, enable, ctrl, pollrate, rxerr, miss,
+                       tx_ring, rx_ring, addrl, addrh, lafl, lafh, mdio;
+} arc_emac_reg;
+
+#define ASSUME_1_EMAC
+
+#ifdef ASSUME_1_EMAC
+
+#ifdef ARC_SIMPLE_REG_ACCESS
+
+#define EMAC_REG(ap)   ((arc_emac_reg *)(VMAC_REG_BASEADDR))
+
+#else  /* ! ARC_SIMPLE_REG_ACCESS */
+
+static inline arc_emac_reg *const EMAC_REG(void * ap)   \
+{                                                                       \
+    arc_emac_reg *p = (arc_emac_reg *)VMAC_REG_BASEADDR;                \
+    asm ("; fix %0": "+r" (p));                                         \
+    return p;                                                           \
+}
+#endif
+
+#else  /* ! ASSUME_1_EMAC */
+#define EMAC_REG(ap)   (ap->reg_base_addr)
+#endif
 
 /* STATUS and ENABLE Register bit masks */
 #define TXINT_MASK	(1<<0)	/* Transmit interrupt */
@@ -156,6 +179,9 @@ struct proc_dir_entry *myproc;
 #define RTRY            (1<<24)
 #define LTCL            (1<<28)
 #define UFLO            (1<<29)
+
+#define FOR_EMAC        OWN_MASK
+#define FOR_CPU         0
 
 /* ARCangel board PHY Identifier */
 #define PHY_ID	0x3
@@ -214,21 +240,21 @@ struct proc_dir_entry *myproc;
 #define dbg_printk(fmt, args...)
 #endif
 
-#define __mdio_write(priv, mdio_data_reg, phy_id, phy_reg, val)	\
+#define __mdio_write(priv, phy_reg, val)	\
 {                                                   \
-priv->mdio_complete = 0;				\
-		*(mdio_data_reg) = (0x50020000 | phy_id << 23 | \
-					phy_reg << 18 | (val & 0xffff)) ; \
-		while (!priv->mdio_complete);			\
+    priv->mdio_complete = 0;				\
+	EMAC_REG(priv)->mdio = (0x50020000 | (PHY_ID << 23) | \
+					          (phy_reg << 18) | (val & 0xffff)) ; \
+	while (!priv->mdio_complete);			\
 }
 
-#define __mdio_read(priv, mdio_data_reg, phy_id, phy_reg, val)	\
+#define __mdio_read(priv, phy_reg, val)	\
 {                                                   \
-		priv->mdio_complete = 0;				\
-		*(mdio_data_reg) = (0x60020000 | phy_id << 23 | phy_reg << 18 );	\
-		while (!priv->mdio_complete);			\
-		val = *(mdio_data_reg); \
-		val &= 0xffff;              \
+    priv->mdio_complete = 0;				\
+	EMAC_REG(priv)->mdio = (0x60020000 | (PHY_ID << 23) | (phy_reg << 18));	\
+	while (!priv->mdio_complete);			\
+	val = EMAC_REG(priv)->mdio; \
+	val &= 0xffff;              \
 }
 
 	struct aa3_buffer_desc
@@ -241,7 +267,7 @@ priv->mdio_complete = 0;				\
 	{
 		struct net_device_stats stats;
 		/* base address of the register set for this device */
-		int            *reg_base_addr;
+		arc_emac_reg  *reg_base_addr;
 		struct net_device *prev_dev;
 		spinlock_t      lock;
 		/*
@@ -333,7 +359,6 @@ static int aa3_poll (struct napi_struct *napi, int budget)
 
    struct net_device *netdev = aa3_root_dev;
    struct aa3_emac_priv *ap = (struct aa3_emac_priv *) netdev->priv;
-   volatile unsigned int *reg;
    unsigned int work_done = 0;
 
 
@@ -344,8 +369,7 @@ static int aa3_poll (struct napi_struct *napi, int budget)
         if(work_done < budget)
         {
             netif_rx_complete(netdev, napi);
-            reg = ap->reg_base_addr + ENABLE_OFFSET;
-            *reg |= RXINT_MASK;
+            EMAC_REG(ap)->enable |= RXINT_MASK;
         }
 
 //    printk("work done %u budget %u\n", work_done, budget);
@@ -359,7 +383,6 @@ static int aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigne
     unsigned int    flags;
 	struct net_device *dev = (struct net_device *) aa3_root_dev;
 	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
-	volatile unsigned int *reg;
 	unsigned int    status, len, i, info;
 	struct sk_buff *skb, *skbnew;
 
@@ -370,7 +393,7 @@ static int aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigne
 		{
 			/* Why not to go in a round-robin order */
 			info = arc_read_uncached_32(&ap->rxbd[i].info);
-			if ((info & OWN_MASK) == 0)
+			if ((info & OWN_MASK) == FOR_CPU)
 			{
 				if ((info & FRST_MASK) && (info & LAST_MASK))
 				{
@@ -380,7 +403,6 @@ static int aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigne
 
 					if (skb_count)
 					{
-						skb_preallocated_used++;
 						skbnew = skb_prealloc[skb_count];
 						skb_count--;
 					} else
@@ -393,22 +415,23 @@ static int aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigne
 							 * VMAC
 							 */
 							arc_write_uncached_32(&ap->rxbd[i].info,
-									      (OWN_MASK | (dev->mtu + VMAC_BUFFER_PAD)));
+									      (FOR_EMAC| (dev->mtu + VMAC_BUFFER_PAD)));
 							ap->stats.rx_dropped++;
-						} else
-						{
-
+						}
+                        else {
+                            // Not fatal, purely for statistical purposes
 							skb_not_preallocated++;
 						}
 					}
 
 					if (skbnew)
 					{
+                        /* Prepare the BD for next cycle */
+
 						skb = ap->rx_skbuff[i];
-//						dbg_printk("RXINT: invalidating cache for data: 0x%lx-0x%lx\n",
-//							   skb->data, skb->data + skb->len);
-						inv_dcache_range(skb->data, skb->data + len);
-						//flush_dcache_all();
+
+						inv_dcache_range((unsigned long)skb->data,
+                                         (unsigned long)skb->data + len);
 						/*
 						 * IP header Alignment (14
 						 * byte Ethernet header)
@@ -459,28 +482,15 @@ static int aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigne
 
 static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 {
-
 	struct net_device *dev = (struct net_device *) dev_instance;
 	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
-	volatile unsigned int *reg;
-    volatile unsigned int *mask;
-    volatile unsigned int *rxring;
 
 	unsigned int    status, len, i, info,enable, rx_ring,mdio_reg;
 	struct sk_buff *skb, *skbnew;
 
-	reg = ap->reg_base_addr + STAT_OFFSET;
-	status = (*reg);
-	(*reg) = status;
-    mask = ap->reg_base_addr + ENABLE_OFFSET;
-    enable = (*mask);
-
-    rxring = ap->reg_base_addr + RXRINGPTR_OFFSET;
-   rx_ring = *rxring;
-
-    reg = ap->reg_base_addr + MDIO_DATA_OFFSET;
-
-//    __mdio_read(ap,reg,PHY_ID,LXT971A_STATUS_REG, mdio_reg);
+	status = EMAC_REG(ap)->status;
+    EMAC_REG(ap)->status = status;
+    enable = EMAC_REG(ap)->enable;
 
 	/*
 	 * We dont allow chaining of recieve packets. We want to do "zero
@@ -492,16 +502,13 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 	{
         if(likely(netif_rx_schedule_prep(dev, &ap->napi)))
         {
-//            printk("disable ints\n");
-            reg = ap->reg_base_addr + ENABLE_OFFSET;;
-            *reg &= ~RXINT_MASK; // no more interrupts.
+            EMAC_REG(ap)->enable &= ~RXINT_MASK; // no more interrupts.
             __netif_rx_schedule(dev,&ap->napi);
         }
     }
 
     if (status & MDIO_MASK)
 	{
-//        printk("MDIO INT\n");
 		/*
 		 * Mark the mdio operation as complete. This is reset by the
 		 * MDIO reader
@@ -516,7 +523,6 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 
 	if (status & ERR_MASK)
 	{
-//		printk(KERN_DEBUG "ARCTangent Vmac: Error...status = 0x%x\n", status);
 		if (status & TXCH_MASK)
 		{
 			ap->stats.tx_errors++;
@@ -552,19 +558,9 @@ static int aa3_tx_clean(struct net_device *netdev)
     unsigned int    flags;
 	struct net_device *dev = (struct net_device *) aa3_root_dev;
 	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
-	volatile unsigned int *reg;
 	unsigned int    status, len, i, info;
 	struct sk_buff *skb, *skbnew;
 
-#if 0
-    reg = ap->reg_base_addr + STAT_OFFSET;
-    status = (*reg);
-    (*reg) = status;
-
-	if (status & TXINT_MASK)
-	{
-
-#endif
 
 		/*
 		 * Kind of short circuiting code taking advantage of the fact
@@ -615,7 +611,6 @@ static int aa3_tx_clean(struct net_device *netdev)
 			arc_write_uncached_32(&ap->txbd[ap->txbd_dirty].info, 0x0);
 			ap->txbd_dirty = (ap->txbd_dirty + 1) % TX_BDT_LEN;
 		}
-/*	} TXINT */
 err_int:
 	return IRQ_HANDLED;
 
@@ -632,14 +627,13 @@ aa3_emac_intr(int irq, void *dev_instance)
 {
 	struct net_device *dev = (struct net_device *) dev_instance;
 	struct aa3_emac_priv *ap = netdev_priv(dev);
-	volatile unsigned int *reg;
 	unsigned int    status, len, i, info;
 	struct sk_buff *skb, *skbnew;
 
 	/* Check what kind of interrupt */
-	reg = ap->reg_base_addr + STAT_OFFSET;
-	status = (*reg);
-	(*reg) = status;
+	status = EMAC_REG(ap)->status;
+    EMAC_REG(ap)->status = status;
+
 	/*
 	 * We dont allow chaining of recieve packets. We want to do "zero
 	 * copy" and sk_buff structure is not chaining friendly when we dont
@@ -662,7 +656,6 @@ aa3_emac_intr(int irq, void *dev_instance)
 
 					if (skb_count)
 					{
-						skb_preallocated_used++;
 						skbnew = skb_prealloc[skb_count];
 						skb_count--;
 					} else
@@ -689,8 +682,8 @@ aa3_emac_intr(int irq, void *dev_instance)
 						skb = ap->rx_skbuff[i];
 //						dbg_printk("RXINT: invalidating cache for data: 0x%lx-0x%lx\n",
 //							   skb->data, skb->data + skb->len);
-						inv_dcache_range(skb->data, skb->data + len);
-						//flush_dcache_all();
+						inv_dcache_range((unsigned long)skb->data,
+                                         (unsigned long)skb->data + len);
 						/*
 						 * IP header Alignment (14
 						 * byte Ethernet header)
@@ -831,8 +824,6 @@ aa3_emac_open(struct net_device * dev)
 	struct aa3_emac_priv *ap;
 	struct aa3_buffer_desc *bd;
 	struct sk_buff *skb;
-	volatile unsigned int *reg;
-	volatile unsigned int *stat_reg;
 	int             i;
 	unsigned int    temp, duplex;
 	int             noauto;
@@ -844,20 +835,16 @@ aa3_emac_open(struct net_device * dev)
 	/* Register interrupt handler for device */
 	request_irq(dev->irq, aa3_emac_intr, 0, dev->name, dev);
 
-	reg = ap->reg_base_addr + ENABLE_OFFSET;
-	(*reg) |= MDIO_MASK;	/* MDIO Complete Interrupt Mask */
-
-	reg = ap->reg_base_addr + MDIO_DATA_OFFSET;
-	stat_reg = ap->reg_base_addr + STAT_OFFSET;
+	EMAC_REG(ap)->enable |= MDIO_MASK;	/* MDIO Complete Interrupt Mask */
 
 	/* Reset the PHY */
-	__mdio_write(ap, reg, PHY_ID, LXT971A_CTRL_REG, LXT971A_CTRL_RESET);
+	__mdio_write(ap, LXT971A_CTRL_REG, LXT971A_CTRL_RESET);
 
 	/* Wait till the PHY has finished resetting */
 	i = 0;
 	do
 	{
-		__mdio_read(ap, reg, PHY_ID, LXT971A_CTRL_REG, temp);
+		__mdio_read(ap, LXT971A_CTRL_REG, temp);
 		i++;
 	} while (i < AUTO_NEG_TIMEOUT && (temp & LXT971A_CTRL_RESET));
 
@@ -866,7 +853,7 @@ aa3_emac_open(struct net_device * dev)
 						 * networking without the
 						 * cable being plugged in */
 	if (noauto)
-		__mdio_write(ap, reg, PHY_ID, LXT971A_CTRL_REG, 0);
+		__mdio_write(ap, LXT971A_CTRL_REG, 0);
 
 	/* Advertize capabilities */
 	temp = LXT971A_AUTONEG_ADV_10BT | AUTONEG_ADV_IEEE_8023;
@@ -875,21 +862,22 @@ aa3_emac_open(struct net_device * dev)
 	if (clk_speed > 25000000)
 		temp |= LXT971A_AUTONEG_ADV_100BTX;
 
-	__mdio_write(ap, reg, PHY_ID, LXT971A_AUTONEG_ADV_REG, temp);
+	__mdio_write(ap, LXT971A_AUTONEG_ADV_REG, temp);
 
 	if (!noauto)
 	{
 		/* Start Auto-Negotiation */
-		__mdio_write(ap, reg, PHY_ID, LXT971A_CTRL_REG,
+		__mdio_write(ap, LXT971A_CTRL_REG,
 			(LXT971A_CTRL_AUTONEG | LXT971A_CTRL_RESTART_AUTO));
 
 		/* Wait for Auto Negotiation to complete */
 		i = 0;
 		do
 		{
-			__mdio_read(ap, reg, PHY_ID, LXT971A_STATUS2_REG, temp);
+			__mdio_read(ap, LXT971A_STATUS2_REG, temp);
 			i++;
 		} while ((i < AUTO_NEG_TIMEOUT) && !(temp & LXT971A_STATUS2_COMPLETE));
+
 		if (i < AUTO_NEG_TIMEOUT)
 		{
 			/*
@@ -912,25 +900,12 @@ aa3_emac_open(struct net_device * dev)
 		 * cable is unplugged Force 10mbps, half-duplex.
 		 */
 		printk("Emac - forcing manual PHY config.\n");
-		__mdio_write(ap, reg, PHY_ID, LXT971A_CTRL_REG, 0);
+		__mdio_write(ap, LXT971A_CTRL_REG, 0);
 		duplex = 0;
 	}
-	__mdio_read(ap, reg, PHY_ID, LXT971A_STATUS2_REG, temp);
+	__mdio_read(ap, LXT971A_STATUS2_REG, temp);
 	dump_phy_status(temp);
 
-	/*
-	 * Allocate the rx BD's. kmalloc guarantees only 4 byte alignment. We
-	 * need a 8 byte aligned memory so we allocate 1 extra (8 byte) BD
-	 * and then adjust it to the next 8 byte boundary
-	 */
-	/*
-	 * ap->rxbd = kmalloc (sizeof(struct aa3_buffer_desc)*(RX_BDT_LEN +
-	 * 1), GFP_KERNEL);
-	 *
-	 * if (ap->rxbd == NULL) return -ENOMEM; ap->rxbd = (struct
-	 * aa3_buffer_desc *) ((unsigned int)(ap->rxbd + 1) & 0xfffffff8);
-	 *
-	 */
 	/* Allocate and set buffers for rx BD's */
 	bd = ap->rxbd;
 	for (i = 0; i < RX_BDT_LEN; i++)
@@ -941,20 +916,11 @@ aa3_emac_open(struct net_device * dev)
 		ap->rx_skbuff[i] = skb;
 		arc_write_uncached_32(&bd->data, skb->data);
 		/* VMAC owns rx descriptors */
-		arc_write_uncached_32(&bd->info, OWN_MASK | (dev->mtu + VMAC_BUFFER_PAD));
+		arc_write_uncached_32(&bd->info, FOR_EMAC | (dev->mtu + VMAC_BUFFER_PAD));
 		bd++;
 	}
 	/* Allocate tx BD's similar to rx BD's */
-	/*
-	ap->txbd = kmalloc (sizeof(struct aa3_buffer_desc)*(TX_BDT_LEN + 1),
-								 GFP_KERNEL);
-	if (ap->txbd == NULL)
-		return -ENOMEM;
-	ap->txbd = (struct aa3_buffer_desc *)
-			((unsigned int)(ap->txbd + 1) & 0xfffffff8);
-	*/
 	/* All TX BD's owned by CPU */
-	//memset(ap->txbd, 0, sizeof(struct aa3_buffer_desc) * TX_BDT_LEN);
 	bd = ap->txbd;
 	for (i = 0; i < TX_BDT_LEN; i++)
 	{
@@ -963,30 +929,24 @@ aa3_emac_open(struct net_device * dev)
 		bd++;
 	}
 	/* Initialize logical address filter */
-	reg = ap->reg_base_addr + LAFL_OFFSET;
-	(*reg) = 0x0;
-	reg = ap->reg_base_addr + LAFH_OFFSET;
-	(*reg) = 0x0;
+	EMAC_REG(ap)->lafl = 0x0;
+	EMAC_REG(ap)->lafh = 0x0;
 
 	/* Set rx BD ring pointer */
-	reg = ap->reg_base_addr + RXRINGPTR_OFFSET;
-	(*reg) = (unsigned int) ap->rxbd;
+	EMAC_REG(ap)->rx_ring = (unsigned int) ap->rxbd;
 
 	/* Set tx BD ring pointer */
-	reg = ap->reg_base_addr + TXRINGPTR_OFFSET;
-	(*reg) = (unsigned int) ap->txbd;
+	EMAC_REG(ap)->tx_ring = (unsigned int) ap->txbd;
 
 	/* Set Poll rate so that it polls every 1 ms */
-	reg = ap->reg_base_addr + POLLRATE_OFFSET;
-	(*reg) = (clk_speed / 1000000);
+	EMAC_REG(ap)->pollrate = (clk_speed / 1000000);
 
 	/*
 	 * Enable interrupts. Note: interrupts wont actually come till we set
 	 * CONTROL below.
 	 */
-	reg = ap->reg_base_addr + ENABLE_OFFSET;
 	/* FIXME :: enable all intrs later */
-	(*reg) = TXINT_MASK |	/* Transmit interrupt */
+	EMAC_REG(ap)->enable = TXINT_MASK |	/* Transmit interrupt */
 		RXINT_MASK |	/* Recieve interrupt */
 		ERR_MASK |	/* Error interrupt */
 		TXCH_MASK |	/* Transmit chaining error interrupt */
@@ -994,14 +954,14 @@ aa3_emac_open(struct net_device * dev)
 		MDIO_MASK;	/* MDIO Complete Intereupt Mask */
 
 	/* Set CONTROL */
-	reg = ap->reg_base_addr + CONTROL_OFFSET;
-	(*reg) = (RX_BDT_LEN << 24) |	/* RX buffer desc table len */
+	EMAC_REG(ap)->ctrl = (RX_BDT_LEN << 24) |	/* RX buffer desc table len */
 		(TX_BDT_LEN << 16) |	/* TX buffer des tabel len */
 		TXRN_MASK |	/* TX enable */
 		RXRN_MASK |	/* RX enable */
 		duplex;		/* Full Duplex enable */
 
-	(*reg) |= EN_MASK;	/* VMAC enable */
+	EMAC_REG(ap)->ctrl |= EN_MASK;	/* VMAC enable */
+
 #ifdef CONFIG_EMAC_NAPI
     netif_wake_queue(dev);
     napi_enable(&ap->napi);
@@ -1010,14 +970,11 @@ aa3_emac_open(struct net_device * dev)
 #endif
 
 	printk(KERN_INFO "%s up\n", dev->name);
-//	kernel_thread(arc_thread, NULL, CLONE_KERNEL);
-    kthread_run(arc_thread, 0, "EMAC helper");
-#if 0
-        printk(KERN_CRIT "Starting spinlock_test thread\n");
-        kernel_thread(spinlock_test, NULL, CLONE_KERNEL);
-#endif
+
 	//ARC Emac helper thread.
-		myproc = create_proc_entry("emac", 0644, NULL);
+    kthread_run(arc_thread, 0, "EMAC helper");
+
+    myproc = create_proc_entry("emac", 0644, NULL);
 	if (myproc)
 	{
 		myproc->read_proc = read_proc;
@@ -1029,17 +986,14 @@ aa3_emac_open(struct net_device * dev)
 int
 aa3_emac_stop(struct net_device * dev)
 {
-	volatile unsigned int *reg;
 	struct aa3_emac_priv *ap = netdev_priv(dev);
 
-	dbg_printk("stop called\n");
 #ifdef CONFIG_EMAC_NAPI
     napi_disable(&ap->napi);
 #endif
 
 	/* Disable VMAC */
-	reg = ap->reg_base_addr + CONTROL_OFFSET;
-	(*reg) &= (~EN_MASK);
+	EMAC_REG(ap)->ctrl &= (~EN_MASK);
 
 	netif_stop_queue(dev);	/* stop the queue for this device */
 
@@ -1064,7 +1018,7 @@ aa3_emac_ioctl(struct net_device * dev, struct ifreq * rq, int cmd)
 struct net_device_stats *
 aa3_emac_stats(struct net_device * dev)
 {
-	int             flags;
+	unsigned long  flags;
 	struct aa3_emac_priv *ap = netdev_priv(dev);
 
 	dbg_printk("get stats called\n");
@@ -1079,12 +1033,9 @@ void
 aa3_emac_update_stats(struct aa3_emac_priv * ap)
 {
 	unsigned long   miss, rxerr, rxfram, rxcrc, rxoflow;
-	volatile unsigned int *reg;
 
-	reg = ap->reg_base_addr + RXERR_OFFSET;
-	rxerr = *reg;
-	reg = ap->reg_base_addr + MISS_OFFSET;
-	miss = *reg;
+	rxerr = EMAC_REG(ap)->rxerr;
+	miss = EMAC_REG(ap)->miss;
 
 	rxcrc = (rxerr & 0xff);
 	rxfram = (rxerr >> 8 & 0xff);
@@ -1109,26 +1060,14 @@ aa3_emac_tx(struct sk_buff * skb, struct net_device * dev)
 	int             len, data_len, bitmask;
 	unsigned int    info;
 	char           *data;
-	volatile unsigned int *reg;
-	volatile unsigned int *status;
-
 	struct aa3_emac_priv *ap = netdev_priv(dev);
-
 	int             inpacket;
 
 	len = skb->len < ETH_ZLEN ? ETH_ZLEN : skb->len;
 	data = skb->data;
 	dev->trans_start = jiffies;
 
-	//dbg_printk("transmit called - skb=0x%lx, len=%lu\n", skb, len);
-	//dbg_printk("tx: flushing and invalidating cache for data: 0x%lx-0x%lx\n", data, data + len);
-	flush_dcache_range(data, data + len);
-	//was in.
-	//	flush_dcache_all();
-
-	/* transmission code */
-	reg = ap->reg_base_addr + CONTROL_OFFSET;
-	status = ap->reg_base_addr + STAT_OFFSET;
+	flush_dcache_range((unsigned long)data, (unsigned long)data + len);
 
 	/* Set First bit */
 	bitmask = FRST_MASK;
@@ -1138,7 +1077,7 @@ aa3_emac_tx(struct sk_buff * skb, struct net_device * dev)
 	{
 		data_len = (len > MAX_TX_BUFFER_LEN) ? MAX_TX_BUFFER_LEN : len;
 		info = arc_read_uncached_32(&ap->txbd[ap->txbd_curr].info);
-		if ((info & OWN_MASK) == 0)
+		if ((info & OWN_MASK) == FOR_CPU)
 		{
 			arc_write_uncached_32(&ap->txbd[ap->txbd_curr].data, data);
 			/* Set Last bit */
@@ -1157,10 +1096,8 @@ aa3_emac_tx(struct sk_buff * skb, struct net_device * dev)
 			 * might immediately start sending
 			 */
 			arc_write_uncached_32(&ap->txbd[ap->txbd_curr].info,
-					      OWN_MASK | bitmask | data_len);
+					      FOR_EMAC | bitmask | data_len);
 
-
-			//while ((arc_read_uncached_32(&ap->txbd[ap->txbd_curr].info)) & (OWN_MASK));
 			ap->txbd_curr = (ap->txbd_curr + 1) % TX_BDT_LEN;
 
 			data += data_len;
@@ -1180,8 +1117,7 @@ aa3_emac_tx(struct sk_buff * skb, struct net_device * dev)
 		printk("Incomplete packet\n");
 
 	/* Set TXPOLL bit to force a poll */
-	reg = ap->reg_base_addr + STAT_OFFSET;
-	(*reg) |= TXPL_MASK;
+	EMAC_REG(ap)->status |= TXPL_MASK;
 
 	/* Success */
 	return 0;
@@ -1211,22 +1147,16 @@ aa3_emac_set_multicast_list(struct net_device * dev)
 int
 aa3_emac_set_address(struct net_device * dev, void *p)
 {
-	int             i;
 	struct sockaddr *addr = p;
-	volatile unsigned int *reg;
 	struct aa3_emac_priv *ap = netdev_priv(dev);
+    char buf[32];
 
 	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
 
-	reg = ap->reg_base_addr + ADDRL_OFFSET;
-	(*reg) = *(unsigned int *) dev->dev_addr;
-	reg = ap->reg_base_addr + ADDRH_OFFSET;
-	(*reg) = (*(unsigned int *) &dev->dev_addr[4]) & 0x0000ffff;
+	EMAC_REG(ap)->addrl = *(unsigned int *) dev->dev_addr;
+	EMAC_REG(ap)->addrh = (*(unsigned int *) &dev->dev_addr[4]) & 0x0000ffff;
 
-	printk(KERN_INFO "MAC address set to ");
-	for (i = 0; i < 5; i++)
-		printk("%02x:", dev->dev_addr[i]);
-	printk("%02x\n", dev->dev_addr[i]);
+	printk(KERN_INFO "MAC address set to %s",print_mac(buf, dev->dev_addr));
 
 	return 0;
 }
@@ -1235,24 +1165,20 @@ aa3_emac_set_address(struct net_device * dev, void *p)
 static int
 __init aa3_emac_probe(int num)
 {
-	volatile unsigned int *reg_base_addr;
-	unsigned int   *id_reg;
+	arc_emac_reg *reg;
+	unsigned int id;
 
 	if (num == 8)
-		return -ENODEV;	/* Only upto 8 instances of the VMAC are
-				 * possible */
+		return -ENODEV;	/* Only upto 8 instances of the VMAC are possible */
 
 	/* Calculate the register base address of this instance (num) */
-	reg_base_addr = (unsigned int *) (VMAC_REG_BASEADDR | (num << 8));
-
-	/* The address of the ID register */
-	id_reg = (unsigned int *) reg_base_addr + ID_OFFSET;
+	reg = (arc_emac_reg *)(VMAC_REG_BASEADDR | (num << 8));
+	id = reg->id;
 
 	/* Check for VMAC revision 5 or 7, magic number */
-	if (*id_reg == 0x0005fd02 || *id_reg == 0x0007fd02)
-	{
+	if (id == 0x0005fd02 || id == 0x0007fd02)
 		return 0;
-	}
+
 	return -ENODEV;
 }
 
@@ -1290,14 +1216,13 @@ aa3_module_init(void)
 		 * Allocate a net device structure and the priv structure and
 		 * intitialize to generic ethernet values
 		 */
-		/* dev = init_etherdev(NULL, sizeof(struct aa3_emac_priv)); */
-
 		dev = alloc_etherdev(sizeof(struct aa3_emac_priv));
 
 		if (dev == NULL)
 			return -ENOMEM;
+
 		priv = netdev_priv(dev);
-		priv->reg_base_addr = (unsigned int *) (VMAC_REG_BASEADDR | ((vmacs - 1) << 8));
+		priv->reg_base_addr = (arc_emac_reg *) (VMAC_REG_BASEADDR | ((vmacs - 1) << 8));
 		/* link this device into the list of all detected devices */
 		priv->prev_dev = aa3_root_dev;
 		aa3_root_dev = dev;
@@ -1312,7 +1237,6 @@ aa3_module_init(void)
 #ifdef CONFIG_NET_POLL_CONTROLLER
         dev->poll_controller = aa3_netpoll;
 #endif
-
 
 		/* Set EMAC hardware address */
 		aa3_emac_set_address(dev, &mac_addr);
@@ -1348,11 +1272,10 @@ aa3_module_init(void)
 	ifr.ifr_flags = IFF_UP;
 	devinet_ioctl(SIOCSIFFLAGS, &ifr);
 	dbg_printk("ARCTangent emac: Interface is up\n");
-#endif				/* ARCTANGENT_EMAC_SETUP */
-	/* return (vmacs ? 0 : -ENODEV); */
+#endif
+
 #ifdef CONFIG_EMAC_NAPI
     netif_napi_add(dev,&priv->napi,aa3_poll, NAPI_WEIGHT);
-//    SET_NETDEV_DEV(dev,&priv->napi);
 #endif
 
 	err = register_netdev(dev);
@@ -1362,7 +1285,7 @@ aa3_module_init(void)
 	return err;
 out:
 	free_netdev(dev);
-	return ERR_PTR(err);
+	return err;
 
 }
 
@@ -1386,10 +1309,9 @@ aa3_module_cleanup(void)
 }
 
 
-void
-arc_thread(void) //helps with interrupt mitigation.
+static int
+arc_thread(void *unused) //helps with interrupt mitigation.
 {
-	unsigned int    flags;
 	unsigned int    i;
 	while (1)
 	{
@@ -1409,24 +1331,19 @@ arc_thread(void) //helps with interrupt mitigation.
 			skb_count = SKB_PREALLOC - 1;
 		}
 	}
+
+    return 0;
 }
 
-
-int
-read_proc(char *sysbuf, char **p_mybuf, off_t offset, int l_sysbuf, int zero)
+static int read_proc(char *sysbuf, char **start,
+			    off_t off, int count, int *eof, void *data)
 {
-	int             len;
-
-	if (offset > 0)
-	{
-		return 0;
-	}
+	int  len;
 
 	len = sprintf(sysbuf, "\nARC EMAC STATISTICS\n");
 	len += sprintf(sysbuf + len, "-------------------\n");
 	len += sprintf(sysbuf + len, "SKB Pre-allocated available buffers : %u\n", skb_count);
 	len += sprintf(sysbuf + len, "SKB Pre-allocated maximum           : %u\n", SKB_PREALLOC);
-	len += sprintf(sysbuf + len, "Number of pre-allocated SKB's used  : %u\n", skb_preallocated_used);
 	len += sprintf(sysbuf + len, "Number of intr allocated SKB's used : %u\n", skb_not_preallocated);
 	len += sprintf(sysbuf + len, "EMAC DEFR count : %u\n", emac_defr);
 	len += sprintf(sysbuf + len, "EMAC DROP count : %u\n", emac_drop);
