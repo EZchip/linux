@@ -230,8 +230,12 @@ char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
                 ((p_cpu->timers & 0x100) ? "TIMER0":""));
 
     num += sprintf(buf+num,"Interrupt Vect Base: \t0x%x \n", p_cpu->vec_base);
+    if(p_cpu->perip_base==0){
+        num += sprintf(buf+num,"Peripheral Base: NOT present; assuming 0xCOFC0000 \n");
+    }
+    else{
     num += sprintf(buf+num,"Peripheral Base: \t0x%x \n", p_cpu->perip_base);
-
+    }
     num += sprintf(buf+num, "Data UNCACHED Base (I/O): start %#x Sz, %d MB \n",
             p_cpu->uncached_space.start, (0x10 << p_cpu->uncached_space.sz) );
 

@@ -361,7 +361,7 @@ config XILINX_TEMAC
         select NET_ETHERNET
 
 config ISS_MAC
-        tristate "Use ISS ENET simulation ?"
+        tristate "Use xISS/ISS ENET simulation ?"
         default n
         select NET
         select IET

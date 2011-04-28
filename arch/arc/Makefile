@@ -56,10 +56,6 @@ MODFLAGS	+= -mlong-calls
 
 KBUILD_CFLAGS	+= $(shell if [ $(call cc-version, $(CC)) -gt 0400 ] ; then echo $(call cc-option,-mno-sdata); fi ;)
 
-ifeq ($(CONFIG_DEBUG_INFO),y)
-KBUILD_CFLAGS		+= -O1 -gdwarf-2
-endif
-
 ifdef CONFIG_ARC_STACK_UNWIND
 KBUILD_CFLAGS		+= -fasynchronous-unwind-tables
 endif

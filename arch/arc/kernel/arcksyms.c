@@ -30,6 +30,7 @@
 extern void __ashldi3(void);
 extern void __ashrdi3(void);
 extern void __divsi3(void);
+extern void __divsf3(void);
 extern void __lshrdi3(void);
 extern void __modsi3(void);
 extern void __muldi3(void);
@@ -42,6 +43,7 @@ extern void __fixunsdfsi(void);
 extern void __muldf3(void);
 extern void __divdf3(void);
 extern void __floatunsidf(void);
+extern void __floatunsisf(void);
 
 extern void fpundefinstr(void);
 extern void fp_enter(void);
@@ -53,6 +55,7 @@ extern struct sock_addr mac_addr;
 EXPORT_SYMBOL(__ashldi3);
 EXPORT_SYMBOL(__ashrdi3);
 EXPORT_SYMBOL(__divsi3);
+EXPORT_SYMBOL(__divsf3);
 EXPORT_SYMBOL(__lshrdi3);
 EXPORT_SYMBOL(__modsi3);
 EXPORT_SYMBOL(__muldi3);
@@ -65,7 +68,7 @@ EXPORT_SYMBOL(__fixunsdfsi);
 EXPORT_SYMBOL(__muldf3);
 EXPORT_SYMBOL(__divdf3);
 EXPORT_SYMBOL(__floatunsidf);
-
+EXPORT_SYMBOL(__floatunsisf);
 
 EXPORT_SYMBOL(clk_speed);
 EXPORT_SYMBOL(mac_addr);
