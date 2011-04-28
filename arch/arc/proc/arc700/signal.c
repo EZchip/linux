@@ -1,6 +1,14 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: Nov 2009 (Everything needed for TIF_RESTORE_SIGMASK)
+ *  -do_signal() supports TIF_RESTORE_SIGMASK
+ *  -do_signal() no loner needs oldset, required by OLD sys_sigsuspend
+ *  -sys_rt_sigsuspend() now comes from generic code, so discard arch implemen
+ *  -sys_sigsuspend() no longer needs to fudge ptregs, hence that arg removed
+ *  -sys_sigsuspend() no longer loops doing do_signal(), it sets TIF_xxx and leaves
+ *   the job to do_signal()
+ *
  * vineetg: July 2009
  *  -Modified Code to support the uClibc provided userland sigreturn stub
  *   to avoid kernel synthesing it on user stack at runtime, costing TLB
@@ -74,7 +82,6 @@
 #include <asm/tlb.h>
 
 #define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
-int do_signal(struct pt_regs *, sigset_t *);
 
 #define EXEC_DISABLE 0
 #define EXEC_ENABLE 1
@@ -83,33 +90,12 @@ void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
 
 void set_frame_exec(unsigned long vaddr, unsigned int exec_enable);
 
-#if 0
-#define ASID_DBG_DEFS int asid_dbg1, asid_dbg2;
-
-#define ASID_DBG1 \
-    asid_dbg1 = current->mm->context.asid;              \
-    if ( asid_dbg1 ==  256)                             \
-            printk("Error #1 in ASID in signals 0x%x\n",  \
-                        asid_dbg1);
-
-#define ASID_DBG2                                           \
-        asid_dbg2 = current->mm->context.asid;              \
-        if ( asid_dbg2 == 256 || asid_dbg2 != asid_dbg1 )   \
-            printk("Error #2 in ASID in signals 0x%x 0x%x\n",   \
-                        asid_dbg1, asid_dbg2);
-
-#else
-#define ASID_DBG_DEFS
-#define ASID_DBG1
-#define ASID_DBG2
-#endif
-
 
 /*
  * atomically swap in the new signal mask, and wait for a signal.
  */
 asmlinkage int sys_sigsuspend(int restart, unsigned long oldmask,
-                  old_sigset_t mask, struct pt_regs *regs)
+                  old_sigset_t mask)
 {
     sigset_t saveset;
 
@@ -119,43 +105,11 @@ asmlinkage int sys_sigsuspend(int restart, unsigned long oldmask,
     siginitset(&current->blocked, mask);
     recalc_sigpending();
     spin_unlock_irq(&current->sighand->siglock);
-    regs->r0 = -EINTR;
 
-    while (1) {
-        current->state = TASK_INTERRUPTIBLE;
-        schedule();
-        if (do_signal(regs, &saveset))
-            return regs->r0;
-    }
-}
-
-asmlinkage int
-sys_rt_sigsuspend(sigset_t __user * unewset, size_t sigsetsize,
-          struct pt_regs *regs)
-{
-    sigset_t saveset, newset;
-
-    /* XXX: Don't preclude handling different sized sigset_t's. */
-    if (sigsetsize != sizeof(sigset_t))
-        return -EINVAL;
-
-    if (copy_from_user(&newset, unewset, sizeof(newset)))
-        return -EFAULT;
-    sigdelsetmask(&newset, ~_BLOCKABLE);
-
-    spin_lock_irq(&current->sighand->siglock);
-    saveset = current->blocked;
-    current->blocked = newset;
-    recalc_sigpending();
-    spin_unlock_irq(&current->sighand->siglock);
-    regs->r0 = -EINTR;
-
-    while (1) {
-        current->state = TASK_INTERRUPTIBLE;
-        schedule();
-        if (do_signal(regs, &saveset))
-            return regs->r0;
-    }
+    current->state = TASK_INTERRUPTIBLE;
+    schedule();
+	set_thread_flag(TIF_RESTORE_SIGMASK);
+	return -ERESTARTNOHAND;
 }
 
 asmlinkage int
@@ -400,9 +354,9 @@ static inline void *get_sigframe(struct k_sigaction *ka, struct pt_regs *regs,
     return frame;
 }
 
-/* Set up to return from userspace */
+/* Set up to return from userspace signal handler back into kernel */
 static int noinline
-setup_mode_change(struct k_sigaction *ka, struct pt_regs *regs,
+setup_ret_from_usr_sighdlr(struct k_sigaction *ka, struct pt_regs *regs,
                     struct sigframe __user *frame)
 {
     unsigned long *retcode;
@@ -417,7 +371,11 @@ setup_mode_change(struct k_sigaction *ka, struct pt_regs *regs,
         if (err)
             return err;
     }
-    else {
+    else {  /* Note that with uClibc providing userland sigreturn stub,
+               this code is more of a legacy and will not be executed.
+               The really bad part was flushing the TLB and caches which
+               we no longer have to do
+             */
         unsigned int code;
 
         retcode = frame->retcode;
@@ -476,7 +434,7 @@ static int setup_frame(int sig, struct k_sigaction *ka,
     err = setup_sigframe(frame, regs, set);
 
     if(!err)
-        err |= setup_mode_change(ka, regs, frame);
+        err |= setup_ret_from_usr_sighdlr(ka, regs, frame);
 
     /* Arguements to the user Signal handler */
     regs->r0 = sig;
@@ -512,7 +470,7 @@ static int setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t * info,
     err |= setup_sigframe(&rt_frame->sig, regs, set);
 
     if (!err)
-        err |= setup_mode_change(ka, regs, &(rt_frame->sig));
+        err |= setup_ret_from_usr_sighdlr(ka, regs, &(rt_frame->sig));
 
     /* Arguements to the user Signal handler */
     regs->r0 = sig;
@@ -528,13 +486,35 @@ static int setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t * info,
 /*
  * OK, we're invoking a handler
  */
-static void
+static int
 handle_signal(unsigned long sig, struct k_sigaction *ka,
-          siginfo_t * info, sigset_t * oldset, struct pt_regs *regs)
+          siginfo_t * info, sigset_t * oldset, struct pt_regs *regs, int in_syscall)
 {
     struct thread_info *thread = current_thread_info();
     unsigned long usig = sig;
     int ret;
+
+    /* If it needs restarting, tweak the user space regs to do so */
+    if (in_syscall) {
+        switch (regs->r0) {
+        case -ERESTARTNOHAND:
+            regs->r0 = -EINTR;
+            break;
+
+        case -ERESTARTSYS:
+            if (!(ka->sa.sa_flags & SA_RESTART)) {
+                regs->r0 = -EINTR;
+                break;
+            }
+            /* fallthrough */
+
+        case -ERESTARTNOINTR:
+            /* No need to restore r8, as its value will be restored anyways */
+            regs->r0 = regs->orig_r0;
+            regs->ret -= 4;
+            break;
+        }
+    }
 
     if (thread->exec_domain && thread->exec_domain->signal_invmap && usig < 32)
         usig = thread->exec_domain->signal_invmap[usig];
@@ -547,7 +527,7 @@ handle_signal(unsigned long sig, struct k_sigaction *ka,
 
     if (ret) {
         force_sigsegv(sig, current);
-        return;
+        return ret;
     }
 
     /* Block the signal if we are successful */
@@ -557,6 +537,8 @@ handle_signal(unsigned long sig, struct k_sigaction *ka,
         sigaddset(&current->blocked, sig);
     recalc_sigpending();
     spin_unlock_irq(&current->sighand->siglock);
+
+    return ret;
 }
 
 /* Note that 'init' is a special process: it doesn't get signals it doesn't
@@ -567,56 +549,60 @@ handle_signal(unsigned long sig, struct k_sigaction *ka,
  * the kernel can handle, and then we build all the user-level signal handling
  * stack-frames in one go after that.
  */
-int do_signal(struct pt_regs *regs, sigset_t * oldset)
+void do_signal(struct pt_regs *regs)
 {
     struct k_sigaction ka;
     siginfo_t info;
     int signr;
+    sigset_t * oldset;
+    int insyscall;
 
     if (try_to_freeze())
         goto no_signal;
 
-    if(!oldset)
-        oldset = &current->blocked;
+	if (test_thread_flag(TIF_RESTORE_SIGMASK))
+		oldset = &current->saved_sigmask;
+	else
+		oldset = &current->blocked;
 
     signr = get_signal_to_deliver(&info, &ka, regs, NULL);
 
     /* Are we from a system call? */
-    if (regs->orig_r8 >= 0 && regs->orig_r8 <= NR_syscalls) {
-        switch (regs->r0) {
-            case -ERESTARTNOHAND:
-                regs->r0 = -EINTR;
-                break;
+    insyscall = in_syscall(regs);
 
-            case -ERESTARTSYS:
-                if (!(ka.sa.sa_flags & SA_RESTART)) {
-                    regs->r0 = -EINTR;
-                    break;
-                }
-                /* fallthrough */
+    if (signr > 0) {
+        if (handle_signal(signr, &ka, &info, oldset, regs, insyscall) == 0 ) {
+			/*
+			 * A signal was successfully delivered; the saved
+			 * sigmask will have been stored in the signal frame,
+			 * and will be restored by sigreturn, so we can simply
+			 * clear the TIF_RESTORE_SIGMASK flag.
+			 */
+			if (test_thread_flag(TIF_RESTORE_SIGMASK))
+				clear_thread_flag(TIF_RESTORE_SIGMASK);
+        }
+        return;
+    }
 
-            case -ERESTARTNOINTR:
-                /* We don't need to restore r8, as its value will be restored
-                 * anyway
-                 */
-                regs->r0 = regs->orig_r0;
-                regs->ret -= 4;
+no_signal:
+    if (insyscall) {
+        switch(regs->r0) {
+        case -ERESTARTNOHAND:
+        case -ERESTARTSYS:
+        case-ERESTARTNOINTR:
+            regs->r0 = regs->orig_r0;
+            regs->ret -= 4;
+            break;
         }
     }
 
-    if (signr > 0) {
-        handle_signal(signr, &ka, &info, oldset, regs);
-        return 1;
-    }
-
-    no_signal:
-    if ((regs->orig_r8 >= 0 && regs->orig_r8 <= NR_syscalls) &&
-            (regs->r0 == -ERESTARTNOHAND ||
-                regs->r0 == -ERESTARTSYS || regs->r0 == -ERESTARTNOINTR)) {
-        regs->r0 = regs->orig_r0;
-        regs->ret -= 4;
-    }
-    return 0;
+	/*
+	 * If there's no signal to deliver, restore the saved sigmask back
+	 */
+	if (test_thread_flag(TIF_RESTORE_SIGMASK)) {
+		clear_thread_flag(TIF_RESTORE_SIGMASK);
+		sigprocmask(SIG_SETMASK, &current->saved_sigmask, NULL);
+	}
 }
 
 void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
@@ -663,7 +649,6 @@ void set_frame_exec(unsigned long vaddr, unsigned int exec_enable)
     pte_t *ptep, pte;
     unsigned long size_on_pg, size_on_pg2;
     unsigned long fr_sz=sizeof(((struct sigframe *)(0))->retcode);
-    ASID_DBG_DEFS;
 
     off_from_pg_start = vaddr - (vaddr & PAGE_MASK);
     size_on_pg = min(fr_sz, PAGE_SIZE - off_from_pg_start);
@@ -696,9 +681,7 @@ do_per_page:
         flush_dcache_range(paddr, paddr + size_on_pg);
     flush_icache_range(paddr, paddr + size_on_pg);
 
-    ASID_DBG1;
     mod_tlb_permission(vaddr_pg, current->mm, exec_enable);
-
 
     if (size_on_pg2) {
         vaddr = vaddr_pg + PAGE_SIZE;

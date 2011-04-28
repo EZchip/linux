@@ -1,7 +1,12 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
- * Vineetg: Oct 1009
+ * vineetg: Nov 2009 (Everything needed for TIF_RESTORE_SIGMASK)
+ *  -do_signal()invoked upon TIF_RESTORE_SIGMASK as well
+ *  -Wrappers for sys_{,rt_}sigsuspend() nolonger needed as they don't
+ *   need ptregs anymore
+ *
+ * Vineetg: Oct 2009
  *  -In a rare scenario, Process gets a Priv-V exception and gets scheduled
  *   out. Since we don't do FAKE RTIE for Priv-V, CPU excpetion state remains
  *   active (AE bit enabled).  This causes a double fault for a subseq valid
@@ -655,13 +660,13 @@ resume_user_mode:
     b   ret_from_exception
 
 skip_user_resched:
-    ; --------- check for signals ------------
-    bbit0  r9, TIF_SIGPENDING, restore_regs
+    ; --------- check for signals/restore-sigmask ------------
+    and.f  0, r9, (_TIF_SIGPENDING | _TIF_RESTORE_SIGMASK)
+    bz  restore_regs
 
     ; setup args for "C" routine, do_signal ( )
 
     mov r0, sp      ;  pass ptr to pt_regs
-    mov r1, 0       ;  pass offset = NULL
 
     ; save CALLEE Regs.
     ; (i) For core dump: Incase this signal causes one
@@ -901,18 +906,6 @@ ARC_ENTRY sys_sigreturn_wrapper
     jl  SYMBOL_NAME(sys_sigreturn)
     jal ret_from_system_call
 
-ARC_ENTRY sys_rt_sigsuspend_wrapper
-    ; copy parameter( struct pt_regs *) for sys_rt_sigsuspend
-    mov r2, sp
-    jl  SYMBOL_NAME(sys_rt_sigsuspend)
-    jal ret_from_system_call
-
-ARC_ENTRY sys_sigsuspend_wrapper
-    ; copy parameter( struct pt_regs *) for sys_sigsuspend
-    mov r3, sp
-    jl  SYMBOL_NAME(sys_sigsuspend)
-    jal ret_from_system_call
-
 ARC_ENTRY sys_sigaltstack_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r2, sp
@@ -997,7 +990,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_ni_syscall) /* was sys_ssetmask */
   /* 70 */  .long   SYMBOL_NAME(sys_setreuid16)
         .long   SYMBOL_NAME(sys_setregid16)
-        .long   SYMBOL_NAME(sys_sigsuspend_wrapper)
+        .long   SYMBOL_NAME(sys_sigsuspend)
         .long   SYMBOL_NAME(sys_sigpending)
         .long   SYMBOL_NAME(sys_sethostname)
   /* 75 */  .long   SYMBOL_NAME(sys_setrlimit)
@@ -1104,7 +1097,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_rt_sigpending)
         .long   SYMBOL_NAME(sys_rt_sigtimedwait)
         .long   SYMBOL_NAME(sys_rt_sigqueueinfo)
-        .long   SYMBOL_NAME(sys_rt_sigsuspend_wrapper)
+        .long   SYMBOL_NAME(sys_rt_sigsuspend)
  /* 180 */  .long   SYMBOL_NAME(sys_pread64)
         .long   SYMBOL_NAME(sys_pwrite64)
         .long   SYMBOL_NAME(sys_chown16)
