@@ -8,6 +8,7 @@
  * full-blown stack unwinding with all the bells and whistles, so there
  * is not much point in implementing the full Dwarf2 unwind API.
  */
+
 #include <asm/ptrace.h>
 #include <linux/sched.h>
 //#include <linux/unwind.h>
@@ -23,6 +24,14 @@
 
 extern char __start_unwind[], __end_unwind[];
 //extern const u8 __start_unwind_hdr[], __end_unwind_hdr[];
+
+// #define UNWIND_DEBUG
+
+#ifdef UNWIND_DEBUG
+#define unw_debug(fmt, ...) printk(fmt, ##__VA_ARGS__)
+#else
+#define unw_debug(fmt, ...)
+#endif
 
 #define MAX_STACK_DEPTH 8
 
@@ -540,6 +549,7 @@ static int advance_loc(unsigned long delta, struct unwind_state *state)
 
     // FIXME_Rajesh: Probably we are defining for the initial range as well;
 	// return delta > 0;
+    unw_debug("delta %3lu => loc 0x%lx: ", delta, state->loc);
 	return 1;
 }
 
@@ -551,6 +561,18 @@ static void set_rule(uleb128_t reg,
 	if (reg < ARRAY_SIZE(state->regs)) {
 		state->regs[reg].where = where;
 		state->regs[reg].value = value;
+
+#ifdef UNWIND_DEBUG
+        unw_debug("r%lu: ", reg);
+        switch(where)
+        {
+            case Nowhere: unw_debug("s "); break;
+            case Memory:  unw_debug("c(%lu) ", value); break;
+            case Register:unw_debug("r(%lu) ", value); break;
+            case Value:   unw_debug("v(%lu) ", value); break;
+            default: break;
+        }
+#endif
 	}
 }
 
@@ -566,6 +588,7 @@ static int processCFI(const u8 *start,
 		const u32 *p32;
 	} ptr;
 	int result = 1;
+    u8 opcode;
 
 	if (start != state->cieStart) {
 		state->loc = state->org;
@@ -578,29 +601,37 @@ static int processCFI(const u8 *start,
 			uleb128_t value;
 
         case 0:
-			switch(*ptr.p8++) {
+            opcode = *ptr.p8++;
+
+			switch(opcode) {
 			case DW_CFA_nop:
+                unw_debug("cfa nop ");
 				break;
 			case DW_CFA_set_loc:
 				if ((state->loc = read_pointer(&ptr.p8, end, ptrType)) == 0)
 					result = 0;
+                unw_debug("cfa_set_loc: 0x%lx ", state->loc);
 				break;
 			case DW_CFA_advance_loc1:
+                unw_debug("\ncfa advance loc1:");
 				result = ptr.p8 < end && advance_loc(*ptr.p8++, state);
 				break;
 			case DW_CFA_advance_loc2:
                 value = *ptr.p8++;
                 value += *ptr.p8++ << 8;
+                unw_debug("\ncfa advance loc2:");
 				result = ptr.p8 <= end + 2
 				         //&& advance_loc(*ptr.p16++, state);
 				         && advance_loc(value, state);
 				break;
 			case DW_CFA_advance_loc4:
+                unw_debug("\ncfa advance loc4:");
 				result = ptr.p8 <= end + 4
 				         && advance_loc(*ptr.p32++, state);
 				break;
 			case DW_CFA_offset_extended:
 				value = get_uleb128(&ptr.p8, end);
+                unw_debug("cfa_offset_extended: ");
 				set_rule(value, Memory, get_uleb128(&ptr.p8, end), state);
 				break;
 			case DW_CFA_val_offset:
@@ -616,17 +647,22 @@ static int processCFI(const u8 *start,
 				set_rule(value, Value, get_sleb128(&ptr.p8, end), state);
 				break;
 			case DW_CFA_restore_extended:
+                unw_debug("cfa_restore_extended: ");
 			case DW_CFA_undefined:
+                unw_debug("cfa_undefined: ");
 			case DW_CFA_same_value:
+                unw_debug("cfa_same_value: ");
 				set_rule(get_uleb128(&ptr.p8, end), Nowhere, 0, state);
 				break;
 			case DW_CFA_register:
+                unw_debug("cfa_register: ");
 				value = get_uleb128(&ptr.p8, end);
 				set_rule(value,
 				         Register,
 				         get_uleb128(&ptr.p8, end), state);
 				break;
 			case DW_CFA_remember_state:
+                unw_debug("cfa_remember_state: ");
 				if (ptr.p8 == state->label) {
 					state->label = NULL;
 					return 1;
@@ -636,6 +672,7 @@ static int processCFI(const u8 *start,
 				state->stack[state->stackDepth++] = ptr.p8;
 				break;
 			case DW_CFA_restore_state:
+                unw_debug("cfa_restore_state: ");
 				if (state->stackDepth) {
 					const uleb128_t loc = state->loc;
 					const u8 *label = state->label;
@@ -652,9 +689,11 @@ static int processCFI(const u8 *start,
 				break;
 			case DW_CFA_def_cfa:
 				state->cfa.reg = get_uleb128(&ptr.p8, end);
+                unw_debug("cfa_def_cfa: reg: 0x%lx ", state->cfa.reg);
 				/*nobreak*/
 			case DW_CFA_def_cfa_offset:
 				state->cfa.offs = get_uleb128(&ptr.p8, end);
+                unw_debug("cfa_def_cfa_offset: 0x%lx ", state->cfa.offs);
 				break;
 			case DW_CFA_def_cfa_sf:
 				state->cfa.reg = get_uleb128(&ptr.p8, end);
@@ -664,6 +703,7 @@ static int processCFI(const u8 *start,
 				                  * state->dataAlign;
 				break;
 			case DW_CFA_def_cfa_register:
+                unw_debug("cfa_def_cfa_regsiter: ");
 				state->cfa.reg = get_uleb128(&ptr.p8, end);
 				break;
 			/*todo case DW_CFA_def_cfa_expression: */
@@ -680,21 +720,26 @@ static int processCFI(const u8 *start,
 				break;
 			case DW_CFA_GNU_window_save:
 			default:
+                unw_debug("UNKNOW OPCODE 0x%x\n", opcode);
 				result = 0;
 				break;
 			}
 			break;
 		case 1:
+            unw_debug("\ncfa_advance_loc: ");
 			result = advance_loc(*ptr.p8++ & 0x3f, state);
 			break;
 		case 2:
+            unw_debug("cfa_offset: ");
 			value = *ptr.p8++ & 0x3f;
 			set_rule(value, Memory, get_uleb128(&ptr.p8, end), state);
 			break;
 		case 3:
+            unw_debug("cfa_restore: ");
 			set_rule(*ptr.p8++ & 0x3f, Nowhere, 0, state);
 			break;
 		}
+
 		if (ptr.p8 > end)
 			result = 0;
 		if (result && targetLoc != 0 && targetLoc < state->loc)
@@ -724,9 +769,25 @@ int arc_unwind(struct unwind_frame_info *frame)
 	uleb128_t retAddrReg = 0;
 	const struct unwind_table *table;
 	struct unwind_state state;
+    unsigned long *fptr;
+
+    unw_debug("\n\nUNWIND FRAME:\n");
+    unw_debug("PC: 0x%lx BLINK: 0x%lx, SP: 0x%lx, FP: 0x%x\n",
+                 UNW_PC(frame), UNW_BLINK(frame), UNW_SP(frame), UNW_FP(frame));
 
 	if (UNW_PC(frame) == 0)
 		return -EINVAL;
+
+#ifdef UNWIND_DEBUG
+    {
+        unsigned long *sptr = (unsigned long *)UNW_SP(frame);
+        unw_debug("\nStack Dump:\n");
+        for (i = 0; i < 20; i++, sptr++)
+            unw_debug("0x%p:  0x%lx\n", sptr, *sptr);
+        unw_debug("\n");
+    }
+#endif
+
 	if ((table = find_table(pc)) != NULL
 	    && !(table->size & (sizeof(*fde) - 1))) {
 		const u8 *hdr = table->header;
@@ -868,6 +929,10 @@ int arc_unwind(struct unwind_frame_info *frame)
 			cie = NULL;
 		else {
 			retAddrReg = state.version <= 1 ? *ptr++ : get_uleb128(&ptr, end);
+            unw_debug("CIE Frame Info:\n");
+            unw_debug("return Address register 0x%lx\n", retAddrReg);
+            unw_debug("data Align: %ld\n", state.dataAlign);
+            unw_debug("code Align: %lu\n", state.codeAlign);
 			/* skip augmentation */
 			if (((const char *)(cie + 2))[1] == 'z') {
 				uleb128_t augSize = get_uleb128(&ptr, end);
@@ -941,6 +1006,8 @@ int arc_unwind(struct unwind_frame_info *frame)
 	}
 	state.org = startLoc;
 	memcpy(&state.cfa, &badCFA, sizeof(state.cfa));
+
+    unw_debug("\nProcess instructions\n");
 	/* process instructions */
 // For ARC, we optimize by having blink(retAddrReg) with the sameValue in the
 // leaf function, so we should not check state.regs[retAddrReg].where == Nowhere
@@ -951,6 +1018,31 @@ int arc_unwind(struct unwind_frame_info *frame)
 	   || reg_info[state.cfa.reg].width != sizeof(unsigned long)
 	   || state.cfa.offs % sizeof(unsigned long))
 		return -EIO;
+
+#ifdef UNWIND_DEBUG
+    unw_debug("\n");
+
+    unw_debug("\nRegister State Based on the rules parsed from FDE: \n");
+    for (i = 0; i < ARRAY_SIZE(state.regs); ++i) {
+
+		if (REG_INVALID(i))
+			continue;
+
+        unw_debug(" r%d:", i);
+
+        switch(state.regs[i].where)
+        {
+            case Nowhere: unw_debug(" s,"); break;
+            case Memory:  unw_debug(" c(%lu),", state.regs[i].value); break;
+            case Register:unw_debug(" r(%lu),", state.regs[i].value); break;
+            case Value:   unw_debug(" v(%lu),", state.regs[i].value); break;
+            default: break;
+        }
+    }
+
+    unw_debug("\n");
+#endif
+
 	/* update frame */
 #ifndef CONFIG_AS_CFI_SIGNAL_FRAME
 	if(frame->call_frame
@@ -964,6 +1056,10 @@ int arc_unwind(struct unwind_frame_info *frame)
 		startLoc = min(STACK_LIMIT(cfa), cfa);
 		endLoc = max(STACK_LIMIT(cfa), cfa);
 	}
+
+    unw_debug("\nCFA reg: 0x%lx, offset: 0x%lx =>  0x%lx\n",
+                                state.cfa.reg, state.cfa.offs, cfa);
+
 #ifndef CONFIG_64BIT
 # define CASES CASE(8); CASE(16); CASE(32)
 #else
@@ -997,7 +1093,14 @@ int arc_unwind(struct unwind_frame_info *frame)
 			break;
 		}
 	}
-	for (i = 0; i < ARRAY_SIZE(state.regs); ++i) {
+
+
+
+
+    unw_debug("\nRegister state after evaluation with realtime Stack:\n");
+    fptr = (unsigned long *)(&frame->regs);
+    for (i = 0; i < ARRAY_SIZE(state.regs); ++i, fptr++) {
+
 		if (REG_INVALID(i))
 			continue;
 		switch(state.regs[i].where) {
@@ -1047,6 +1150,7 @@ int arc_unwind(struct unwind_frame_info *frame)
 			}
 			break;
 		}
+        unw_debug("r%d: 0x%lx ", i, *fptr);
 	}
 
 	return 0;
