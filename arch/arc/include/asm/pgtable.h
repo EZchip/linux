@@ -1,4 +1,15 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2010-2011
+ *
+ * vineetg: April 2010
+ *  -Switched form 8:11:13 split for page tabel lookup to 11:8:13
+ *  -this speeds up page table allocation itself as we now have to memset 1K
+ *    instead of 8k per page table.
+ * -TODO: Right now page table alloc is 8K and rest 7K is unused
+ *    need to optimise it
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -29,7 +40,7 @@
 
 /* Page Table Lookup split */
 #define BITS_IN_PAGE  PAGE_SHIFT
-#define BITS_FOR_PTE  11
+#define BITS_FOR_PTE  8
 #define BITS_FOR_PGD  (32 - BITS_FOR_PTE - BITS_IN_PAGE)
 
 #define PGDIR_SHIFT	(BITS_FOR_PTE + BITS_IN_PAGE)
