@@ -41,8 +41,11 @@
 /* User mode registers, used for core dumps. */
 struct user_regs_struct
 {
-	/* from struct pt_regs */
-	long	reserved1;	/* this is stack_place_holder in pt_regs */
+	/* ------- from struct pt_regs --------- */
+    long    reserved1;  /* SP unncessarily hops 1 word, in SAVE_ALL_xxx macros
+                           No reason to do that, but changing this would
+                           require syncing up tools (gdb) so .....
+                        */
 	long	bta;		/* bta_l1, bta_l2, erbta */
 	long	lp_start;
 	long	lp_end;
@@ -69,10 +72,9 @@ struct user_regs_struct
 	long 	orig_r8;
 	long	sp;	/* user sp or kernel sp, depending on where we came from  */
 
+	long	reserved2;
 
-	/* from struct callee_regs */
-	long	reserved2;	/* this is stack_place_holder in callee_regs */
-
+	/* -------- from struct callee_regs --------- */
 	long	r25;
 	long	r24;
 	long	r23;
@@ -87,8 +89,8 @@ struct user_regs_struct
 	long	r14;
 	long	r13;
 
-	long 	efa;		/* the break pt addr, required for break points in delay slots */
-	long 	stop_pc;	/* give the debugger the stop_pc directly after checking orig_r8 */
+	long 	efa;    /* break pt addr, req for break points in delay slots */
+	long 	stop_pc;	/* give dbg stop_pc directly after checking orig_r8 */
 };
 
 

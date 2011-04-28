@@ -147,7 +147,7 @@
     st.a    r25, [sp, -4]
 #endif
 
-    /* move sp to next free entry */
+    /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
 .endm
 
@@ -163,22 +163,13 @@
  * which simply pops the stack w/o touching regs.
  *-------------------------------------------------------------*/
 .macro RESTORE_CALLEE_SAVED
-    add     sp, sp, 4
+    add sp, sp, 4       /* hop over unused "pt_regs->stack_place_holder" */
 
 #ifdef CONFIG_ARCH_ARC_CURR_IN_REG
 
-    /* This is not needed as current->thread.r25 always had user r25*/
-#if 0
-    ; Get saved r25 from stack and copy in current->thread.user_r25
-    ld.ab   r12, [sp, 4]
-        ; Cant do this hence following 3 lines
-        ;st      r12, [r25, TASK_THREAD + 20]
-    add  r25, r25,  TASK_THREAD + 20
-    st   r12, [r25]
-    sub  r25, r25,  TASK_THREAD + 20
-#endif
-
-    ; Just skip the r25 placeholder
+    /* Don't load r25 with r25 reg from stack because in kernel mode
+     * r25 is always loaded with current task ptr
+     */
     add     sp, sp, 4
 #else
     ld.ab   r25, [sp, 4]
@@ -303,7 +294,7 @@
     /* Go to end of page pointed to by task->thread_info.
      *  This is start of THE kernel stack (grows upwards remember)
      */
-    add r9, r9, (THREAD_SIZE - 4)
+    add r9, r9, (THREAD_SIZE - 4)   // 0ne word GUTTER
 
     /* Save Pre Intr/Exception User SP on kernel stack */
     st.a    sp, [r9, -4]
@@ -371,7 +362,8 @@
     st.a    r9, [sp, -4]
     lr  r9, [erbta]
     st.a    r9, [sp, -4]
-        /* move sp to next free entry */
+
+    /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
 .endm
 
@@ -400,7 +392,8 @@
     st.a    r9, [sp, -4]
     lr  r9, [erbta]
     st.a    r9, [sp, -4]
-        /* move sp to next free entry */
+
+    /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
 .endm
 
@@ -417,8 +410,7 @@
  *-------------------------------------------------------------*/
 .macro RESTORE_ALL_SYS
 
-    /* ignore free entry */
-    add sp, sp, 4
+    add sp, sp, 4       /* hop over unused "pt_regs->stack_place_holder" */
 
     ld.ab   r9, [sp, 4]
     sr  r9, [erbta]
@@ -473,7 +465,8 @@
     st.a    r9, [sp, -4]
     lr  r9, [bta_l1]
     st.a    r9, [sp, -4]
-        /* move sp to next free entry */
+
+    /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
 .endm
 
@@ -503,7 +496,7 @@
     st.a    r9, [sp, -4]
     lr  r9, [bta_l2]
     st.a    r9, [sp, -4]
-        /* move sp to next free entry */
+    /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
 .endm
 
@@ -518,9 +511,9 @@
  *-------------------------------------------------------------*/
 
 .macro RESTORE_ALL_INT1
-    /* ignore free entry */
-    add sp, sp, 4
-    ld.ab   r9, [sp, 4]
+    add sp, sp, 4       /* hop over unused "pt_regs->stack_place_holder" */
+
+    ld.ab   r9, [sp, 4] /* Actual reg file */
     sr  r9, [bta_l1]
     ld.ab   r9, [sp, 4]
     sr  r9, [lp_start]
@@ -542,8 +535,8 @@
 .endm
 
 .macro RESTORE_ALL_INT2
-    /* ignore free entry */
-    add sp, sp, 4
+    add sp, sp, 4       /* hop over unused "pt_regs->stack_place_holder" */
+
     ld.ab   r9, [sp, 4]
     sr  r9, [bta_l2]
     ld.ab   r9, [sp, 4]

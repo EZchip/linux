@@ -61,8 +61,12 @@
 struct pt_regs {
 	/* After a SAVE_ALL_SYS or a SAVE ALL_INT, SP points to next free
 	 * entry on stack. So this place holder
+	 * vineetg: There is technically no need to do this, but this change
+	 * percolates to tools (gdb) so ....
 	 */
 	long	stack_place_holder;
+
+    /* Real registers */
 	long	bta;		/* bta_l1, bta_l2, erbta */
 	long	lp_start;
 	long	lp_end;
@@ -86,17 +90,14 @@ struct pt_regs {
 	long	r1;
 	long	r0;
 	long	orig_r0;
-	long	orig_r8;	/*used to distinguish between an exception, a system call, int1 or int2 */
-	long	sp;	/* user sp or kernel sp, depending on where we came from  */
+	long	orig_r8;	/*to distinguish bet excp, sys call, int1 or int2 */
+	long	sp;	        /* user/kernel sp depending on where we came from  */
 };
 
 /* Callee saved registers - need to be saved only when you are scheduled out */
 
 struct callee_regs {
-	/* After a SAVE_ALL_SYS or a SAVE ALL_INT, SP points to next free
-	 * entry on stack. So this place holder
-	 */
-	long	stack_place_holder;
+	long	stack_place_holder; /* Again this is not needed */
 	long	r25;
 	long	r24;
 	long	r23;
