@@ -674,8 +674,7 @@ void __init setup_arch(char **cmdline_p)
      *  save a copy of he unparsed command line for the
      *  /proc/cmdline interface
      */
-    memcpy(boot_command_line, command_line, sizeof(command_line));
-    boot_command_line[COMMAND_LINE_SIZE - 1] = '\0';
+    strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
 
     _current_task[0] = &init_task;
 

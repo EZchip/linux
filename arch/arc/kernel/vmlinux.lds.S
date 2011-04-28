@@ -7,6 +7,7 @@
 
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/vmlinux.lds.h>
+#include <asm/cache.h>
 #include <asm/page.h>
 #include <asm/thread_info.h>
 #include <asm/board/plat_memmap.h>
@@ -81,14 +82,9 @@ SECTIONS
 
         _init_begin = .;
 
-#ifdef CONFIG_BLK_DEV_INITRD
     .init.ramfs : {
-        . = ALIGN(PAGE_SIZE);
-        __initramfs_start = .;
-            *(.init.ramfs)
-        __initramfs_end = .;
+        INIT_RAM_FS
     }
-#endif
 
     . = ALIGN(PAGE_SIZE);
     _stext = .;
@@ -97,36 +93,21 @@ SECTIONS
             INIT_TEXT
         _einittext = .;
 
-            INIT_DATA
-        . = ALIGN(16);
+        INIT_DATA
 
-        __setup_start = .;
-            *(.init.setup)
-        __setup_end = .;
-
-        __initcall_start = .;
-            INITCALLS
-        __initcall_end = .;
-
-        __con_initcall_start = .;
-            *(.con_initcall.init)
-        __con_initcall_end = .;
+        INIT_SETUP(16)
+        INIT_CALLS
+        CON_INITCALL
+        SECURITY_INITCALL
 
         __tagtable_begin = .;
             *(.taglist.init)
         __tagtable_end = .;
 
-        . = ALIGN(PAGE_SIZE);
-        __per_cpu_start = .;
-            *(.data.percpu)
-        __per_cpu_end = .;
-
-		*(.init.rodata)
+    }
 
     . = ALIGN(PAGE_SIZE);
     _init_end = .;
-
-   }
 
     .text : {           /* Real text segment        */
         _text = .;      /* Text and read-only data  */
@@ -138,38 +119,31 @@ SECTIONS
             *(.fixup)
             *(.gnu.warning)
 
-
-        . = ALIGN(16);
-        __start___ex_table = .; /* Exception table      */
-            *(__ex_table)
-        __stop___ex_table = .;
     }
+    EXCEPTION_TABLE(16)
     _etext = .;     /* End of text section      */
 
-    RO_DATA(PAGE_SIZE)
-
     /* writeable */
-    . = ALIGN(THREAD_SIZE);   /* init.task must be kernel-stk sz aligned */
-    .data : {
+    _sdata = .;
 
-        *(.init.task)
-        . = ALIGN(32);
-        *(.data.cacheline_aligned)
-        DATA_DATA
-        ARCFP_SDRAM_DATA
+    RO_DATA_SECTION(PAGE_SIZE)
 
-        CONSTRUCTORS
-        _edata = .;
+    /* 1. this is .data essentially
+       2. THREAD_SIZE for init.task, must be kernel-stk sz aligned
+     */
+    RW_DATA_SECTION(L1_CACHE_BYTES, PAGE_SIZE, THREAD_SIZE)
+
+    /* becasuse above RW_xxx doesn't include our .data.arcfp */
+#ifndef CONFIG_ARCH_ARC_DCCM
+    .data.arcfp : {
+    *(.data..shared_aligned)
+    ARCFP_SDRAM_DATA
     }
+#endif
 
-    .bss : {
-        __bss_start = .;    /* BSS              */
-        *(.bss)
-        __bss_end = .;
-        *(COMMON)
-        _end = . ;
-    }
+    _edata = .;
 
+    BSS_SECTION(0, 0, 0)
 
     . = ALIGN(PAGE_SIZE);
     __start_unwind = .;
@@ -179,14 +153,10 @@ SECTIONS
     . = ALIGN(PAGE_SIZE);
     end_kernel = .;
 
-    /* Sections to be discarded */
-    /DISCARD/ : {           /* Exit code and data       */
-        EXIT_TEXT
-        EXIT_DATA
-        *(.exitcall.exit)
-    }
+    _end = . ;
 
     STABS_DEBUG
+    DISCARDS
 
     .arcextmap 0 : {
         *(.gnu.linkonce.arcextmap.*)
@@ -206,6 +176,7 @@ SECTIONS
     . = DCCM_COMPILE_BASE;
     __arc_dccm_base = .;
     .data.arcfp : {
+        *(.data..shared_aligned)
         ARCFP_CCM_DATA
     }
     . = ALIGN(DCCM_COMPILE_SZ);

@@ -25,14 +25,11 @@
 
 static struct signal_struct init_signals = INIT_SIGNALS(init_signals);
 static struct sighand_struct init_sighand = INIT_SIGHAND(init_sighand);
-struct mm_struct init_mm = INIT_MM(init_mm);
 
 EXPORT_SYMBOL(init_mm);
 
-/* FIXME :: space allocation need to be optimized like in ARM */
-union thread_union init_thread_union
-    __attribute__ ((__section__(".init.task"))) = {
-INIT_THREAD_INFO(init_task)};
+union thread_union init_thread_union __init_task_data
+ = { INIT_THREAD_INFO(init_task)};
 
 /*
  * Initial task structure.

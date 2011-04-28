@@ -163,7 +163,7 @@ typedef unsigned long pgtable_t;
     memset(pg, 0, PAGE_SIZE); \
 }
 
-#include <asm-generic/page.h>
+#include <asm-generic/getorder.h>
 
 #endif  /* __KERNEL__ */
 

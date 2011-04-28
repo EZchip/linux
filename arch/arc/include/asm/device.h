@@ -7,7 +7,6 @@
 #ifndef ASMARC_DEVICE_H
 #define ASMARC_DEVICE_H
 
-struct dev_archdata {
-};
+#include <asm-generic/device.h>
 
 #endif

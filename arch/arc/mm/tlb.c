@@ -138,7 +138,7 @@
 
 /* Sameer: We have to define this as we are using asm-generic code for TLB.
            This will go once we stop using generic code. */
-struct mmu_gather per_cpu__mmu_gathers;
+struct mmu_gather mmu_gathers;
 
 /* A copy of the ASID from the PID reg is kept in asid_cache */
 volatile int asid_cache;

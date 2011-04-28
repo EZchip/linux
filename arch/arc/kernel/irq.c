@@ -46,6 +46,7 @@
 #include <linux/kallsyms.h>
 #include <linux/irqflags.h>
 #include <linux/kernel_stat.h>
+#include <linux/slab.h>
 
 //#define ARC_IRQ_DBG
 

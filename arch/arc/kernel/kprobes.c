@@ -1,5 +1,6 @@
 #include <linux/types.h>
 #include <linux/kprobes.h>
+#include <linux/slab.h>
 
 enum
 {

@@ -239,6 +239,6 @@ cmpxchg(volatile int *p, int old, int new)
 #define smp_mb__before_atomic_inc() barrier()
 #define smp_mb__after_atomic_inc()  barrier()
 
-#include <asm-generic/atomic.h>
+#include <asm-generic/atomic-long.h>
 #endif
 #endif

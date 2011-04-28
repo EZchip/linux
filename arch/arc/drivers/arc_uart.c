@@ -221,7 +221,7 @@ int arc_cnt;
  */
 static void arc_serial_tx_chars(struct arc_serial_port *uart)
 {
-	struct circ_buf *xmit = &uart->port.info->xmit;
+	struct circ_buf *xmit = &uart->port.state->xmit;
     int sent=0;
     unsigned char ch;
 
@@ -269,7 +269,7 @@ static void arc_serial_rx_chars(struct arc_serial_port *uart)
 	struct tty_struct *tty = NULL;
 	unsigned int status, ch, flg=0;
 
-	tty = uart->port.info->port.tty;
+	tty = uart->port.state->port.tty;
 
     /* UART controller has 4 deep RX-FIFO. Driver's recongnition of this fact
      * is very subtle. Here's how ...

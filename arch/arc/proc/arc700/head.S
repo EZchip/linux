@@ -95,7 +95,7 @@ __clear_bss:
 #ifdef CONFIG_ARC_UBOOT_CMDLINE
     mov r6, __bss_start + 256
 #else
-    mov r6, __bss_end
+    mov r6, __bss_stop
 #endif
 
 __clear_bss_loop:

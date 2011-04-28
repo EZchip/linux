@@ -985,7 +985,7 @@ arc_emac_set_address(struct net_device * dev, void *p)
 	EMAC_REG(ap)->addrl = *(unsigned int *) dev->dev_addr;
 	EMAC_REG(ap)->addrh = (*(unsigned int *) &dev->dev_addr[4]) & 0x0000ffff;
 
-	printk(KERN_INFO "MAC address set to %s",print_mac(buf, dev->dev_addr));
+//	printk(KERN_INFO "MAC address set to %s",print_mac(buf, dev->dev_addr));
 
 	return 0;
 }

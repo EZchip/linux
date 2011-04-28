@@ -182,9 +182,10 @@ static volatile ARC_IDE_if *controller =
 /* PIO operations */
 
 /* routine to tune PIO mode for drives */
-static void arc_ide_set_pio_mode(ide_drive_t *drive, const u8 pio_mode)
+static void arc_ide_set_pio_mode(ide_hwif_t *hwif, ide_drive_t *drive)
 {
     unsigned long t0,t1,t2,t2l;
+    const u8 pio_mode = drive->pio_mode - XFER_PIO_0;
 
     DBG("%s:\n",__FUNCTION__);
     DBG("drive %s, mode %d\n", drive->name,pio_mode);
@@ -266,10 +267,11 @@ int arc_ide_ack_irq(ide_hwif_t *hwif)
 }
 
 /* DMA mode operations */
-void arc_ide_set_dma_mode(ide_drive_t * drive, const u8 speed)
+void arc_ide_set_dma_mode(ide_hwif_t *hwif, ide_drive_t * drive)
 {
     unsigned long t0,tkw,tkr,td,tm;
     int dma_mode;
+    const u8 speed = drive->dma_mode;
 
     DBG("%s:\n", __FUNCTION__);
 
@@ -670,12 +672,13 @@ static struct ide_port_info arc_ide_port_info = {
     .host_flags = 0,
     .pio_mask = ATA_PIO4,
     .mwdma_mask = ATA_MWDMA2,
+    .chipset = ide_unknown
 } ;
 
 /* Set up a hw structure for a specified port
  */
-static __inline__ void arc_ide_setup_ports(hw_regs_t *hw, int data_port, int control_port,
-                int irq, ide_ack_intr_t *ack_intr)
+static void arc_ide_setup_ports(struct ide_hw *hw, int data_port, int control_port,
+                int irq)
 {
     int i;
 
@@ -686,13 +689,11 @@ static __inline__ void arc_ide_setup_ports(hw_regs_t *hw, int data_port, int con
 
     hw->io_ports.ctl_addr = control_port;
     hw->irq = irq;
-    hw->ack_intr = ack_intr;
-    hw->chipset = ide_unknown;
 }
 
 int __init arc_ide_init(void)
 {
-    hw_regs_t hw, *hws[] = {&hw, NULL, NULL, NULL};
+    struct ide_hw hw, *hws[] = {&hw};
     struct ide_host *host;
     unsigned int id_word;
     struct ID_REG {
@@ -727,7 +728,7 @@ int __init arc_ide_init(void)
     arc_ide_reset_controller(0);
 
     arc_ide_setup_ports(&hw, IDE_CONTROLLER_BASE + DRIVE_REGISTER_OFFSET,
-                   IDE_CONTROLLER_BASE + DRIVE_STATCTRL_OFFSET, IDE_IRQ, NULL);
+                   IDE_CONTROLLER_BASE + DRIVE_STATCTRL_OFFSET, IDE_IRQ);
 
     // Clear the Interrupt
     arc_ide_ack_irq(NULL);
@@ -735,9 +736,9 @@ int __init arc_ide_init(void)
     // Enable the irq at the IDE Controller
     arc_ide_enable_irq();
 
-    ide_host_add(&arc_ide_port_info, hws, &host);
+    ide_host_add(&arc_ide_port_info, hws, 1, &host);
 
-    blk_queue_max_hw_segments(host->ports[0]->devices[0]->queue, ARC_IDE_NUM_SG);
+    blk_queue_max_segments(host->ports[0]->devices[0]->queue, ARC_IDE_NUM_SG);
 
     return 0;
 }
