@@ -1054,25 +1054,23 @@ clear_user(void *to, unsigned long n)
 static inline long
 __do_strncpy_from_user(char *dst, const char *src, long count)
 {
-    long res;
+    long res = count;
     char val;
+    unsigned int hw_count;
 
     if (count == 0)
         return 0;
 
     __asm__ __volatile__ (
-        "   mov %0, %3                  \n"
-        "1: ldb.ab  %4, [%2, 1]         \n"
-        "   stb %4, [%1]                \n"
-        "   breq.d  %4, 0, 2f           \n"
-        "   add %1, %1, 1               \n"
-        "   sub.f   %0, %0, 1           \n"
-        "   bnz 1b                      \n"
-        "2: sub %0, %3, %0              \n"
+        "   lp 2f   \n"
+        "1: ldb.ab  %3, [%2, 1]         \n"
+        "   breq.d    %3, 0, 2f           \n"
+        "   stb.ab  %3, [%1, 1]         \n"
+        "2: sub %0, %6, %4              \n"
         "3: nop                         \n"
         "   .section .fixup, \"ax\"     \n"
         "   .align 4                    \n"
-        "4: mov %0, %8                  \n"
+        "4: mov %0, %5                  \n"
         "   j   3b                      \n"
         "   .previous                   \n"
         "   .section __ex_table, \"a\"  \n"
@@ -1080,23 +1078,20 @@ __do_strncpy_from_user(char *dst, const char *src, long count)
         "   .word   1b, 4b              \n"
         "   .previous                   \n"
 
-        :"=r"(res), "=r"(dst), "=r"(src), "=r"(count), "=r"(val)
-        :"3"(count), "1"(dst), "2"(src), "g" (-EFAULT)
+        :"=r"(res), "+r"(dst), "+r"(src), "=r"(val),"=l"(hw_count)
+        :"g" (-EFAULT), "ir"(count),"4"(count)
+        :"memory"
     );
 
     return (res);
 }
 
-static inline long
-__strncpy_from_user(char *dst, const char *src, long count)
-{
-    return __do_strncpy_from_user(dst, src, count);
-}
 
 static inline long
 strncpy_from_user(char *dst, const char *src, long count)
 {
     long res = -EFAULT;
+
     if (access_ok(VERIFY_READ, src, 1))
         res = __do_strncpy_from_user(dst, src, count);
     return res;
