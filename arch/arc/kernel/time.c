@@ -92,9 +92,9 @@ static void arc_timer1_setup_free_flow(unsigned int limit)
 
 /********** Clock Source Device *********/
 
-static cycle_t cycle_read_t1(void)
+static cycle_t cycle_read_t1(struct clocksource *cs)
 {
-    return read_new_aux_reg(ARC_REG_TIMER1_CNT);
+    return (cycle_t)read_new_aux_reg(ARC_REG_TIMER1_CNT);
 }
 
 static struct clocksource clocksource_t1 = {
@@ -181,6 +181,7 @@ static void __cpuinit arc_clockevent_init(void)
     cd->name = "ARC Clock";
     cd->features = CLOCK_EVT_FEAT_ONESHOT;
     cd->features |= CLOCK_EVT_FEAT_PERIODIC;
+    cd->mode = CLOCK_EVT_MODE_UNUSED;
 
     /* Find a shift value */
     for (shift = 32; shift > 0; shift--) {
@@ -205,7 +206,7 @@ static void __cpuinit arc_clockevent_init(void)
 
     cd->rating  = 300;
     cd->irq     = TIMER0_INT;
-    cd->cpumask = CPU_MASK_ALL;
+    cd->cpumask = cpumask_of(0);
     cd->set_next_event  = arc_next_event;
     cd->set_mode        = arc_set_mode;
 

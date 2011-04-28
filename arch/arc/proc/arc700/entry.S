@@ -1059,7 +1059,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_uselib)
         .long   SYMBOL_NAME(sys_swapon)
         .long   SYMBOL_NAME(sys_reboot)
-        .long   SYMBOL_NAME(old_readdir) /* used by libc4 */
+        .long   SYMBOL_NAME(sys_old_readdir) /* used by libc4 */
   /* 90 */  .long   SYMBOL_NAME(old_mmap) /* used by libc4 */
         .long   SYMBOL_NAME(sys_munmap)
         .long   SYMBOL_NAME(sys_truncate)

@@ -68,6 +68,7 @@ SECTIONS
         EXIT_TEXT
         EXIT_DATA
         *(.exitcall.exit)
+        *(.gnu.linkonce.arcextmap.*)
     }
 
     .text : {           /* Real text segment        */
@@ -90,22 +91,20 @@ SECTIONS
     /* writeable */
     . = ALIGN(PAGE_SIZE);
     .data : {
-        /*
-         * first, the init task union, aligned
+
+        /* first, the init task union, aligned
          * to an PAGE_SIZE byte boundary.
          */
         *(.init.task)
 
-        /*
-         * then the cacheline aligned data
+        /* then the cacheline aligned data
          */
         . = ALIGN(32);
         *(.data.cacheline_aligned)
 
-        /*
-         * and the usual data section
+        /* and the usual data section
          */
-        *(.data)
+	DATA_DATA
 
         CONSTRUCTORS
         _edata = .;

@@ -1,11 +1,11 @@
 How to build the ARC linux kernel to a known working configuration.
 
-Select either the arc_config or arc_simulator_config depending on whether you are
-using the MetaWare simulator or the ARC Angel 4 hardware.
+Select either arch/arc/configs/iss_config or arch/arc/configs/aa4_config depending on
+whether you are using the MetaWare simulator or the ARC Angel 4 hardware.
 
 Copy the relevant file to .config and build the kernel.
 
-$ cp arc_simulator_config .config
+$ cp arch/arc/config/aa4_config .config
 $ make oldconfig
 $ make clean
 $ make bootpImage

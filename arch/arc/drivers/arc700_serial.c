@@ -690,7 +690,7 @@ arcserial_ioctl(struct tty_struct *tty, struct file *file, unsigned int cmd,
 
         default:
             // FIXME This is wrongwrongwrong, but how do I make it right?
-            return n_tty_ioctl(tty, file, cmd, arg);
+            return n_tty_ioctl_helper(tty, file, cmd, arg);
             // return -EINVAL;
     }
 

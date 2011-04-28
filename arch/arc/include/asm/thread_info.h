@@ -31,6 +31,7 @@
 #ifdef __KERNEL__
 
 #include <asm/page.h>
+#define THREAD_SIZE_ORDER 1
 #ifdef CONFIG_16KSTACKS
 #define THREAD_SIZE     (PAGE_SIZE << 1)
 #else
@@ -98,9 +99,8 @@ static inline struct thread_info *current_thread_info(void)
 }
 
 /* thread information allocation */
-
+#define __HAVE_ARCH_THREAD_INFO_ALLOCATOR
 #define alloc_thread_info(tsk) kmalloc(THREAD_SIZE, GFP_KERNEL)
-
 #define free_thread_info(info) kfree(info)
 
 #else /*  __ASSEMBLY__ */

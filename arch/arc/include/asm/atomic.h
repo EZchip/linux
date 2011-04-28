@@ -19,7 +19,7 @@
 #ifndef _ASM_ARC_ATOMIC_H
 #define _ASM_ARC_ATOMIC_H
 
-typedef struct { int counter; } atomic_t;
+#include <linux/types.h>
 
 #define ATOMIC_INIT(i)  { (i) }
 

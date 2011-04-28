@@ -35,6 +35,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/ide.h>
+#include <linux/hdreg.h>
 #include <linux/mm.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -262,7 +263,6 @@ static void arc_ide_reset_controller(ide_drive_t *drive)
 int arc_ide_enable_irq(void)
 {
     DBG("%s:\n",__FUNCTION__);
-    DBG("Enabled IDE IRQ\n");
     controller->statctrl |= IDE_STATCTRL_IE;
     return 0;
 }
@@ -362,8 +362,10 @@ static int arc_ide_dma_timer_expiry(ide_drive_t *drive)
     timeout_count++;
 
     /* BUSY Stupid Early Timer !! */
-    if ((dma_stat & IDE_DSR_BUSY) && (timeout_count < 2))
+    if ((dma_stat & IDE_DSR_BUSY) && (timeout_count < 2))    {
+        DBG("reset the timer dma_stat 0x%x, timeout_count %d\n", dma_stat, timeout_count);
         return WAIT_CMD;
+    }
 
     do {
         controller->dma_command = 0;
@@ -371,18 +373,11 @@ static int arc_ide_dma_timer_expiry(ide_drive_t *drive)
         dma_stat = controller->dma_status;
     } while (dma_stat & IDE_DSR_BUSY);
 
-    /*
-     * Clear the expiry handler in case we decide to wait more,
-     * next time timer expires it is an error
-     */
-    HWGROUP(drive)->expiry = NULL;
-
     if (dma_stat & IDE_DSR_ERROR)  /* ERROR */
         return -1;
 
     return 0;    /* Unknown status -- reset the bus */
 }
-
 
 /* returns 1 if dma irq issued, 0 otherwise */
 int arc_ide_dma_test_irq(ide_drive_t *drive)
@@ -390,12 +385,11 @@ int arc_ide_dma_test_irq(ide_drive_t *drive)
     DBG("%s:\n", __FUNCTION__);
 
     DBG("statctrl %ld\n", controller->statctrl);
+
     /* return 1 if IRQ asserted */
     if (controller->statctrl & IDE_STATCTRL_IS)
         return 1;
-    if (!drive->waiting_for_dma)
-        printk(KERN_WARNING "%s: (%s) called while not waiting\n",
-               drive->name, __FUNCTION__);
+
     return 0;
 }
 
@@ -411,7 +405,7 @@ void arc_ide_dma_host_on(ide_drive_t *drive)
 {
     DBG("%s:\n", __FUNCTION__);
 
-    if (drive->using_dma)
+    if (drive->dma)
         controller->dma_command |= IDE_DCR_ENABLE;
 }
 
@@ -424,14 +418,8 @@ void arc_ide_dma_host_set(ide_drive_t *drive, int on)
 }
 
 
-static void arc_ide_dma_begin(ide_drive_t *drive)
+static void arc_ide_dma_start(ide_drive_t *drive)
 {
-    /* Note that this is done *after* the cmd has
-     * been issued to the drive, as per the BM-IDE spec.
-     * The Promise Ultra33 doesn't work correctly when
-     * we do this part before issuing the drive cmd.
-     */
-
     DBG("%s:\n", __FUNCTION__);
 
     /* start DMA */
@@ -447,11 +435,9 @@ static void arc_ide_dma_begin(ide_drive_t *drive)
 static int arc_ide_dma_end(ide_drive_t *drive)
 {
     unsigned long dma_stat = 0;
-    struct scatterlist *sg = HWIF(drive)->sg_table;
+    struct scatterlist *sg = drive->hwif->sg_table;
 
     DBG("%s:\n", __FUNCTION__);
-
-    drive->waiting_for_dma = 0;
 
     controller->dma_command = 0;        /* stop DMA */
     dma_stat = controller->dma_status;  /* get DMA status */
@@ -485,7 +471,7 @@ static int arc_ide_dma_end(ide_drive_t *drive)
 
     if (sg_dma_address(sg) % PAGE_SIZE) {
 
-        if (rq_data_dir(HWIF(drive)->hwgroup->rq) == READ) {
+        if (rq_data_dir(drive->hwif->rq) == READ) {
 
             DBG("Finalize bouncing FROM DEV: src %x Dst %x, sz %d\n",
                   bounce_buffer, sg_virt(sg), sg_dma_len(sg));
@@ -504,68 +490,8 @@ static int arc_ide_dma_end(ide_drive_t *drive)
 //                        sg_dma_len(sg), DMA_FROM_DEVICE);
     }
 
-    /* purge DMA mappings/do cache finalisation for block layer scatterlist.
-     * ide_destroy_dmatable( ) inturn calls dma_unmap_sg
-     *
-     * Note we are lucky that unmap_sg is a NOP on ARC.
-     * All Cache OPs are done at the time of dma_map_sg
-     * Had unmap been implemented, for the DMA_FROM_DEVICE case, it would have
-     * INV the d-cache lines of block layer buffer just copied into from bounce
-     * buffer, causing the cache hot page to be thrown away
-     */
-    ide_destroy_dmatable(drive);
-
     /* verify good DMA status */
     return (dma_stat & IDE_DSR_ERROR) ? 1 : 0;
-}
-
-
-static void arc_ide_dma_timeout(ide_drive_t *drive)
-{
-    DBG("%s:\n", __FUNCTION__);
-    printk(KERN_ERR "%s: timeout waiting for DMA \n", drive->name);
-
-    if(arc_ide_dma_test_irq(drive))
-        return;
-
-    arc_ide_dma_end(drive);
-}
-
-
-/*  ide_dma_irq_handler - IDE DMA interrupt handler
- *  Handle an interrupt completing a read/write DMA transfer on an IDE device
- */
-ide_startstop_t arc_ide_dma_irq_handler(ide_drive_t *drive)
-{
-    u8 stat = 0, dma_stat = 0;
-
-    DBG("%s:\n", __FUNCTION__);
-
-    dma_stat = arc_ide_dma_end(drive);  //drive->hwif->dma_ops->dma_end
-
-    stat = ide_read_status(drive);
-
-    arc_ide_ack_irq(NULL);
-
-    if (OK_STAT(stat,DRIVE_READY,drive->bad_wstat|DRQ_STAT)) {
-        if (!dma_stat) {
-            struct request *rq = HWGROUP(drive)->rq;
-
-            if (rq->rq_disk) {
-                ide_driver_t *drv;
-
-                drv = *(ide_driver_t **)rq->rq_disk->private_data;
-                drv->end_request(drive, 1, rq->nr_sectors);
-            } else
-                ide_end_request(drive, 1, rq->nr_sectors);
-
-            return ide_stopped;
-        }
-		printk(KERN_ERR "%s: dma_intr: bad DMA status (dma_stat=%x)\n",
-		       drive->name, dma_stat);
-    }
-
-    return ide_error(drive, "dma_intr", stat);
 }
 
 
@@ -599,7 +525,7 @@ static unsigned long grow_bounce_buffer(unsigned long size)
 
 static int arc_ide_setup_dma_from_dev(ide_drive_t *drive)
 {
-    ide_hwif_t *hwif    = HWIF(drive);
+    ide_hwif_t *hwif    = drive->hwif;
     struct scatterlist *sg = hwif->sg_table;
     dma_addr_t real_dma_buf = sg_dma_address(sg);
 
@@ -630,7 +556,7 @@ static int arc_ide_setup_dma_from_dev(ide_drive_t *drive)
 
 static int arc_ide_setup_dma_to_dev(ide_drive_t *drive)
 {
-    ide_hwif_t *hwif    = HWIF(drive);
+    ide_hwif_t *hwif    = drive->hwif;
     struct scatterlist *sg = hwif->sg_table;
     dma_addr_t real_dma_buf = sg_dma_address(sg);
 
@@ -657,34 +583,19 @@ static int arc_ide_setup_dma_to_dev(ide_drive_t *drive)
 }
 
 
-static int arc_ide_dma_setup(ide_drive_t *drive)
+static int arc_ide_dma_setup(ide_drive_t *drive, struct ide_cmd *cmd)
 {
-    struct request *rq = HWIF(drive)->hwgroup->rq;
+    struct request *rq = drive->hwif->rq;
     int result=1;    /* False */
 
     DBG("%s:\n",__FUNCTION__);
-
-    // This calls dma_map_sg ( ) which takes care of initial cache sync
-    HWIF(drive)->sg_nents = ide_build_sglist(drive, rq);
 
     if (rq_data_dir(rq) == WRITE)
         result = arc_ide_setup_dma_to_dev(drive);
     else
         result = arc_ide_setup_dma_from_dev(drive);
 
-    drive->waiting_for_dma = 1;
-
     return result;
-}
-
-
-static void arc_ide_dma_exec_cmd(ide_drive_t *drive, u8 cmd)
-{
-    DBG("%s:\n",__FUNCTION__);
-
-    /* issue cmd to drive */
-    ide_execute_command(drive, cmd, &arc_ide_dma_irq_handler,
-                                        2*WAIT_CMD, arc_ide_dma_timer_expiry);
 }
 
 int arc_ide_dma_init(ide_hwif_t *hwif, const struct ide_port_info *d)
@@ -708,19 +619,19 @@ int arc_ide_dma_init(ide_hwif_t *hwif, const struct ide_port_info *d)
         hwif->sg_table = kmalloc(sizeof(struct scatterlist) * ARC_IDE_NUM_SG,
                     GFP_KERNEL);
 
+        hwif->sg_max_nents = ARC_IDE_NUM_SG;
     }
 
     return 0;
 }
 
 static const struct ide_dma_ops arc_ide_dma_ops = {
-    .dma_host_set   = arc_ide_dma_host_set,
-    .dma_setup      = arc_ide_dma_setup,
-    .dma_exec_cmd   = arc_ide_dma_exec_cmd,
-    .dma_start      = arc_ide_dma_begin,
-    .dma_end        = arc_ide_dma_end,
-    .dma_test_irq   = arc_ide_dma_test_irq,
-    .dma_timeout    = arc_ide_dma_timeout,
+    .dma_host_set     = arc_ide_dma_host_set,
+    .dma_setup        = arc_ide_dma_setup,
+    .dma_start        = arc_ide_dma_start,
+    .dma_end          = arc_ide_dma_end,
+    .dma_test_irq     = arc_ide_dma_test_irq,
+    .dma_timer_expiry = arc_ide_dma_timer_expiry,
 };
 #endif
 
@@ -742,30 +653,28 @@ static struct ide_port_info arc_ide_port_info = {
     .mwdma_mask = ATA_MWDMA2,
 } ;
 
-/*
- * Set up a hw structure for a specified data port, control port.
- * This should follow whatever the default interface uses.
+/* Set up a hw structure for a specified port
  */
-
-static __inline__ void
-arc_ide_init_hwif_ports(hw_regs_t *hw, int data_port, int control_port)
+static __inline__ void arc_ide_setup_ports(hw_regs_t *hw, int data_port, int control_port,
+                int irq, ide_ack_intr_t *ack_intr)
 {
-    unsigned long reg = (unsigned long) data_port;
     int i;
 
-    for (i = 0; i <= 7; i++) {
-        hw->io_ports_array[i] = reg;
-        reg += 4;
-    }
+    memset(hw, 0, sizeof(*hw));
 
-    hw->io_ports_array[8] = control_port;
+    for (i = 0; i < 8; i++)
+        hw->io_ports_array[i] = data_port + i*4;
+
+    hw->io_ports.ctl_addr = control_port;
+    hw->irq = irq;
+    hw->ack_intr = ack_intr;
+    hw->chipset = ide_unknown;
 }
 
 int __init arc_ide_init(void)
 {
-    ide_hwif_t *hwif;
-    hw_regs_t   hw;
-    u8 idx[4] = {0xff, 0xff, 0xff, 0xff};
+    hw_regs_t hw, *hws[] = {&hw, NULL, NULL, NULL};
+    struct ide_host *host;
 
     DBG("%s:\n", __FUNCTION__);
 
@@ -782,35 +691,18 @@ int __init arc_ide_init(void)
     // Reset the IDE Controller
     arc_ide_reset_controller(0);
 
-    hwif = ide_find_port();
-    if (hwif == NULL) {
-        printk("%s, IDE couldnot find the port\n", __FUNCTION__);
-        return -1;
-    }
-    hwif->chipset = ide_unknown;
-    hwif->mmio = 0;
-    hwif->dev = NULL;
-
-    memset(&hw, 0, sizeof(hw));
-    arc_ide_init_hwif_ports(&hw, IDE_CONTROLLER_BASE + DRIVE_REGISTER_OFFSET,
-                               IDE_CONTROLLER_BASE + DRIVE_STATCTRL_OFFSET);
-    hw.irq = IDE_IRQ;
-    hw.dev = NULL;
-    hw.ack_intr = (ide_ack_intr_t *)arc_ide_ack_irq;
-    ide_init_port_hw(hwif, &hw);
-
-    idx[0] = hwif->index;
-    hwif->drives[0].present = 1;
+    arc_ide_setup_ports(&hw, IDE_CONTROLLER_BASE + DRIVE_REGISTER_OFFSET,
+                   IDE_CONTROLLER_BASE + DRIVE_STATCTRL_OFFSET, IDE_IRQ, arc_ide_ack_irq);
 
     // Clear the Interrupt
-    arc_ide_ack_irq(hwif);
+    arc_ide_ack_irq(NULL);
 
     // Enable the irq at the IDE Controller
     arc_ide_enable_irq();
 
-    ide_device_add(idx, &arc_ide_port_info);
+    ide_host_add(&arc_ide_port_info, hws, &host);
 
-    blk_queue_max_hw_segments(hwif->drives[0].queue, ARC_IDE_NUM_SG);
+    blk_queue_max_hw_segments(host->ports[0]->devices[0]->queue, ARC_IDE_NUM_SG);
 
     return 0;
 }

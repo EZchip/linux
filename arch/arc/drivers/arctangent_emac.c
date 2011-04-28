@@ -632,7 +632,7 @@ static irqreturn_t
 aa3_emac_intr(int irq, void *dev_instance)
 {
 	struct net_device *dev = (struct net_device *) dev_instance;
-	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
+	struct aa3_emac_priv *ap = netdev_priv(dev);
 	volatile unsigned int *reg;
 	unsigned int    status, len, i, info;
 	struct sk_buff *skb, *skbnew;
@@ -841,7 +841,7 @@ aa3_emac_open(struct net_device * dev)
 	/* #ifdef MODULE */
 	/* MOD_INC_USE_COUNT; */
 	/* #endif */
-	ap = dev->priv;
+	ap = netdev_priv(dev);
 	if (ap == NULL)
 		return -ENODEV;
 
@@ -1034,7 +1034,7 @@ int
 aa3_emac_stop(struct net_device * dev)
 {
 	volatile unsigned int *reg;
-	struct aa3_emac_priv *ap = dev->priv;
+	struct aa3_emac_priv *ap = netdev_priv(dev);
 
 	dbg_printk("stop called\n");
 #ifdef CONFIG_EMAC_NAPI
@@ -1073,7 +1073,7 @@ struct net_device_stats *
 aa3_emac_stats(struct net_device * dev)
 {
 	int             flags;
-	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
+	struct aa3_emac_priv *ap = netdev_priv(dev);
 
 	dbg_printk("get stats called\n");
 	spin_lock_irqsave(&ap->lock, flags);
@@ -1120,7 +1120,8 @@ aa3_emac_tx(struct sk_buff * skb, struct net_device * dev)
 	volatile unsigned int *reg;
 	volatile unsigned int *status;
 
-	struct aa3_emac_priv *ap = dev->priv;
+	struct aa3_emac_priv *ap = netdev_priv(dev);
+
 	int             inpacket;
 
 	len = skb->len < ETH_ZLEN ? ETH_ZLEN : skb->len;
@@ -1221,7 +1222,7 @@ aa3_emac_set_address(struct net_device * dev, void *p)
 	int             i;
 	struct sockaddr *addr = p;
 	volatile unsigned int *reg;
-	struct aa3_emac_priv *ap = dev->priv;
+	struct aa3_emac_priv *ap = netdev_priv(dev);
 
 	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
 
@@ -1263,6 +1264,20 @@ aa3_emac_probe(int num)
 	return -ENODEV;
 }
 
+		// dev->hard_start_xmit = aa3_emac_tx;
+
+static const struct net_device_ops aa3_emac_netdev_ops = {
+	.ndo_open 			= aa3_emac_open,
+	.ndo_stop 			= aa3_emac_stop,
+	.ndo_start_xmit 	= aa3_emac_tx,
+	.ndo_set_multicast_list = aa3_emac_set_multicast_list,
+	.ndo_tx_timeout 	= aa3_emac_tx_timeout,
+	.ndo_set_mac_address= aa3_emac_set_address,
+    .ndo_get_stats      = aa3_emac_stats,
+    // .ndo_do_ioctl    = aa3_emac_ioctl;
+	// .ndo_change_mtu 	= aa3_emac_change_mtu, FIXME:  not allowed
+};
+
 int __init
 aa3_module_init(void)
 {
@@ -1289,26 +1304,16 @@ aa3_module_init(void)
 
 		if (dev == NULL)
 			return -ENOMEM;
-		priv = dev->priv;
+		priv = netdev_priv(dev);
 		priv->reg_base_addr = (unsigned int *) (VMAC_REG_BASEADDR | ((vmacs - 1) << 8));
 		/* link this device into the list of all detected devices */
 		priv->prev_dev = aa3_root_dev;
 		aa3_root_dev = dev;
 
 		/* populate our net_device structure */
-		dev->open = aa3_emac_open;
-		dev->stop = aa3_emac_stop;
-		dev->hard_start_xmit = aa3_emac_tx;
-		/* dev->do_ioctl = aa3_emac_ioctl; */
-		dev->get_stats = aa3_emac_stats;
-		/*
-		 * dev->change_mtu = aa3_emac_change_mtu; *//* FIXME :: not
-		 * allowed
-		 */
-		dev->tx_timeout = aa3_emac_tx_timeout;
+        dev->netdev_ops = &aa3_emac_netdev_ops;
+
 		dev->watchdog_timeo = TX_TIMEOUT;
-		dev->set_multicast_list = aa3_emac_set_multicast_list;
-		dev->set_mac_address = aa3_emac_set_address;
 		/* FIXME :: no multicast support yet */
 		dev->flags &= ~IFF_MULTICAST;
 		dev->irq = VMAC_IRQ + (vmacs - 1);	/* set irq number here */
@@ -1323,7 +1328,7 @@ aa3_module_init(void)
 		SET_MODULE_OWNER(dev);
 #endif				/* MODULE */
 
-		spin_lock_init(&((struct aa3_emac_priv *) dev->priv)->lock);
+		spin_lock_init(&((struct aa3_emac_priv *)netdev_priv(dev))->lock);
 		//Amit 's hack
 			break;
 	}
@@ -1377,8 +1382,8 @@ aa3_module_cleanup(void)
 		/* unregister the network device */
 		unregister_netdev(dev);
 		/* free up memory for private data */
-		prev_dev = ((struct aa3_emac_priv *) (dev->priv))->prev_dev;
-		kfree(dev->priv);
+		prev_dev = ((struct aa3_emac_priv *)netdev_priv(dev))->prev_dev;
+		kfree(netdev_priv(dev));
 		dev = prev_dev;
 	}
 
@@ -1485,7 +1490,8 @@ int aa3_emac_reset()
 	/* #ifdef MODULE */
 	/* MOD_INC_USE_COUNT; */
 	/* #endif */
-	ap = dev->priv;
+	ap = netdev_priv(dev);
+
 	if (ap == NULL)
 		return -ENODEV;
 

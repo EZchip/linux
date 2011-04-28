@@ -76,6 +76,9 @@
 
 #define SO_MARK 36
 
+#define SO_TIMESTAMPING 37
+#define SCM_TIMESTAMPING SO_TIMESTAMPING
+
 /* Nast libc5 fixup - bletch */
 #if defined(__KERNEL__)
 

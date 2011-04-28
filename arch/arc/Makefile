@@ -21,9 +21,12 @@ endif
 KBUILD_DEFCONFIG := arc_defconfig
 
 PROCESSOR  := arc700
+PLATFORM := AA4
+export PLATFORM
 
 #LDFLAGS_vmlinux :=-X -T arch/$(ARCH)/kernel/vmlinux.lds
 GZFLAGS		:=-9
+KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin -D__linux__
 KBUILD_AFLAGS		+= $(KBUILD_CFLAGS)
 
@@ -95,16 +98,23 @@ boot := arch/arc/boot
 #         here. We wil need it when we'll add more processors
 #         or boards.
 
-archprepare: maketools
+archprepare: maketools arch/arc/include/asm/board
 
 PHONY += maketools FORCE
 
 maketools: include/linux/version.h FORCE
 	$(Q)$(MAKE) $(build)=arch/$(ARCH)/tools
 
+define arc-create-symlink
+	@echo 'SYMLINK arch/arc/include/asm/board -> arch/arc/include/asm/board-$(PLATFORM)'; \
+	ln -fsn board-$(PLATFORM) arch/arc/include/asm/board;
+endef
+
+arch/arc/include/asm/board: FORCE
+	$(arc-create-symlink)
+
 # Convert bzImage to zImage
 bzImage: zImage
-
 
 
 # work around for bug 94179: force some object file to have load,alloc flags

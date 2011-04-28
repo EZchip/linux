@@ -101,9 +101,6 @@ extern __inline__ int get_order(unsigned long size)
     return order;
 }
 
-/* to align the pointer to the (next) page boundary */
-#define PAGE_ALIGN(addr)    (((addr)+PAGE_SIZE-1)&PAGE_MASK)
-
 #define __pa(vaddr)  (((unsigned long)vaddr - PAGE_OFFSET) + PHYS_SRAM_OFFSET)
 #define __va(paddr)  ((void *)(((unsigned long)(paddr) - PHYS_SRAM_OFFSET) + PAGE_OFFSET))
 

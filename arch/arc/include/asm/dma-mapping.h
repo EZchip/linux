@@ -180,7 +180,7 @@ dma_get_cache_alignment(void)
 }
 
 static inline int
-dma_mapping_error(dma_addr_t dma_addr)
+dma_mapping_error(struct device *dev, dma_addr_t dma_addr)
 {
     BUG();
     return 0;

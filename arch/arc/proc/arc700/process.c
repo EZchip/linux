@@ -113,7 +113,7 @@ void cpu_idle(void)
 
     /* endless idle loop with no priority at all */
     while (1) {
-        tick_nohz_stop_sched_tick();
+        tick_nohz_stop_sched_tick(1);
 
         /* Test the need-resced "flag" of current task "idle"
            A local ISR or peer CPU may want resched
@@ -234,7 +234,7 @@ asmlinkage void ret_from_fork(void);
  * |   UNUSED 1 word|
  * ------------------  <===== END of PAGE
  */
-int copy_thread(int nr, unsigned long clone_flags,
+int copy_thread(unsigned long clone_flags,
         unsigned long usp, unsigned long topstk,
         struct task_struct *p, struct pt_regs *regs)
 {

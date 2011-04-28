@@ -61,8 +61,7 @@ void __init paging_init(void)
 
 #ifdef  CONFIG_FLATMEM
 
-	free_area_init_node(0, NODE_DATA(0), zones_size,
-			    __pa(PAGE_OFFSET) >> PAGE_SHIFT, NULL);
+	free_area_init_node(0, zones_size, __pa(PAGE_OFFSET) >> PAGE_SHIFT, NULL);
 #endif
 #endif
 }

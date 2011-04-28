@@ -479,9 +479,10 @@ found_middle:
  */
 
 /* Sameer: Using generic implementations for a while */
-
+#include <linux/compiler.h>
 #include <asm-generic/bitops/fls.h>
 #include <asm-generic/bitops/ffs.h>
+#include <asm-generic/bitops/__fls.h>
 #include <asm-generic/bitops/__ffs.h>
 #include <asm-generic/bitops/hweight.h>
 #include <asm-generic/bitops/fls64.h>

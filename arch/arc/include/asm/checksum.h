@@ -133,7 +133,7 @@ static inline unsigned long csum_tcpudp_nofold(unsigned long saddr,
 						   unsigned short proto,
 						   unsigned int sum)
 {
-	__asm__ (
+	__asm__ __volatile__(
 		"add.f %0, %0, %1   \n"
 		"adc.f %0, %0, %2   \n"
 		"adc.f %0, %0, %3   \n"
@@ -142,6 +142,7 @@ static inline unsigned long csum_tcpudp_nofold(unsigned long saddr,
 		: "=r" (sum)
 		: "r" (saddr), "r" (daddr), "r" (ntohs(len) << 16),
 		  "r" (proto << 8), "0" (sum)
+        : "cc"
 	);
 
     return sum;
