@@ -26,8 +26,8 @@
 #ifdef CONFIG_HAS_DMA
 
 #include <linux/dma-mapping.h>
-#include <asm/utils.h>
 #include <asm/cacheflush.h>
+#include <linux/kallsyms.h>
 
 void *
 dma_alloc_coherent(struct device *dev, size_t size, dma_addr_t *dma_handle,
@@ -82,8 +82,8 @@ void __dma_cache_maint(void *start, size_t sz, int dir, void *caller_for_dbg)
      *  otherwise there could be ugly side effects.
      */
     if (is_not_cache_aligned(start)) {
-        printk("Non-align Cache maint op for %#lx at %s\n", addr,
-                arc_identify_sym((unsigned long)caller_for_dbg));
+        printk("Non-align Cache maint op for %#lx at", addr);
+        __print_symbol("%s\n",(unsigned long)caller_for_dbg);
     }
 
 	switch (dir) {

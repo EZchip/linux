@@ -8,6 +8,6 @@
 
 #L_TARGET	:= lib.a
 
-lib-y 		+= checksum.o string.o utils.o
+lib-y 		+= checksum.o string.o
 
 #include $(TOPDIR)/Rules.make

@@ -8,7 +8,7 @@
 #include <linux/module.h>
 #include <asm/arcregs.h>
 #include <asm/traps.h>      /* defines for Reg values */
-#include <asm/utils.h>
+#include <linux/kallsyms.h>
 
 static void show_ecr_verbose(struct pt_regs *regs);
 void show_callee_regs(struct callee_regs *cregs);

@@ -23,8 +23,8 @@
 #include <linux/module.h>
 #include <asm/arcregs.h>
 #include <asm/unwind.h>
-#include <asm/utils.h>
 #include <linux/stacktrace.h>
+#include <linux/kallsyms.h>
 
 
 /*-------------------------------------------------------------------------
@@ -33,8 +33,8 @@
  */
 #ifdef CONFIG_ARC_STACK_UNWIND
 
-void seed_unwind_frame_info(struct task_struct *tsk, struct pt_regs *regs,
-    struct unwind_frame_info *frame_info)
+static void seed_unwind_frame_info(struct task_struct *tsk,
+    struct pt_regs *regs, struct unwind_frame_info *frame_info)
 {
     if (tsk == NULL && regs == NULL)
     {
@@ -78,7 +78,7 @@ void seed_unwind_frame_info(struct task_struct *tsk, struct pt_regs *regs,
     }
 }
 
-unsigned int noinline arc_unwind_core(struct task_struct *tsk,
+static unsigned int noinline arc_unwind_core(struct task_struct *tsk,
     struct pt_regs *regs, int (*consumer_fn)(unsigned int, void *), void *arg)
 {
     int ret = 0;
@@ -111,11 +111,13 @@ unsigned int noinline arc_unwind_core(struct task_struct *tsk,
 }
 
 #else
-unsigned int arc_unwind_core(struct task_struct *tsk, struct pt_regs *regs,
+static unsigned int arc_unwind_core(struct task_struct *tsk, struct pt_regs *regs,
     int (*fn)(unsigned int))
 {
     /* On ARC, only Dward based unwinder works. fp based backtracing is
-     * not possible even with -fno-omit-frame-pointer
+     * not possible (-fno-omit-frame-pointer) because of the way function
+     * prelogue is setup (callee regs saved and then fp set and not other
+     * way around
      */
     printk("CONFIG_ARC_STACK_UNWIND needs to be enabled\n");
 }
@@ -135,16 +137,7 @@ unsigned int arc_unwind_core(struct task_struct *tsk, struct pt_regs *regs,
  */
 int vebose_dump_stack(unsigned int address, void *unused)
 {
-    char namebuf[KSYM_NAME_LEN+1];
-
-    printk("\nStack Trace:\n");
-
-#ifdef CONFIG_KALLSYMS
-    printk("  %#x :", address);
-#endif
-    // if KALLSYMS prints name, else prints just addr
-    printk("  %s\n",arc_identify_sym_r(address, namebuf, sizeof(namebuf)));
-
+    __print_symbol("  %s\n", address);
     return 0;
 }
 
@@ -182,23 +175,23 @@ int get_first_nonsched_frame(unsigned int address, void *unused)
  *-------------------------------------------------------------------------
  */
 
+void noinline show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
+{
+    printk("\nStack Trace:\n");
+    arc_unwind_core(tsk, regs, vebose_dump_stack, NULL);
+    sort_snaps(1);
+}
+
 /* Expected by sched Code */
 void show_stack(struct task_struct *tsk, unsigned long *sp)
 {
-    arc_unwind_core(0,0,vebose_dump_stack, NULL);
-    sort_snaps(1);
+    show_stacktrace(tsk, NULL);
 }
 
 /* Expected by Rest of kernel code */
 void dump_stack(void)
 {
-    arc_unwind_core(0,0,vebose_dump_stack, NULL);
-}
-
-void show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
-{
-    arc_unwind_core(tsk, regs, vebose_dump_stack, NULL);
-    sort_snaps(1);
+    show_stacktrace(0, NULL);
 }
 
 EXPORT_SYMBOL(show_stacktrace);
@@ -214,14 +207,16 @@ unsigned int get_wchan(struct task_struct *tsk)
 
 #ifdef CONFIG_STACKTRACE
 
-extern struct task_struct *__switch_to(struct task_struct *prev,
-                                    struct task_struct *next);
-
 /* API required by CONFIG_STACKTRACE.
  * A typical use is when /proc/<pid>/stack is queried by userland
  */
 void save_stack_trace_tsk(struct task_struct *tsk, struct stack_trace *trace)
 {
     arc_unwind_core(tsk, NULL, fill_backtrace, trace);
+}
+
+void save_stack_trace(struct stack_trace *trace)
+{
+    arc_unwind_core_wrap(current, NULL, fill_backtrace, trace);
 }
 #endif

@@ -47,7 +47,7 @@
 #include <asm/system.h>
 #include <asm/errno.h>
 #include <asm/arcregs.h>
-#include <asm/utils.h>
+#include <linux/kallsyms.h>
 
 //#define ARC_IRQ_DBG
 
@@ -127,8 +127,8 @@ int setup_irq(unsigned int irq, struct irqaction *node)
     unsigned long flags;
     struct irqaction *curr;
 
-    printk("---IRQ Request (%d) ISR %s\n", irq,
-                arc_identify_sym((unsigned long) node->handler));
+    printk("---IRQ Request (%d) ISR", irq);
+    __print_symbol("%s\n",(unsigned long) node->handler);
 
     if (!(irq_list[irq])) {
         irq_list[irq] = node;
