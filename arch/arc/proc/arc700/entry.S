@@ -1254,6 +1254,23 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_inotify_init1)
         .long   SYMBOL_NAME(sys_preadv)
 /* 335 */        .long   SYMBOL_NAME(sys_pwritev)
+        .long   SYMBOL_NAME(sys_socket)
+        .long   SYMBOL_NAME(sys_bind)
+        .long   SYMBOL_NAME(sys_connect)
+        .long   SYMBOL_NAME(sys_listen)
+/*340*/ .long   SYMBOL_NAME(sys_accept)
+        .long   SYMBOL_NAME(sys_getsockname)
+        .long   SYMBOL_NAME(sys_getpeername)
+        .long   SYMBOL_NAME(sys_socketpair)
+        .long   SYMBOL_NAME(sys_send)
+/*345*/ .long   SYMBOL_NAME(sys_sendto)
+        .long   SYMBOL_NAME(sys_recv)
+        .long   SYMBOL_NAME(sys_recvfrom)
+        .long   SYMBOL_NAME(sys_shutdown)
+        .long   SYMBOL_NAME(sys_setsockopt)
+/*350*/ .long   SYMBOL_NAME(sys_getsockopt)
+        .long   SYMBOL_NAME(sys_sendmsg)
+        .long   SYMBOL_NAME(sys_recvmsg)
 
 
 

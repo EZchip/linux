@@ -372,9 +372,28 @@
 #define __NR_inotify_init1       333
 #define __NR_preadv             334
 #define __NR_pwritev            335
+
+#define __NR_socket			    336
+#define __NR_bind			    337
+#define __NR_connect		    338
+#define __NR_listen			    339
+#define __NR_accept			    340
+#define __NR_getsockname	    341
+#define __NR_getpeername	    342
+#define __NR_socketpair		    343
+#define __NR_send			    344
+#define __NR_sendto			    345
+#define __NR_recv			    346
+#define __NR_recvfrom		    347
+#define __NR_shutdown		    348
+#define __NR_setsockopt		    349
+#define __NR_getsockopt		    350
+#define __NR_sendmsg		    351
+#define __NR_recvmsg		    352
+
 #endif	/* ! __ASSEMBLY__ */
 
-#define NR_syscalls             335
+#define NR_syscalls             352
 
 
 
