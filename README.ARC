@@ -6,7 +6,7 @@ hardware.
 
 Copy the relevant file to .config and build the kernel.
 
-$ cp arch/arc/config/aa4_defconfig .config
+$ cp arch/arc/configs/aa4_defconfig .config
 $ make oldconfig
 $ make clean
 $ make bootpImage
