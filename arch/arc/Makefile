@@ -26,7 +26,7 @@ export PLATFORM
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
-						-D__linux__  -fcall-used-gp
+						-D__linux__  -fcall-used-gp -multcost=16
 
 # Idea is to use -O3 for our builds (Default kernel makefile uses -O2)
 # However doing that unconditionally here breaks -Os:
