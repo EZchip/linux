@@ -360,6 +360,10 @@
 55:
 .endm
 
+.macro GET_CURR_THR_INFO_FROM_SP  reg
+    and \reg, sp, ~(THREAD_SIZE - 1)
+.endm
+
 /*--------------------------------------------------------------
  * Save all registers used by Exceptions (TLB Miss, Prot-V, Mem err etc)
  * Requires SP to be already switched to kernel mode Stack

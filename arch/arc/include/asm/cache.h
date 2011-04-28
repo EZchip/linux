@@ -43,6 +43,7 @@
 #define is_not_cache_aligned(p) ((unsigned long)p & (~DCACHE_LINE_MASK))
 #endif
 
+#ifndef __ASSEMBLY__
 
 /* Uncached access macros */
 #define arc_read_uncached_32(ptr)                   \
@@ -64,5 +65,7 @@ extern unsigned int ARC_shmlba ;
 #define __cacheline_aligned_in_smp					\
   __attribute__((__aligned__(L1_CACHE_BYTES),			\
 		 __section__(".data.cacheline_aligned")))
+
+#endif
 
 #endif /* _ASM_CACHE_H */

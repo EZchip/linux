@@ -22,6 +22,10 @@
 #ifndef _ASM_ARC_PARAM_H
 #define _ASM_ARC_PARAM_H
 
+#include <asm/page.h>
+
+#define EXEC_PAGESIZE   PAGE_SIZE
+
 #ifdef __KERNEL__
 #define HZ CONFIG_HZ
 #endif

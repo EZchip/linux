@@ -101,12 +101,6 @@ static inline __attribute_const__ struct thread_info *current_thread_info(void)
     return (struct thread_info *)(sp & ~(THREAD_SIZE - 1));
 }
 
-#else /*  __ASSEMBLY__ */
-
-.macro GET_CURR_THR_INFO_FROM_SP  reg
-    and \reg, sp, ~(THREAD_SIZE - 1)
-.endm
-
 #endif  /* !__ASSEMBLY__ */
 
 
