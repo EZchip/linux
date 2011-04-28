@@ -244,8 +244,18 @@ const cpuinfo_data_t mac_mul_nm[] = {
     num += sprintf(buf+num, "   MAC Multiplier: %s\n",
                         mac_mul_nm[p_cpu->extn_mac_mul.type].str);
 
+#ifdef CONFIG_ARCH_ARC_DCCM
     num += sprintf(buf+num, "DCCM: %s,", IS_AVAIL1(p_cpu->extn.dccm));
+    if (p_cpu->extn.dccm)
+        num += sprintf(buf+num, " (%x)\n", p_cpu->extn.dccm);
+#endif
+
+#ifdef CONFIG_ARCH_ARC_ICCM
     num += sprintf(buf+num, "   ICCM: %s\n", IS_AVAIL1(p_cpu->extn.iccm));
+    if (p_cpu->extn.iccm)
+        num += sprintf(buf+num, " (%x)\n", p_cpu->extn.iccm);
+#endif
+
     num += sprintf(buf+num, "CRC  Instrn: %s,", IS_AVAIL1(p_cpu->extn.crc));
     num += sprintf(buf+num, "   SWAP Instrn: %s", IS_AVAIL1(p_cpu->extn.swap));
 

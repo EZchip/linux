@@ -6,6 +6,7 @@
  */
 
 #include <asm-generic/vmlinux.lds.h>
+#include <asm/vmlinux.lds.h>
 #include <asm/page.h>
 
 OUTPUT_ARCH(arc)
@@ -16,11 +17,31 @@ jiffies = jiffies_64;
 
 SECTIONS
 {
+    /* ICCM starts at 0x8000_0000. So if kernel is relocated to some other
+     * address, make sure peripheral at 0x8z doesn't clash with ICCM
+     * Essentially vector is also in ICCM.
+     */
+
     . = 0x80000000;
     _int_vec_base_lds = .;
     .vector : {
         *(.vector)
     }
+
+    /* TODO: These might change depending on H/w */
+#ifdef CONFIG_ARCH_ARC_ICCM
+    .text.arcfp : {
+        ARCFP_CCM_TEXT
+    }
+#endif
+
+#ifdef CONFIG_ARCH_ARC_DCCM
+    . = 0x80100000;
+    .data.arcfp : {
+        ARCFP_CCM_DATA
+    }
+    . = ALIGN(PAGE_SIZE * 4);
+#endif
 
     . = ALIGN(PAGE_SIZE);
     _stext = .;
@@ -75,10 +96,12 @@ SECTIONS
     .text : {           /* Real text segment        */
         _text = .;      /* Text and read-only data  */
             TEXT_TEXT
+            ARCFP_SDRAM_TEXT
             SCHED_TEXT
             LOCK_TEXT
             *(.fixup)
             *(.gnu.warning)
+
 
         . = ALIGN(16);
         __start___ex_table = .; /* Exception table      */
@@ -97,6 +120,7 @@ SECTIONS
         . = ALIGN(32);
         *(.data.cacheline_aligned)
         DATA_DATA
+        ARCFP_SDRAM_DATA
 
         CONSTRUCTORS
         _edata = .;

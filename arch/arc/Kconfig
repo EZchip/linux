@@ -298,6 +298,18 @@ config ARCH_ARC_LV2_INTR
         default y if EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
         depends on EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
 
+config ARCH_ARC_ICCM
+		bool "Use ICCM"
+        help
+		Single Cycle RAMS to store Fast Path Code
+        default n
+
+config ARCH_ARC_DCCM
+		bool "Use DCCM"
+        help
+        Single Cycle RAMS to store Fast Path Data
+        default n
+
 config ARCH_ARC_MMU_V2
         bool "Build Linux for MMU V2"
         default n
