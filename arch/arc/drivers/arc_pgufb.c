@@ -59,6 +59,9 @@
 #define DRIVER_DESC "ARC Pixel Graphic Unit driver"
 #define ID "ARC PGU FB"
 
+#define PGU_REG_ID_OLD (0x1df20)
+#define PGU_REG_ID     (0x1df21)
+
 #define VCLK_MASK    7
 #define VLCK_NOTIFY  8
 
@@ -343,23 +346,32 @@ static int set_rgb_pointer(void)
 }
 
 
-static void set_color_bitfields(struct fb_var_screeninfo *var)
+static void set_color_bitfields(struct arc_pgu_devdata *fb_devdata, struct fb_var_screeninfo *var)
 {
 	switch (var->bits_per_pixel)
 	{
 		case 16:
-		case 15:
 		{
 			if (current_par.main_is_fb)
 			{
+				if(fb_devdata->regs->pgu_id == PGU_REG_ID)
+				{
+					var->red.offset = 11;
+					var->red.length = 5;
+					var->green.offset = 5;
+					var->green.length = 6;
+				}
+				else
+				{
 					var->red.offset = 10;
 					var->red.length = 5;
 					var->green.offset = 5;
 					var->green.length = 5;
-					var->blue.offset = 0;
-					var->blue.length = 5;
-					var->transp.offset = 0;
-					var->transp.length = 0;
+				}
+				var->blue.offset = 0;
+				var->blue.length = 5;
+				var->transp.offset = 0;
+				var->transp.length = 0;
 			}
 			else
 			{
@@ -495,7 +507,7 @@ static int arc_pgu_setmode(void)
 	for (i = 0; i < 10000; i++) {}
 
 	fb_devdata.regs->statctrl |= STATCTRL_REG_DISP_EN_MASK;
-	set_color_bitfields (&arc_pgu_var);
+	set_color_bitfields (&fb_devdata, &arc_pgu_var);
 	return 0;
 }
 
@@ -523,19 +535,24 @@ static int arc_pgu_setcolreg(unsigned regno, unsigned red, unsigned green,
 	}
 #endif
 
-   if (info->fix.visual == FB_VISUAL_TRUECOLOR ||
-        info->fix.visual == FB_VISUAL_DIRECTCOLOR) {
-            u32 v;
+	if (info->fix.visual == FB_VISUAL_TRUECOLOR ||
+	    info->fix.visual == FB_VISUAL_DIRECTCOLOR) {
+		u32 v, green_mask;
 
-            if (regno >= 16)
-                    return -EINVAL;
+		if(fb_devdata.regs->pgu_id == PGU_REG_ID)
+			green_mask = 0xfc00;
+		else
+			green_mask = 0xf800;
 
-            v = ((red & 0xf800) >> info->var.red.offset) |
-                    ((green & 0xf800) >> info->var.green.offset) |
-                    ((blue & 0xf800) >> info->var.blue.offset);
+		if (regno >= 16)
+			return -EINVAL;
 
-            ((u32*)(info->pseudo_palette))[regno] = v;
-    }
+		v = ((red & 0xf800) >> info->var.red.offset) |
+			((green & green_mask) >> info->var.green.offset) |
+			((blue & 0xf800) >> info->var.blue.offset);
+
+		((u32*)(info->pseudo_palette))[regno] = v;
+	}
 
 	return 0;
 }
