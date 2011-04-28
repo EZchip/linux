@@ -52,9 +52,9 @@ void __iomem * __ioremap(unsigned long phys_addr, unsigned long size, unsigned l
 	*/
 
     if( flags == ARC_IOMAP_NOCACHE )
-        prot = __pgprot(_PAGE_KERNEL_NO_CACHE);
+        prot = PAGE_KERNEL_NO_CACHE;
     else
-        prot = __pgprot(_PAGE_KERNEL);
+        prot = PAGE_KERNEL;
 
     /*
      * Mappings have to be page-aligned

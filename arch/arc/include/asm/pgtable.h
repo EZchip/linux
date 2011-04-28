@@ -154,70 +154,19 @@ static inline int pte_file(pte_t pte)	{ return pte_val(pte) & _PAGE_FILE; }
 #define pte_offset_map(dir,addr) pte_offset(dir, addr)
 #define pte_offset_map_nested(dir,addr) pte_offset(dir, addr)
 
-static inline pte_t pte_wrprotect(pte_t pte)
-{
-	pte_val(pte) &= ~(_PAGE_WRITE );
-	return pte;
-}
+#define PTE_BIT_FUNC(fn,op) \
+static inline pte_t pte_##fn(pte_t pte) { pte_val(pte) op; return pte; }
 
-static inline pte_t pte_rdprotect(pte_t pte)
-{
-	pte_val(pte) &= ~(_PAGE_READ );
-	return pte;
-}
+PTE_BIT_FUNC(wrprotect, &= ~(_PAGE_WRITE));
+PTE_BIT_FUNC(mkwrite,   |=  (_PAGE_WRITE));
+PTE_BIT_FUNC(mkclean,   &= ~(_PAGE_MODIFIED));
+PTE_BIT_FUNC(mkdirty,   |=  (_PAGE_MODIFIED));
+PTE_BIT_FUNC(mkold,     &= ~(_PAGE_ACCESSED));
+PTE_BIT_FUNC(mkyoung,   |=  (_PAGE_ACCESSED));
+PTE_BIT_FUNC(exprotect, &= ~(_PAGE_EXECUTE));
+PTE_BIT_FUNC(mkexec,    |=  (_PAGE_EXECUTE));
 
-static inline pte_t pte_exprotect(pte_t pte)
-{
-	pte_val(pte) &= ~(_PAGE_EXECUTE);
-	return pte;
-}
-
-static inline pte_t pte_mkclean(pte_t pte)
-{
-	pte_val(pte) &= ~(_PAGE_MODIFIED);
-	return pte;
-}
-
-static inline pte_t pte_mkold(pte_t pte)
-{
-	pte_val(pte) &= ~(_PAGE_ACCESSED);
-	return pte;
-}
-
-static inline pte_t pte_mkwrite(pte_t pte)
-{
-	pte_val(pte) |= _PAGE_WRITE;
-	return pte;
-}
-
-static inline pte_t pte_mkread(pte_t pte)
-{
-	pte_val(pte) |= _PAGE_READ;
-	return pte;
-}
-
-static inline pte_t pte_mkexec(pte_t pte)
-{
-	pte_val(pte) |= _PAGE_EXECUTE;
-	return pte;
-}
-
-static inline pte_t pte_mkdirty(pte_t pte)
-{
-	pte_val(pte) |= _PAGE_MODIFIED;
-	return pte;
-}
-
-static inline pte_t pte_mkyoung(pte_t pte)
-{
-	pte_val(pte) |= _PAGE_ACCESSED;
-	return pte;
-}
-
-static inline pte_t pte_mkspecial(pte_t pte)
-{
-    return pte;
-}
+static inline pte_t pte_mkspecial(pte_t pte) { return pte; }
 
 /* Macro to mark a page protection as uncacheable */
 #define pgprot_noncached pgprot_noncached

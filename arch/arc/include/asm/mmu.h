@@ -93,72 +93,80 @@ typedef struct {
 
 #endif
 
-/* Sameer: Temporary definition */
 #define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 
 /* Kernel allowed all permissions for all pages */
-#define _KERNEL_PAGE_PERMS  (_PAGE_K_EXECUTE | _PAGE_K_WRITE |  _PAGE_K_READ)
+#define _KERNEL_PAGE_PERMS  (_PAGE_K_EXECUTE | _PAGE_K_WRITE | _PAGE_K_READ)
 
 #ifdef  CONFIG_ARC700_CACHE_PAGES
-#define _PAGE_DEFAULT_CACHEABLE _PAGE_CACHEABLE
+#define _PAGE_DEF_CACHEABLE _PAGE_CACHEABLE
 #else
-#define _PAGE_DEFAULT_CACHEABLE (0)
+#define _PAGE_DEF_CACHEABLE (0)
 #endif
 
-/* ARC700 can do exclusive execute/write protection but most of the other
- * architectures implement it such that execute implies read permission
- * and write imples read permission. So to be compatible we do the same
+/* Helper for every "user" page
+ * -kernel can R/W/X
+ * -by default cached, unless config otherwise
+ * -present in memory
  */
-#define _PAGE_TABLE	(_PAGE_PRESENT \
-			| _PAGE_ACCESSED | _PAGE_MODIFIED \
-			| _KERNEL_PAGE_PERMS)
+#define ___DEF (_PAGE_PRESENT | _KERNEL_PAGE_PERMS | _PAGE_DEF_CACHEABLE)
+
+/* Set of bits not changed in pte_modify */
 #define _PAGE_CHG_MASK	(PAGE_MASK | _PAGE_ACCESSED | _PAGE_MODIFIED)
-#define PAGE_NONE	__pgprot(_PAGE_PRESENT | _PAGE_DEFAULT_CACHEABLE \
-			| _KERNEL_PAGE_PERMS)
-#define PAGE_SHARED	__pgprot(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
-#define PAGE_SHARED_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE \
-			        | _PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE\
-                                | _KERNEL_PAGE_PERMS)
-#define	PAGE_COPY	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
-#define	PAGE_COPY_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-				|_PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE \
-				| _KERNEL_PAGE_PERMS)
-#define PAGE_READONLY	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
-#define PAGE_READONLY_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-				| _PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE \
-				| _KERNEL_PAGE_PERMS )
-/* Kernel only page (vmalloc) : global page with all user mode perms
- * denied. kernel mode perms are set for all pages */
 
-#define _PAGE_KERNEL	(_PAGE_PRESENT | _PAGE_GLOBAL \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
+/* More Abbrevaited helpers */
+#define PAGE_U_NONE     __pgprot(___DEF)
+#define PAGE_U_R        __pgprot(___DEF | _PAGE_READ)
+#define PAGE_U_W_R      __pgprot(___DEF | _PAGE_READ | _PAGE_WRITE)
+#define PAGE_U_X_R      __pgprot(___DEF | _PAGE_READ | _PAGE_EXECUTE)
+#define PAGE_U_X_W_R    __pgprot(___DEF | _PAGE_READ | _PAGE_WRITE | \
+                                        _PAGE_EXECUTE)
 
-#define _PAGE_KERNEL_NO_CACHE	(_PAGE_PRESENT | _PAGE_GLOBAL \
-			|  _KERNEL_PAGE_PERMS)
+/* While kernel runs out of unstrslated space, vmalloc/modules use a chunk of
+ * kernel vaddr space - visible in all addr spaces, but kernel mode only
+ * Thus Global, all-kernel-access, no-user-access, cached
+ */
+#define PAGE_KERNEL          __pgprot(___DEF | _PAGE_GLOBAL)
 
-#define PAGE_KERNEL	__pgprot(_PAGE_KERNEL)
+/* ioremap */
+#define PAGE_KERNEL_NO_CACHE __pgprot(_PAGE_PRESENT| _KERNEL_PAGE_PERMS |\
+                                         _PAGE_GLOBAL)
 
-#define _KERNPG_TABLE   (_PAGE_TABLE | _PAGE_KERNEL)
+/****************************************************************
+ * Mapping of vm_flags (Generic VM) to PTE flags (arch specific)
+ *
+ * Certain cases have 1:1 mapping
+ *  e.g. __P101 means VM_READ, VM_EXEC and !VM_SHARED
+ *       which directly corresponds to  PAGE_U_X_R
+ *
+ * Other rules which cause the divergence from 1:1 mapping
+ *
+ *  1. Although ARC700 can do exclusive execute/write protection (meaning R
+ *     can be tracked independet of X/W unlike some other CPUs), still to
+ *     keep things consistent with other archs:
+ *      -Write implies Read:   W => R
+ *      -Execute implies Read: X => R
+ *
+ *  2. Pvt Writable doesn't have Write Enabled initially: Pvt-W => !W
+ *     This is to enable COW mechanism
+ */
         /* xwr */
-#define __P000	PAGE_NONE
-#define __P001	PAGE_READONLY
-#define __P010	PAGE_COPY
-#define __P011	PAGE_COPY
-#define __P100	PAGE_READONLY_EXECUTE
-#define __P101	PAGE_READONLY_EXECUTE
-#define __P110	PAGE_COPY_EXECUTE
-#define __P111	PAGE_COPY_EXECUTE
+#define __P000  PAGE_U_NONE
+#define __P001  PAGE_U_R
+#define __P010  PAGE_U_R        // Pvt-W => !W
+#define __P011  PAGE_U_R        // Pvt-W => !W
+#define __P100  PAGE_U_X_R      // X => R
+#define __P101  PAGE_U_X_R
+#define __P110  PAGE_U_X_R      // Pvt-W => !W and X => R
+#define __P111  PAGE_U_X_R      // Pvt-W => !W
 
-#define __S000	PAGE_NONE
-#define __S001	PAGE_READONLY
-#define __S010	PAGE_SHARED
-#define __S011	PAGE_SHARED
-#define __S100	PAGE_READONLY_EXECUTE
-#define __S101	PAGE_READONLY_EXECUTE
-#define __S110	PAGE_SHARED_EXECUTE
-#define __S111	PAGE_SHARED_EXECUTE
+#define __S000  PAGE_U_NONE
+#define __S001  PAGE_U_R
+#define __S010  PAGE_U_W_R      // W => R
+#define __S011  PAGE_U_W_R
+#define __S100  PAGE_U_X_R      // X => R
+#define __S101  PAGE_U_X_R
+#define __S110  PAGE_U_X_W_R    // X => R
+#define __S111  PAGE_U_X_W_R
 
 #endif  /* _ASM_ARC_MMU_H */
