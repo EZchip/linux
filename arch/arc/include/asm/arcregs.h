@@ -156,9 +156,25 @@
 
 #ifndef __ASSEMBLY__
 
+
 /******************************************************************
- *      Inline ASM macros to read AUX Regs
+ *      Inline ASM macros to read/write AUX Regs
+ *      Essentially invocation of lr/sr insns from "C"
  *****************************************************************/
+
+/* gcc builtins generate better code
+    Not so much for aux access itself, but because of better
+    understanding of constraints, the nearby code is better
+*/
+#if 1
+
+#define read_new_aux_reg(reg)               __builtin_arc_lr(reg)
+
+// gcc builtin sr needs reg param to be long immediate
+#define write_new_aux_reg(reg_immed, val)   \
+                    __builtin_arc_sr((unsigned int)val, reg_immed)
+
+#else
 
 #define read_new_aux_reg(reg)                                   \
 ({ unsigned int __ret;                                          \
@@ -196,6 +212,8 @@
         :"=&r"(tmp)                         \
         :"r"(val),"memory"(&reg_in_var));   \
 })
+
+#endif
 
 /****************************************************************
  * Register Layouts using bitfields so that we dont have to write
