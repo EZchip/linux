@@ -1105,7 +1105,7 @@ __do_strncpy_from_user(char *dst, const char *src, long count)
         "   .word   1b, 4b              \n"
         "   .previous                   \n"
 
-        :"=r"(res), "+r"(dst), "+r"(src), "=r"(val),"=l"(hw_count)
+        :"=r"(res), "+r"(dst), "+r"(src), "=&r"(val),"=l"(hw_count)
         :"g" (-EFAULT), "ir"(count),"4"(count)
         :"memory"
     );

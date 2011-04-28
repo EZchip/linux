@@ -34,9 +34,13 @@ slowpath_copy_from_user(void *to, const void *from, unsigned long n)
         "   .word   1b, 3b              \n"
         "   .previous                   \n"
 
-        :"+r"(n), "=r"(tmp)
-        : "r"(to), "r"(from)
-        :"lp_count","lp_start","lp_end"
+        : "+r" (n),
+         /* Note as an '&' earlyclobber operand to make sure the
+            temporary register inside the loop is not the same as
+            FROM or TO.  */
+          "=&r" (tmp)
+        : "r" (to), "r" (from)
+        : "lp_count", "lp_start", "lp_end"
     );
 
     return n;
@@ -51,10 +55,10 @@ slowpath_copy_to_user(void *to, const void *from, unsigned long n)
 
     __asm__ __volatile__ (
         "   mov.f   lp_count, %0        \n"
-        "   lpnz  3f                    \n"
+        "   lpnz 3f                     \n"
         "   ldb.ab  %1, [%3, 1]         \n"
         "1: stb.ab  %1, [%2, 1]         \n"
-        "   sub %0, %0, 1               \n"
+        "   sub     %0, %0, 1           \n"
         "3: nop                         \n"
         "   .section .fixup, \"ax\"     \n"
         "   .align 4                    \n"
@@ -65,9 +69,13 @@ slowpath_copy_to_user(void *to, const void *from, unsigned long n)
         "   .word   1b, 4b              \n"
         "   .previous                   \n"
 
-        :"+r"(n), "=r"(tmp)
-        : "r"(to), "r"(from)
-        :"lp_count","lp_start","lp_end"
+        : "+r" (n),
+         /* Note as an '&' earlyclobber operand to make sure the
+            temporary register inside the loop is not the same as
+            FROM or TO.  */
+          "=&r" (tmp)
+        : "r" (to), "r" (from)
+        :"lp_count", "lp_start", "lp_end"
     );
 
     return n;
