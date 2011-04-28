@@ -272,7 +272,7 @@ config ARC700_NUM_SERIAL_PORTS
 
 config ARC700_SERIAL_BAUD
         int "Baud rate"
-        default "57600"
+        default "115200"
         depends on ARC700_SERIAL
 
 config ARC_UART_CONSOLE
