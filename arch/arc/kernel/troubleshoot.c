@@ -11,11 +11,9 @@
 #include <linux/kdev_t.h>
 #include <asm/arcregs.h>
 #include <asm/traps.h>      /* defines for Reg values */
-#include <linux/kallsyms.h>
-
-static void show_ecr_verbose(struct pt_regs *regs);
-void show_callee_regs(struct callee_regs *cregs);
-static void show_faulting_vma(unsigned long address);
+#include <linux/fs_struct.h>
+#include <linux/proc_fs.h>  // get_mm_exe_file
+#include <linux/file.h>     // fput
 
 /* For dumping register file (r0-r12) or (r13-r25), instead of 13 printks,
  * we simply loop otherwise gcc generates 13 calls to printk each with it's
@@ -32,53 +30,41 @@ void noinline print_reg_file(unsigned long *last_reg, int num)
     }
 }
 
-void show_regs(struct pt_regs *regs)
-{
-    struct task_struct *tsk = current;
-    struct callee_regs *cregs;
-
-    printk("Current task = '%s', PID = %u, ASID = %lu\n", tsk->comm,
-               tsk->pid, tsk->active_mm->context.asid);
-
-    if (current->thread.cause_code)
-        show_ecr_verbose(regs);
-
-    printk("[EFA]: 0x%08lx\n", current->thread.fault_address);
-    printk("[ERET]: 0x%08lx (Faulting instruction)\n",regs->ret);
-
-    show_faulting_vma(regs->ret);   // VMA of faulting code, not data
-
-    /* print special regs */
-    printk("status32: 0x%08lx\n", regs->status32);
-    printk("SP: 0x%08lx\tFP: 0x%08lx\n", regs->sp, regs->fp);
-    printk("BLINK: 0x%08lx\tBTA: 0x%08lx\n",
-            regs->blink, regs->bta);
-    printk("LPS: 0x%08lx\tLPE: 0x%08lx\tLPC: 0x%08lx \n",
-            regs->lp_start, regs->lp_end, regs->lp_count);
-
-    /* print regs->r0 thru regs->r12
-     * Sequential printing was generating horrible code
-     */
-    print_reg_file(&(regs->r0), 0);
-
-    // If Callee regs were saved, display them too
-    cregs = (struct callee_regs *) current->thread.callee_reg;
-    if (cregs) show_callee_regs(cregs);
-}
-
 void show_callee_regs(struct callee_regs *cregs)
 {
     print_reg_file(&(cregs->r13), 13);
     printk("\n");
 }
 
-static void show_faulting_vma(unsigned long address)
+void print_task_path_n_nm(struct task_struct *task, char *buf)
+{
+    struct path path;
+    char *nm = NULL;
+    struct mm_struct *mm;
+    struct file *exe_file;
+
+    mm = get_task_mm(task);
+    exe_file = get_mm_exe_file(mm);
+    mmput(mm);
+
+    if (exe_file) {
+        path = exe_file->f_path;
+        path_get(&exe_file->f_path);
+        fput(exe_file);
+        nm = d_path(&path, buf, 255);
+        path_put(&path);
+    }
+
+    printk("Current task = %s '%s', PID = %u, ASID = %lu\n", nm, task->comm,
+               task->pid, task->active_mm->context.asid);
+}
+
+static void show_faulting_vma(unsigned long address, char *buf)
 {
     struct vm_area_struct *vma;
     struct inode *inode;
     unsigned long ino = 0;
     dev_t dev = 0;
-    char buf[256]={'\0'};
     char *nm = buf;
 
     vma = find_vma(current->active_mm, address);
@@ -90,7 +76,7 @@ static void show_faulting_vma(unsigned long address)
         struct file *file = vma->vm_file;
         if (file) {
                 struct path *path = &file->f_path;
-                nm = d_path(path, buf, 255);
+                nm = d_path(path, buf, PAGE_SIZE -1);
                 inode = vma->vm_file->f_path.dentry->d_inode;
                 dev = inode->i_sb->s_dev;
                 ino = inode->i_ino;
@@ -100,10 +86,6 @@ static void show_faulting_vma(unsigned long address)
     }
     else printk("@No matching VMA found\n");
 }
-
-/************************************************************************
- *  Verbose Display of Exception
- ***********************************************************************/
 
 static void show_ecr_verbose(struct pt_regs *regs)
 {
@@ -149,6 +131,52 @@ static void show_ecr_verbose(struct pt_regs *regs)
     }
 }
 
+/************************************************************************
+ *  API called by rest of kernel
+ ***********************************************************************/
+
+void show_regs(struct pt_regs *regs)
+{
+    struct task_struct *tsk = current;
+    struct callee_regs *cregs;
+    char *buf;
+
+    buf = (char *)__get_free_page(GFP_TEMPORARY);
+    if (!buf)
+        return;
+
+    print_task_path_n_nm(tsk, buf);
+
+    if (current->thread.cause_code)
+        show_ecr_verbose(regs);
+
+    printk("[EFA]: 0x%08lx\n", current->thread.fault_address);
+    printk("[ERET]: 0x%08lx (Faulting instruction)\n",regs->ret);
+
+    show_faulting_vma(regs->ret, buf);   // VMA of faulting code, not data
+
+    //extern void print_vma_addr(char *prefix, unsigned long ip);
+    //print_vma_addr("",regs->ret);
+
+    /* print special regs */
+    printk("status32: 0x%08lx\n", regs->status32);
+    printk("SP: 0x%08lx\tFP: 0x%08lx\n", regs->sp, regs->fp);
+    printk("BLINK: 0x%08lx\tBTA: 0x%08lx\n",
+            regs->blink, regs->bta);
+    printk("LPS: 0x%08lx\tLPE: 0x%08lx\tLPC: 0x%08lx \n",
+            regs->lp_start, regs->lp_end, regs->lp_count);
+
+    /* print regs->r0 thru regs->r12
+     * Sequential printing was generating horrible code
+     */
+    print_reg_file(&(regs->r0), 0);
+
+    // If Callee regs were saved, display them too
+    cregs = (struct callee_regs *) current->thread.callee_reg;
+    if (cregs) show_callee_regs(cregs);
+
+    free_page((unsigned long) buf);
+}
 
 void show_kernel_fault_diag(const char *str, struct pt_regs *regs,
     unsigned long address, unsigned long cause_reg)
