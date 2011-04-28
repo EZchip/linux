@@ -360,10 +360,14 @@ void arc_chk_ccms(void)
 
 #ifdef CONFIG_ARC_BVCI_LAT_UNIT
 
-int mem_lat = 20;
+int mem_lat = 64;
 
 static volatile int *ID = (volatile int *) BVCI_LAT_UNIT_BASE;
+
+/* CTRL1 selects the Latency unit to program (0-8) */
 static volatile int *LAT_CTRL1 = (volatile int *) BVCI_LAT_UNIT_BASE + 21;
+
+/* CRTL2 provides the actual latency value to be programmed */
 static volatile int *LAT_CTRL2 = (volatile int *) BVCI_LAT_UNIT_BASE + 22;
 
 #endif
@@ -402,8 +406,15 @@ void __init probe_lat_unit(void)
 
     printk("BVCI Profiler Ver %x\n",id);
 
-    *LAT_CTRL1 = 0; // Unit #0 : Adds latency to all mem accesses
+    // *LAT_CTRL1 = 0; // Unit #0 : Adds latency to all mem accesses
 
+    /* By default we want to simulate the delays
+     * between (I$|D$) and memory
+     */
+    *LAT_CTRL1 = 1; // Unit #1 : I$ and system Bus
+    *LAT_CTRL2 = mem_lat;
+
+    *LAT_CTRL1 = 2; // Unit #2 : D$ and system Bus
     *LAT_CTRL2 = mem_lat;
 #endif
 }
