@@ -82,6 +82,10 @@ LINKFLAGS	+= -EB
 LDFLAGS		+= -EB
 endif
 
+ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
+KBUILD_CFLAGS		+= -DNONINLINE_USR_CPY
+endif
+
 #setup AFLAGS from CFLAGS when we are done with all the CFLAGS
 KBUILD_AFLAGS		+= $(KBUILD_CFLAGS)
 
