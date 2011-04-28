@@ -64,6 +64,17 @@ static void seed_unwind_frame_info(struct task_struct *tsk,
         frame_info->regs.r28 = KSTK_ESP(tsk);
         frame_info->regs.r31 = KSTK_BLINK(tsk);
         frame_info->regs.r63 = (unsigned int )__switch_to;
+
+        /* In the prologue of __switch_to, first fp is saved on the stack and
+         * then sp is copied to fp, the dwarf assumes cfa as fp based but we
+         * didn't save fp. The value retrieved above is  the fp's state in previous
+         * frame. As a work around for this, we are unwinding from __switch_to
+         * address and adjusting the sp accordingly. The other limitaion in
+         * __switch_to macro is dwarf rules are not generated for inline
+         * assembly code
+         */
+        frame_info->regs.r27 = 0;
+        frame_info->regs.r28 += 64;
         frame_info->call_frame = 0;
 
     }
@@ -136,7 +147,7 @@ static unsigned int arc_unwind_core(struct task_struct *tsk,
 /* Call-back which plugs into unwinding core to dump the stack in
  * case of panic/OOPs/BUG etc
  */
-int vebose_dump_stack(unsigned int address, void *unused)
+int verbose_dump_stack(unsigned int address, void *unused)
 {
     __print_symbol("  %s\n", address);
     return 0;
@@ -198,7 +209,7 @@ int get_first_nonsched_frame(unsigned int address, void *unused)
 void noinline show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
 {
     printk("\nStack Trace:\n");
-    arc_unwind_core(tsk, regs, vebose_dump_stack, NULL);
+    arc_unwind_core(tsk, regs, verbose_dump_stack, NULL);
     sort_snaps(1);
 }
 
