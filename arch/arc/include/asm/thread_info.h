@@ -41,16 +41,16 @@
 
 #include <asm/page.h>
 
-#define THREAD_SIZE_ORDER 1
 #ifdef CONFIG_16KSTACKS
-#define THREAD_SIZE     (PAGE_SIZE << 1)
+#define THREAD_SIZE_ORDER 1
 #else
-#define THREAD_SIZE     PAGE_SIZE
+#define THREAD_SIZE_ORDER 0
 #endif
+
+#define THREAD_SIZE     (PAGE_SIZE << THREAD_SIZE_ORDER)
 
 #ifndef __ASSEMBLY__
 
-#include <linux/linkage.h>
 #include <linux/thread_info.h>
 
 
@@ -67,7 +67,7 @@ struct thread_info {
     struct task_struct  *task;      /* main task structure */
     struct exec_domain  *exec_domain;   /* execution domain */
     unsigned long       flags;      /* low level flags */
-    unsigned long       tp_value;   /* thread pointer */
+    unsigned long           thr_ptr;    /* TLS ptr */
     __u32           cpu;        /* current CPU */
     int         preempt_count;  /* 0 => preemptable, <0 => BUG */
 

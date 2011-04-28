@@ -214,6 +214,14 @@ config ARCH_ARC_CURR_IN_REG
           This reserved Register R25 to point to Current Task in
           kernel mode. This saves memory access for each such access
 
+config ARC_TLS_REG_EMUL
+        bool "Emulate a TLS register using a dedicated user vaddr"
+        default N
+        help
+            ARC ABI lacks defining a dedicated TLS register to hold
+            pointer to TLS Data area.
+            So we emulate the TLS register using a TLS Virtual addr
+
 endmenu   #CPU Core config
 
 menu "Board Configuration"

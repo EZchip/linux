@@ -449,6 +449,8 @@ ARC_ENTRY EV_TLBMissD
     VERIFY_PTE
 
     UPDATE_PTE
+
+dtlb_commit_stage:
     TLB_RELOAD
     TLB_WRITE_DATA
     RESTORE_TEMP
@@ -491,5 +493,7 @@ do_slow_path_pf:
     jl  do_page_fault
     j   ret_from_user_faults
 
+
 ARC_EXIT EV_TLBMissD
+
 ARC_ENTRY EV_TLBMissB   ; Bogus entry to measure sz of DTLBMiss hdlr

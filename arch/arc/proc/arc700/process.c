@@ -202,12 +202,24 @@ asmlinkage int sys_vfork(struct pt_regs *regs)
                NULL, NULL);
 }
 
-asmlinkage int sys_clone(unsigned long clone_flags,
-             unsigned long newsp, struct pt_regs *regs)
+/* Per man, C-lib clone( ) is as follows
+ *
+ * int clone(int (*fn)(void *), void *child_stack,
+ *           int flags, void *arg, ...
+ *           pid_t *ptid, struct user_desc *tls, pid_t *ctid);
+ *
+ * @fn and @arg are of userland thread-hnalder and thus of no use
+ * in sys-call, hence excluded in sys_clone arg list.
+ * The only addition is ptregs, needed by fork core, although now-a-days
+ * task_pt_regs() can be called anywhere to get that.
+ */
+asmlinkage int sys_clone(unsigned long clone_flags, unsigned long newsp,
+            int __user *parent_tidptr, void *tls, int __user *child_tidptr,
+            struct pt_regs *regs)
 {
     if (!newsp)
         newsp = regs->sp;
-    return do_fork(clone_flags, newsp, regs, 0, NULL, NULL);
+    return do_fork(clone_flags, newsp, regs, 0, parent_tidptr, child_tidptr);
 }
 
 asmlinkage void ret_from_fork(void);
@@ -314,6 +326,22 @@ int copy_thread(unsigned long clone_flags,
 #ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     /* Replicate parent's user mode r25 for child */
     p->thread.user_r25 = current->thread.user_r25;
+#endif
+
+#ifdef CONFIG_ARC_TLS_REG_EMUL
+    if (user_mode(regs)) {
+        if (unlikely(clone_flags & CLONE_SETTLS)) {
+            /* If we came here because of a clone and that too with XX_SETTLS,
+            * set this task's userland tls data ptr from the 4th arg to clone
+            * Note that clone C-lib call is difft from clone sys-call
+            */
+            task_thread_info(p)->thr_ptr = regs->r3;
+        }
+        else {
+            /* Normal fork case: set parent's TLS ptr in child */
+            task_thread_info(p)->thr_ptr = task_thread_info(current)->thr_ptr;
+        }
+    }
 #endif
 
     return 0;
@@ -500,4 +528,36 @@ unsigned long arch_align_stack(unsigned long sp)
 #endif
     //printk("RAND: SP orig %x rnd %x\n", orig_sp, sp);
     return sp;
+}
+
+/* Independent of kernel CONFIG option, we keep the syscall in
+ * unistd.h and in sys-call jump table.
+ * But return failure here if not supported
+ */
+int sys_arc_settls(void *user_tls_data_ptr)
+{
+#ifdef CONFIG_ARC_TLS_REG_EMUL
+    task_thread_info(current)->thr_ptr = (unsigned int)user_tls_data_ptr;
+    return 0;
+#else
+    return -EFAULT;
+#endif
+}
+
+/* We return the user space TLS data ptr as sys-call return code
+ * Ideally it should be copy to user.
+ * However we can cheat by the fact that some sys-calls do return
+ * absurdly high values
+ * Since the tls dat aptr is not going to be in range of 0xFFFF_xxxx
+ * it won't be considered a sys-call error
+ * and it will be loads better than copy-to-user, which is a definite
+ * D-TLB Miss
+ */
+int sys_arc_gettls(void)
+{
+#ifdef CONFIG_ARC_TLS_REG_EMUL
+    return task_thread_info(current)->thr_ptr;
+#else
+    return -EFAULT;
+#endif
 }

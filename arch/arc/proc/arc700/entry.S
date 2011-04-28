@@ -887,8 +887,12 @@ ARC_ENTRY sys_vfork_wrapper
     jal ret_from_system_call
 
 ARC_ENTRY sys_clone_wrapper
-    ; copy parameter( struct pt_regs *) for sys_clone
-    mov r2, sp
+    ; clone sys-call takes 2 mandatary args: @flags and @child-stack
+    ; and it can take 3 var-args, depending on flags
+    ; To keep sys_clone( ) signature constant, we assume all 5 args
+    ; and set the helper @prtegs in next free reg
+    ; this is cheap since our args are in regs, not on stack
+    mov r5, sp  ; pt_regs
     SAVE_CALLEE_SAVED_USER
     jl  SYMBOL_NAME(sys_clone)
     DISCARD_CALLEE_SAVED_USER
@@ -1271,6 +1275,8 @@ __syscall_start:
 /*350*/ .long   SYMBOL_NAME(sys_getsockopt)
         .long   SYMBOL_NAME(sys_sendmsg)
         .long   SYMBOL_NAME(sys_recvmsg)
+        .long   SYMBOL_NAME(sys_arc_settls)
+        .long   SYMBOL_NAME(sys_arc_gettls)
 
 
 
