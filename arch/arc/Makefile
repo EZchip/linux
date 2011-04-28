@@ -18,7 +18,7 @@ ifdef CONFIG_ARCH_ARC700
 PROCESSOR  := arc700
 endif
 
-KBUILD_DEFCONFIG := arc_defconfig
+KBUILD_DEFCONFIG := aa4_defconfig
 
 PROCESSOR  := arc700
 PLATFORM := AA4
