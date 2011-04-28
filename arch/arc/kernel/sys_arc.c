@@ -212,20 +212,18 @@ int kernel_execve(const char *filename, char *const argv[], char *const envp[])
      * So to be safe, let gcc know the args for sys call.
      * If they match no extra code will be generated
      */
-    register int arg1  = (int)filename;
     register int arg2 asm ("r1") = (int)argv;
     register int arg3 asm ("r2") = (int)envp;
-    register int ret asm ("r0");
+
+    register int filenm_n_ret asm ("r0") = (int)filename;
 
     __asm__ __volatile__(
-                 "mov   r8, %0\n\t"
+                 "mov   r8, %1\n\t"
                  "trap0 \n\t"
-                 "nop    \n\t"
-                 "nop    \n\t"
-                 :
-                 :"i"(__NR_execve), "r"(arg1), "r"(arg2), "r"(arg3)
-                 :"r0","memory");
+                 :"+r"(filenm_n_ret)
+                 :"i"(__NR_execve),  "r"(arg2), "r"(arg3)
+                 :"r8","memory");
 
-    return ret;
+    return filenm_n_ret;
 }
 EXPORT_SYMBOL(kernel_execve);
