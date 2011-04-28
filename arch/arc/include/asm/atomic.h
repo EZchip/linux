@@ -108,11 +108,12 @@ static __inline__ void atomic_sub(int i, volatile atomic_t *v)
 static __inline__ int atomic_add_return(int i, volatile atomic_t *v)
 {
     unsigned long flags ;
-    long temp;
+    unsigned long temp;
 
     atomic_ops_lock(flags);
-    v->counter += i;
     temp = v->counter;
+    temp += i;
+    v->counter = temp;
     atomic_ops_unlock(flags);
 
     return temp;
@@ -121,11 +122,12 @@ static __inline__ int atomic_add_return(int i, volatile atomic_t *v)
 static __inline__ int atomic_sub_return(int i, volatile atomic_t *v)
 {
     unsigned long flags;
-    long temp;
+    unsigned long temp;
 
     atomic_ops_lock(flags);
-    v->counter -= i;
     temp = v->counter;
+    temp -= i;
+    v->counter = temp;
     atomic_ops_unlock(flags);
 
     return temp;
@@ -153,10 +155,13 @@ static __inline__ int atomic_dec_and_test(volatile atomic_t *v)
 {
     unsigned long flags;
     int result;
+    unsigned long temp;
 
     atomic_ops_lock(flags);
-    v->counter -= 1;
-    result = (v->counter == 0);
+    temp = v->counter;
+    temp -= 1;
+    result = (temp == 0);
+    v->counter = temp;
     atomic_ops_unlock(flags);
 
     return result;
@@ -166,10 +171,13 @@ extern __inline__ int atomic_add_negative(int i, volatile atomic_t *v)
 {
     unsigned long flags;
     int result;
+    unsigned long temp;
 
     atomic_ops_lock(flags);
-    v->counter += i;
-    result = (v->counter < 0);
+    temp = v->counter;
+    temp += i;
+    result = (temp < 0);
+    v->counter = temp;
     atomic_ops_unlock(flags);
 
     return result;
