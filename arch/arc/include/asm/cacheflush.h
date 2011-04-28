@@ -72,15 +72,11 @@ extern void flush_icache_all(void);
 extern void flush_icache_range(unsigned long start, unsigned long end);
 extern void flush_icache_page(struct vm_area_struct *vma,struct page *page);
 
-#define flush_icache_user_range(vma, page, addr, len) \
-                                        flush_icache_page((vma), (page))
-
 #else
 
 #define flush_icache_all()                      do { } while (0)
 #define flush_icache_range(start,end)           do { } while (0)
 #define flush_icache_page(vma,page)             do { } while (0)
-#define flush_icache_user_range(vma,pg,adr,len) do { } while (0)
 
 #endif /*CONFIG_ARC700_USE_ICACHE*/
 
@@ -125,8 +121,6 @@ void flush_and_inv_dcache_all(void);
         memcpy(dst, src, len);                              \
         if (vma->vm_flags & VM_EXEC )   {                   \
             flush_icache_range((unsigned long)(dst),        \
-                               (unsigned long)(dst+len)); \
-            flush_dcache_range((unsigned long)(dst),        \
                                (unsigned long)(dst+len)); \
         }                                                   \
     } while (0)

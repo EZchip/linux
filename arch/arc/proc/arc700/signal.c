@@ -677,8 +677,6 @@ do_per_page:
     paddr = (vaddr & ~PAGE_MASK) | (pte_val(pte) & PAGE_MASK);
 
     /* Flush dcache line, and inv Icache line for frame->retcode */
-    if (exec_enable)
-        flush_dcache_range(paddr, paddr + size_on_pg);
     flush_icache_range(paddr, paddr + size_on_pg);
 
     mod_tlb_permission(vaddr_pg, current->mm, exec_enable);

@@ -446,41 +446,61 @@ static void __flush_icache_range(unsigned long start, unsigned long end)
     local_irq_restore(flags);
 }
 
-/* This is called on insmod, with kernel virtual address for CODE of
+/* This is API for making I/D Caches consistent when modifying code
+ * (loadable modules, kprobes,  etc)
+ * This is called on insmod, with kernel virtual address for CODE of
  * the module. ARC cache maintenance ops require PHY address thus we
  * need to convert vmalloc addr to PHY addr
  */
 void flush_icache_range(unsigned long kstart, unsigned long kend)
 {
-    int sz;
+    int tot_sz;
     unsigned long phy, pfn;
     unsigned long flags;
 
     //printk("Kernel Cache Cohenercy: %lx to %lx\n",kstart, kend);
 
-    /* If this is called for user virtual address, flush the icache */
-    if (kstart < TASK_SIZE || kstart > PAGE_OFFSET) {
-        __flush_icache_range(kstart, kend);
+    /* This is not the right API for user virtual address */
+    if (kstart < TASK_SIZE) {
+        BUG_ON("Flush icache range for user virtual addr space");
         return;
     }
 
-    //  For insmod case, make sure both I and C caches are coheremt
-    sz = kend - kstart + 1;
-    if (sz > PAGE_SIZE) {
+    /* Shortcut for bigger flush ranges.
+     * Here we dont care if this was kernel virtual or phy addr
+     */
+    tot_sz = kend - kstart + 1;
+    if (tot_sz > PAGE_SIZE) {
         flush_cache_all();
         return;
     }
 
-    while (sz > 0) {
+    /* Now it could be kernel virtual addr space (0x7000_0000 to 0x7FFF_FFFF)
+     * or Kernel Physical addr space (0x8000_0000 onwards)
+     * The caveat is ARC700 Cache flushes require PHY address, thus need
+     * for seperate handling for virtual addr
+     */
+
+    /* Kernel Paddr */
+    if (kstart > PAGE_OFFSET) {
+        __flush_icache_range(kstart, kend);
+        flush_dcache_range(kstart, kend);
+        return;
+    }
+
+    /* Kernel Vaddr */
+    while (tot_sz > 0) {
+        int sz;
         pfn = vmalloc_to_pfn((void *)kstart);
         phy = pfn << PAGE_SHIFT;
+        sz = (tot_sz >= PAGE_SIZE)? PAGE_SIZE : tot_sz;
         //printk("Flushing for virt %lx Phy %lx PAGE %lx\n", kstart, phy, pfn);
         local_irq_save(flags);
-        flush_dcache_range(phy, phy+PAGE_SIZE );
-        __flush_icache_range(phy, phy+PAGE_SIZE);
+        flush_dcache_range(phy, phy + sz);
+        __flush_icache_range(phy, phy + sz);
         local_irq_restore(flags);
         kstart += PAGE_SIZE;
-        sz -= PAGE_SIZE;
+        tot_sz -= PAGE_SIZE;
     }
 
 }
