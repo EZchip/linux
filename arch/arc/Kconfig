@@ -7,7 +7,24 @@
 
 mainmenu "Linux Kernel Configuration"
 
-# Need to know why do we need these variables
+# CONFIG common to all ARC cores (700+800) under this
+#    config option instead of existing ARCH_ARC700
+# Need corresponding change in include/asm-arc/linkage.h
+
+config ARCH_ARC
+    bool
+    default y
+    select HAVE_OPROFILE
+    select NO_IOPORT
+    select HAVE_KPROBES
+    select HAVE_KRETPROBES
+
+# vineetg: Mar 31st 2010
+# hack: to enable oprofile w/o TRACE_IRQFLAGS
+# Normally this is selected automatically by kbuild system
+# But is dependent on IRQTRACING when don't have yet.
+# So for now we fake it: When IRQTRACING implemented, take it off
+    select TRACING_SUPPORT
 
 config RWSEM_GENERIC_SPINLOCK
         def_bool y
@@ -50,7 +67,6 @@ config GENERIC_CALIBRATE_DELAY
         bool
         default y
 
-# for generic Time of day implementation
 config GENERIC_TIME
         bool
         default y
@@ -79,49 +95,15 @@ config HAVE_LATENCYTOP_SUPPORT
 	bool
 	default y
 
-# CONFIG common to all ARC cores (700+800) under this
-#    config option instead of existing ARCH_ARC700
-# Need corresponding change in include/asm-arc/linkage.h
-config ARCH_ARC
-    bool
-    default y
-    select HAVE_OPROFILE
-    select NO_IOPORT
-    select HAVE_KPROBES
-    select HAVE_KRETPROBES
-
-# vineetg: Mar 31st 2010
-# hack: to enable oprofile w/o TRACE_IRQFLAGS
-# Normally this is selected automatically by kbuild system
-# But is dependent on IRQTRACING when don't have yet.
-# So for now we fake it: When IRQTRACING implemented, take it off
-    select TRACING_SUPPORT
-
-# end of temporary definitions section
+config VMALLOC_SIZE
+        int
+        default "256" #"VMALLOC_SIZE(in MB)"
 
 source "init/Kconfig"
 
-menu "Bus options (PCI etc.)"
-
-config PCI
-	bool "PCI support"
-	default n
-	help
-	  If you have PCI, say Y, otherwise N.
-
-source "drivers/pci/Kconfig"
-source "drivers/pci/hotplug/Kconfig"
-source "drivers/pcmcia/Kconfig"
-
-endmenu
+source "kernel/Kconfig.freezer"
 
 menu "Processor Type and features"
-
-config GENERIC_CLOCKEVENTS
-    bool "Generic clock events"
-    default y
-
-source "kernel/time/Kconfig"
 
 choice
         prompt "ARC Processor"
@@ -138,21 +120,6 @@ config ARCH_ARC800
           Support for ARC800 core processors.
 
 endchoice
-
-config ARCH_ARC_CURR_IN_REG
-        bool "Dedicate Register r25 for current_task pointer"
-        default N
-        help
-          This reserved Register R25 to point to Current Task in
-                kernel mode. This saves memory access for each such access
-
-config ARCH_ARC_SPACE_RND
-        bool "Address Space Randomisation (mmap/SP)"
-        default N
-        help
-          This feature enables Address space randomisation for mmap and SP
-          Note that it could lead to some performance degradation especially
-          for shared libraries so use it only if needed
 
 config SMP
         bool "Symmetric Multi-Processing (Incomplete)"
@@ -180,7 +147,76 @@ config NR_CPUS
         int "Maximum number of CPUs (2-32)"
         range 2 32
         depends on SMP
-    default "2"
+        default "2"
+
+
+menu "ARC CPU Core Configuration"
+
+menuconfig ARC700_CACHE
+    bool "Enable Cache Support"
+    default y
+
+config ARC700_USE_ICACHE
+        bool "Use Instruction Cache"
+        default y
+        depends on ARC700_CACHE
+
+config ARC700_USE_DCACHE
+        bool "Use Data Cache"
+        default y
+        depends on ARC700_CACHE
+
+config ARC700_CACHE_PAGES
+        bool "Per Page Cache Control"
+#        default y if ARC700_USE_ICACHE || ARC700_USE_DCACHE
+        depends on ARC700_CACHE && (ARC700_USE_ICACHE || ARC700_USE_DCACHE)
+        help
+        This can be used to over-ride the global I/D Cache Enable on a
+        per-page basis (but only for pages accessed via MMU such as
+        Kernel Virtual address or User Virtual Address)
+        TLB entries have a per-page Cache Enable Bit.
+        Note that Global I/D ENABLE + Per Page DISABLE works but corollary
+        Global DISABLE + Per Page ENABLE won't work
+
+config ARCH_ARC_ICCM
+		bool "Use ICCM"
+        help
+		Single Cycle RAMS to store Fast Path Code
+        default n
+
+config ARCH_ARC_DCCM
+		bool "Use DCCM"
+        help
+        Single Cycle RAMS to store Fast Path Data
+        default n
+
+config ARCH_ARC_MMU_V2
+        bool "Build Linux for MMU V2"
+        default n
+        depends on MMU
+        help
+        ARC MMU V1 has a 2 way set assoc J-TLB. This suffers thrashing in a
+        memcpy scenario where 2 D-TLB and 1 I-TLB entries compete for 2 ways
+        of same set. This requires workarounds in TLB refill code which can
+        adversely affect normal case performance. MMU V2 solves this problem
+        in hardware (using the 8 way set assoc uD-TLBs) hence we don't need
+        software workaround. Doing it at runtime was getting costly hence
+        this build option.
+
+config ARCH_ARC_LV2_INTR
+        bool "Enable two levels of Interrupts high(2)low(1)"
+        default n
+
+config ARCH_ARC_CURR_IN_REG
+        bool "Dedicate Register r25 for current_task pointer"
+        default N
+        help
+          This reserved Register R25 to point to Current Task in
+          kernel mode. This saves memory access for each such access
+
+endmenu   #CPU Core config
+
+menu "Board Configuration"
 
 config ARC700_CLK
         int "Clock speed"
@@ -192,41 +228,9 @@ config SRAM_BASE
 
 config SRAM_SIZE
         hex "SRAM Size"
-        default "0x00400000"
+        default "0x10000000"
 
-config VMALLOC_SIZE
-        int "VMALLOC_SIZE(in MB)"
-        default "256"
-        help
-        Kernel Virtual Memory Size
-
-menuconfig ARC700_CACHE
-    bool "Enable Cache Support"
-    default y
-
-if ARC700_CACHE
-
-config ARC700_USE_ICACHE
-        bool "Use Instruction Cache"
-        default y
-
-config ARC700_USE_DCACHE
-        bool "Use Data Cache"
-        default y
-
-config ARC700_CACHE_PAGES
-        bool "Per Page Cache Control"
-#        default y if ARC700_USE_ICACHE || ARC700_USE_DCACHE
-        depends on ARC700_USE_ICACHE || ARC700_USE_DCACHE
-        help
-        This can be used to over-ride the global I/D Cache Enable on a
-        per-page basis (but only for pages accessed via MMU such as
-        Kernel Virtual address or User Virtual Address)
-        TLB entries have a per-page Cache Enable Bit.
-        Note that Global I/D ENABLE + Per Page DISABLE works but corollary
-        Global DISABLE + Per Page ENABLE won't work
-
-endif #ARC700_CACHE
+endmenu   #Board config
 
 menu "ARC Pheripheral Support"
 
@@ -279,11 +283,12 @@ config ARC_UART_CONSOLE
 config SERIAL_LV2
         bool "Configure serial interrupt on level 2"
         default n
-        depends on ARC700_SERIAL
+        depends on ARC700_SERIAL && ARCH_ARC_LV2_INTR
 
 config TIMER_LV2
         bool "Configure Timer0 interrupt on level 2"
         default n
+        depends on ARCH_ARC_LV2_INTR
 
 config ARCTANGENT_EMAC
         tristate "ARCTangent EMAC support"
@@ -296,7 +301,7 @@ config ARCTANGENT_EMAC
 config EMAC_LV2
         bool "Configure EMAC interrupt on level 2"
         default n
-        depends on ARCTANGENT_EMAC
+        depends on ARCTANGENT_EMAC && ARCH_ARC_LV2_INTR
 
 config EMAC_NAPI
         bool "Use NAPI ?"
@@ -318,45 +323,6 @@ config ISS_MAC
         select IET
         select NETDEVICES
         select NET_ETHERNET
-
-config ARCH_ARC_LV2_INTR
-        bool
-        default y if EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
-        depends on EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
-
-config ARCH_ARC_ICCM
-		bool "Use ICCM"
-        help
-		Single Cycle RAMS to store Fast Path Code
-        default n
-
-config ARCH_ARC_DCCM
-		bool "Use DCCM"
-        help
-        Single Cycle RAMS to store Fast Path Data
-        default n
-
-config ARCH_ARC_MMU_V2
-        bool "Build Linux for MMU V2"
-        default n
-        depends on MMU
-        help
-        ARC MMU V1 has a 2 way set assoc J-TLB. This suffers thrashing in a
-        memcpy scenario where 2 D-TLB and 1 I-TLB entries compete for 2 ways
-        of same set. This requires workarounds in TLB refill code which can
-        adversely affect normal case performance. MMU V2 solves this problem
-        in hardware (using the 8 way set assoc uD-TLBs) hence we don't need
-        software workaround. Doing it at runtime was getting costly hence
-        this build option.
-
-config ARCH_ARC_HLINK
-        bool "Support for Metaware debugger assisted Host access"
-        default n
-        help
-        This options allows a Linux userland apps to directly access
-        host file system (open/creat/read/write etc) with help from
-        Metaware Debugger. This can come in handy for Linux-host communication
-        when there is no real usable peripherla such as EMAC.
 
 config ARCPGU
         tristate "Use ARC Pixel Graphics Unit"
@@ -445,6 +411,12 @@ config ARC_PGU_CONSOLE
     select LOGO_LINUX_CLUT224
     select BACKLIGHT_LCD_SUPPORT
 
+
+config FB_ARCPGU
+    bool
+    depends on ARC_PGU_CONSOLE
+    default y
+
 config ARCVSYNC
     bool
     depends on ARC_PGU_CONSOLE
@@ -455,16 +427,66 @@ config SOUND_ARC_AC97
         select SOUND
         select SOUND_PRIME
 
-endmenu
+menu "Bus options (PCI etc.)"
+
+config PCI
+	bool "PCI support"
+	default n
+	help
+	  If you have PCI, say Y, otherwise N.
+
+source "drivers/pci/Kconfig"
+source "drivers/pci/hotplug/Kconfig"
+source "drivers/pcmcia/Kconfig"
+
+endmenu     # Bus options
+
+endmenu     # Peripherals
+
+
+config ARCH_ARC_SPACE_RND
+        bool "Address Space Randomisation (mmap/SP)"
+        default N
+        help
+          This feature enables Address space randomisation for mmap and SP
+          Note that it could lead to some performance degradation especially
+          for shared libraries so use it only if needed
+
+config HZ
+    int "Timer Frequency"
+    default 100
+
+config GENERIC_CLOCKEVENTS
+    bool "Generic clock events"
+    default y
+
+config ARC_STACK_NONEXEC
+    bool "Make stack non-executable"
+    default n
+    help
+    By default the stack and heap areas of processes have execute permissions switched on.
+    You may choose to disable execute on the default data permissions switching this option on
+    see include/asm/page.h
+
+source "kernel/time/Kconfig"
+
+config ARCH_ARC_HLINK
+        bool "Support for Metaware debugger assisted Host access"
+        default n
+        help
+        This options allows a Linux userland apps to directly access
+        host file system (open/creat/read/write etc) with help from
+        Metaware Debugger. This can come in handy for Linux-host communication
+        when there is no real usable peripherla such as EMAC.
+
 
 menuconfig ARC_DBG
     bool "ARC debugging"
     default y
 
-if ARC_DBG
-
 config ARC_STACK_UNWIND
     bool "Enable DWARF specific kernel stack unwind"
+    depends on ARC_DBG
     default y
     select KALLSYMS
     help
@@ -478,23 +500,15 @@ config ARC_STACK_UNWIND
 
 config ARC_TLB_PARANOIA
     bool "Paranoia Checks in Low Level TLB Handlers"
+    depends on ARC_DBG
     default n
-
-config ARC_TLB_PROFILE
-    bool "Profile TLB Misses"
-    default n
-    select DEBUG_FS
-    help
-    Counts number of I and D TLB Misses and exports them via Debugfs
-    The counters can be cleared via Debugfs as well
 
 config ARC_DBG_EVENT_TIMELINE
     bool "Low level event capture"
+    depends on ARC_DBG
     default n
     help
     Capture low level events: IRQ/Trap/Exception
-
-endif #ARC_DBG
 
 config ARC_UBOOT_CMDLINE
     bool "Support U-boot kernel command line passing"
@@ -520,18 +534,6 @@ config ARC_PROFILING
     process you are interested in.
 
     If you are unsure "N" is a good choice.
-
-config HZ
-    int "Timer Frequency"
-    default 100
-
-config ARC_STACK_NONEXEC
-    bool "Make stack non-executable"
-    default n
-    help
-    By default the stack and heap areas of processes have execute permissions switched on.
-    You may choose to disable execute on the default data permissions switching this option on
-    see include/asm/page.h
 
 source "kernel/Kconfig.preempt"
 
