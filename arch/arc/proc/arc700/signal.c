@@ -108,8 +108,8 @@ asmlinkage int sys_sigsuspend(int restart, unsigned long oldmask,
 
     current->state = TASK_INTERRUPTIBLE;
     schedule();
-	set_thread_flag(TIF_RESTORE_SIGMASK);
-	return -ERESTARTNOHAND;
+    set_thread_flag(TIF_RESTORE_SIGMASK);
+    return -ERESTARTNOHAND;
 }
 
 asmlinkage int
@@ -566,10 +566,10 @@ void do_signal(struct pt_regs *regs)
     if (try_to_freeze())
         goto no_signal;
 
-	if (test_thread_flag(TIF_RESTORE_SIGMASK))
-		oldset = &current->saved_sigmask;
-	else
-		oldset = &current->blocked;
+    if (test_thread_flag(TIF_RESTORE_SIGMASK))
+        oldset = &current->saved_sigmask;
+    else
+        oldset = &current->blocked;
 
     signr = get_signal_to_deliver(&info, &ka, regs, NULL);
 
@@ -578,14 +578,14 @@ void do_signal(struct pt_regs *regs)
 
     if (signr > 0) {
         if (handle_signal(signr, &ka, &info, oldset, regs, insyscall) == 0 ) {
-			/*
-			 * A signal was successfully delivered; the saved
-			 * sigmask will have been stored in the signal frame,
-			 * and will be restored by sigreturn, so we can simply
-			 * clear the TIF_RESTORE_SIGMASK flag.
-			 */
-			if (test_thread_flag(TIF_RESTORE_SIGMASK))
-				clear_thread_flag(TIF_RESTORE_SIGMASK);
+            /*
+             * A signal was successfully delivered; the saved
+             * sigmask will have been stored in the signal frame,
+             * and will be restored by sigreturn, so we can simply
+             * clear the TIF_RESTORE_SIGMASK flag.
+             */
+            if (test_thread_flag(TIF_RESTORE_SIGMASK))
+                clear_thread_flag(TIF_RESTORE_SIGMASK);
         }
         return;
     }
@@ -602,13 +602,13 @@ no_signal:
         }
     }
 
-	/*
-	 * If there's no signal to deliver, restore the saved sigmask back
-	 */
-	if (test_thread_flag(TIF_RESTORE_SIGMASK)) {
-		clear_thread_flag(TIF_RESTORE_SIGMASK);
-		sigprocmask(SIG_SETMASK, &current->saved_sigmask, NULL);
-	}
+    /*
+     * If there's no signal to deliver, restore the saved sigmask back
+     */
+    if (test_thread_flag(TIF_RESTORE_SIGMASK)) {
+        clear_thread_flag(TIF_RESTORE_SIGMASK);
+        sigprocmask(SIG_SETMASK, &current->saved_sigmask, NULL);
+    }
 }
 
 void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
