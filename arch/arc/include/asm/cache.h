@@ -60,4 +60,9 @@
 /* used to give SHMLBA a value to avoid Cache Aliasing */
 extern unsigned int ARC_shmlba ;
 
+/* Mainly because jiffies_64 was not cache line aligned */
+#define __cacheline_aligned_in_smp					\
+  __attribute__((__aligned__(L1_CACHE_BYTES),			\
+		 __section__(".data.cacheline_aligned")))
+
 #endif /* _ASM_CACHE_H */
