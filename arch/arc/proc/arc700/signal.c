@@ -1,6 +1,20 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: July 2009
+ *  -Modified Code to support the uClibc provided userland sigreturn stub
+ *   to avoid kernel synthesing it on user stack at runtime, costing TLB
+ *   probes and Cache line flushes.
+ *  -And just in case uClibc doesnot provide the sigret stub, rewrote the PTE/TLB
+ *   permission chg code to not duplicate the code in case of kernel stub
+ *   straddling 2 pages
+ *
+ * vineetg: July 2009
+ *  -In setup_sigrame( ) and restore_sigframe( ), save/restore of user regs
+ *   in done in block copy rather than one word at a time.
+ *   This saves around 2K of code and 500 lines of asm in just 2 functions,
+ *   and LMB lat_sig "catch" numbers are lot better
+ *
  * rajeshwarr: Feb 2009
  *  - Support for Realtime Signals
  *
@@ -67,7 +81,7 @@ int do_signal(struct pt_regs *, sigset_t *);
 void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
                int exec_or_not);
 
-void set_frame_exec(unsigned long vaddr, unsigned long size, bool exec_enable);
+void set_frame_exec(unsigned long vaddr, unsigned int exec_enable);
 
 #if 0
 #define ASID_DBG_DEFS int asid_dbg1, asid_dbg2;
@@ -196,6 +210,9 @@ sys_sigaltstack(const stack_t * uss, stack_t * uoss, struct pt_regs *regs)
  */
 struct sigframe {
     struct ucontext uc;
+#define MAGIC_USERLAND_STUB     0x11091976
+#define MAGIC_KERNEL_SYNTH_STUB 0x07302004
+    unsigned int sigret_magic;
     unsigned long retcode[5];
 };
 
@@ -218,28 +235,14 @@ static int restore_sigframe(struct pt_regs *regs, struct sigframe __user * sf)
         spin_unlock_irq(&current->sighand->siglock);
     }
 
-    err |= __get_user(regs->r0, &sf->uc.uc_mcontext.r0);
-    err |= __get_user(regs->r1, &sf->uc.uc_mcontext.r1);
-    err |= __get_user(regs->r2, &sf->uc.uc_mcontext.r2);
-    err |= __get_user(regs->r3, &sf->uc.uc_mcontext.r3);
-    err |= __get_user(regs->r4, &sf->uc.uc_mcontext.r4);
-    err |= __get_user(regs->r5, &sf->uc.uc_mcontext.r5);
-    err |= __get_user(regs->r6, &sf->uc.uc_mcontext.r6);
-    err |= __get_user(regs->r7, &sf->uc.uc_mcontext.r7);
-    err |= __get_user(regs->r8, &sf->uc.uc_mcontext.r8);
-    err |= __get_user(regs->r9, &sf->uc.uc_mcontext.r9);
-    err |= __get_user(regs->r10, &sf->uc.uc_mcontext.r10);
-    err |= __get_user(regs->r11, &sf->uc.uc_mcontext.r11);
-    err |= __get_user(regs->r12, &sf->uc.uc_mcontext.r12);
-    err |= __get_user(regs->r26, &sf->uc.uc_mcontext.r26);
-    err |= __get_user(regs->fp, &sf->uc.uc_mcontext.fp);
-    err |= __get_user(regs->blink, &sf->uc.uc_mcontext.blink);
-    err |= __get_user(regs->ret, &sf->uc.uc_mcontext.ret);
-    err |= __get_user(regs->status32, &sf->uc.uc_mcontext.status32);
-    err |= __get_user(regs->lp_count, &sf->uc.uc_mcontext.lp_count);
-    err |= __get_user(regs->lp_end, &sf->uc.uc_mcontext.lp_end);
-    err |= __get_user(regs->lp_start, &sf->uc.uc_mcontext.lp_start);
-    err |= __get_user(regs->bta, &sf->uc.uc_mcontext.bta);
+    {
+        void *dst_end = &(regs->r0);
+        void *dst_start = &(regs->bta);
+        void *src_start = &(sf->uc.uc_mcontext.bta);
+        unsigned int sz1 = dst_end - dst_start + 4;
+        err |= __copy_from_user(dst_start, src_start, sz1);
+    }
+
     err |= __get_user(regs->sp, &sf->uc.uc_mcontext.sp);
 
     return err;
@@ -248,6 +251,8 @@ static int restore_sigframe(struct pt_regs *regs, struct sigframe __user * sf)
 asmlinkage int sys_sigreturn(struct pt_regs *regs)
 {
     struct sigframe __user *frame;
+    unsigned int sigret_magic;
+    int err;
 
     /* Always make any pending restarted system calls return -EINTR */
     current_thread_info()->restart_block.fn = do_no_restart_syscall;
@@ -267,12 +272,28 @@ asmlinkage int sys_sigreturn(struct pt_regs *regs)
     if (restore_sigframe(regs, frame))
         goto badframe;
 
-    set_frame_exec((unsigned long)&frame->retcode, sizeof(frame->retcode),
-                                                                EXEC_DISABLE);
+    err = __get_user(sigret_magic, &frame->sigret_magic);
+    if (err)
+        goto badframe;
+
+    /* If C-lib provided userland sigret stub, no need to do anything */
+    if (MAGIC_USERLAND_STUB != sigret_magic) {
+
+        /* If it's kernel sythesized sigret stub, need to undo
+         *  the PTE/TLB changes for making stack executable
+         */
+        if (MAGIC_KERNEL_SYNTH_STUB == sigret_magic) {
+            set_frame_exec((unsigned long)&frame->retcode, EXEC_DISABLE);
+        }
+        else {  /* user corrupted the signal stack */
+            printk("sig stack corrupted");
+            goto badframe;
+        }
+    }
 
     return regs->r0;
 
-    badframe:
+badframe:
     force_sig(SIGSEGV, current);
     return 0;
 }
@@ -280,6 +301,8 @@ asmlinkage int sys_sigreturn(struct pt_regs *regs)
 asmlinkage int sys_rt_sigreturn(struct pt_regs *regs)
 {
     struct rt_sigframe __user *frame;
+    unsigned int sigret_magic;
+    int err;
 
     /* Always make any pending restarted system calls return -EINTR */
     current_thread_info()->restart_block.fn = do_no_restart_syscall;
@@ -302,8 +325,24 @@ asmlinkage int sys_rt_sigreturn(struct pt_regs *regs)
     if (do_sigaltstack(&frame->sig.uc.uc_stack, NULL, regs->sp) == -EFAULT)
         goto badframe;
 
-    set_frame_exec((unsigned long)&frame->sig.retcode,
-                            sizeof(frame->sig.retcode), EXEC_DISABLE);
+    err = __get_user(sigret_magic, &frame->sig.sigret_magic);
+    if (err)
+        goto badframe;
+
+    /* If C-lib provided userland sigret stub, no need to do anything */
+    if (MAGIC_USERLAND_STUB != sigret_magic) {
+
+        /* If it's kernel sythesized sigret stub, need to undo
+         *  the PTE/TLB changes for making stack executable
+         */
+        if (MAGIC_KERNEL_SYNTH_STUB == sigret_magic) {
+            set_frame_exec((unsigned long)&frame->sig.retcode, EXEC_DISABLE);
+        }
+        else {  /* user corrupted the signal stack */
+            printk("sig stack corrupted");
+            goto badframe;
+        }
+    }
 
     return regs->r0;
 
@@ -312,35 +351,24 @@ asmlinkage int sys_rt_sigreturn(struct pt_regs *regs)
     return 0;
 }
 
-static int
+static int noinline
 setup_sigframe(struct sigframe __user * sf, struct pt_regs *regs,
            sigset_t * set)
 {
-
     int err;
+    void *src_end = &(regs->r0);
+    void *src_start = &(regs->bta);
+    void *dst_start = &(sf->uc.uc_mcontext.bta);
 
-    err = __put_user(regs->r0, &sf->uc.uc_mcontext.r0);
-    err |= __put_user(regs->r1, &sf->uc.uc_mcontext.r1);
-    err |= __put_user(regs->r2, &sf->uc.uc_mcontext.r2);
-    err |= __put_user(regs->r3, &sf->uc.uc_mcontext.r3);
-    err |= __put_user(regs->r4, &sf->uc.uc_mcontext.r4);
-    err |= __put_user(regs->r5, &sf->uc.uc_mcontext.r5);
-    err |= __put_user(regs->r6, &sf->uc.uc_mcontext.r6);
-    err |= __put_user(regs->r7, &sf->uc.uc_mcontext.r7);
-    err |= __put_user(regs->r8, &sf->uc.uc_mcontext.r8);
-    err |= __put_user(regs->r9, &sf->uc.uc_mcontext.r9);
-    err |= __put_user(regs->r10, &sf->uc.uc_mcontext.r10);
-    err |= __put_user(regs->r11, &sf->uc.uc_mcontext.r11);
-    err |= __put_user(regs->r12, &sf->uc.uc_mcontext.r12);
-    err |= __put_user(regs->r26, &sf->uc.uc_mcontext.r26);
-    err |= __put_user(regs->fp, &sf->uc.uc_mcontext.fp);
-    err |= __put_user(regs->blink, &sf->uc.uc_mcontext.blink);
-    err |= __put_user(regs->ret, &sf->uc.uc_mcontext.ret);
-    err |= __put_user(regs->status32, &sf->uc.uc_mcontext.status32);
-    err |= __put_user(regs->lp_count, &sf->uc.uc_mcontext.lp_count);
-    err |= __put_user(regs->lp_end, &sf->uc.uc_mcontext.lp_end);
-    err |= __put_user(regs->lp_start, &sf->uc.uc_mcontext.lp_start);
-    err |= __put_user(regs->bta, &sf->uc.uc_mcontext.bta);
+    /* bta to r0 is laid out same in both pt_regs and sigcontext */
+    unsigned int sz1 = src_end - src_start + 4;
+
+    /* Bulk Copy the part of reg file which is common in layout in
+     * both the structs
+     */
+    err = __copy_to_user(dst_start, src_start, sz1);
+
+    /* Hand Copy whatever is left */
     err |= __put_user(regs->sp, &sf->uc.uc_mcontext.sp);
 
     err |= __copy_to_user(&sf->uc.uc_sigmask, set, sizeof(sigset_t));
@@ -373,26 +401,26 @@ static inline void *get_sigframe(struct k_sigaction *ka, struct pt_regs *regs,
 }
 
 /* Set up to return from userspace */
-static int
-setup_mode_change(int usig, struct k_sigaction *ka, struct pt_regs *regs,
-                                                        void __user *frame)
+static int noinline
+setup_mode_change(struct k_sigaction *ka, struct pt_regs *regs,
+                    struct sigframe __user *frame)
 {
     unsigned long *retcode;
     int err = 0;
-
-    if (ka->sa.sa_flags & SA_SIGINFO)
-        retcode = ((struct rt_sigframe *)frame)->sig.retcode;
-    else
-        retcode = ((struct sigframe *)frame)->retcode;
-
 
     /* Setup for returning from signal handler(USER Mode => KERNEL Mode)*/
 
     /* If provided, use a stub already in userspace */
     if (ka->sa.sa_flags & SA_RESTORER) {
         retcode = (unsigned long *)ka->sa.sa_restorer;
-    } else {
+        err = __put_user(MAGIC_USERLAND_STUB, &frame->sigret_magic);
+        if (err)
+            return err;
+    }
+    else {
         unsigned int code;
+
+        retcode = frame->retcode;
 
         /* A7 is middle endian ! */
         if (ka->sa.sa_flags & SA_SIGINFO)
@@ -407,32 +435,21 @@ setup_mode_change(int usig, struct k_sigaction *ka, struct pt_regs *regs,
         err |= __put_user(code, retcode + 2);
         code = 0x7000264a;            /* code for nop */
         err |= __put_user(code, retcode + 3);
-    }
 
-    if (err)
-        return err;
+        err |= __put_user(MAGIC_KERNEL_SYNTH_STUB, &frame->sigret_magic);
+        if (err)
+            return err;
 
     /* To be able execute the code on the stack(retcode), we need to enable the
      * execute permissions of the stack: In the pte entry and in the TLB entry.
      */
-    set_frame_exec((unsigned long)retcode,
-                        sizeof(((struct sigframe *)0)->retcode), EXEC_ENABLE);
-
-
-    /* Setup for invoking the signal handler (KERNEL Mode => USER Mode) */
-
-    /* Arguements to the user Signal handler */
-    regs->r0 = usig;
-    if (ka->sa.sa_flags & SA_SIGINFO) {
-        struct rt_sigframe *rt_frame = frame;
-        regs->r1 = (unsigned long)&rt_frame->info;
-        regs->r2 = (unsigned long)&rt_frame->sig.uc;
+        set_frame_exec((unsigned long)retcode, EXEC_ENABLE);
     }
 
     /* Modify critical regs, so that when control goes back to user-mode
-     * it starts executing the user space Signal handler
+     * it starts executing the user space Signal handler and when that handler
+     * returns, it invokes sigreturn sys call
      */
-    regs->sp = ((unsigned long)frame);
     regs->blink = (unsigned long)retcode;
     regs->ret = (unsigned long)ka->sa.sa_handler;
 
@@ -459,7 +476,13 @@ static int setup_frame(int sig, struct k_sigaction *ka,
     err = setup_sigframe(frame, regs, set);
 
     if(!err)
-        err |= setup_mode_change(sig, ka, regs, frame);
+        err |= setup_mode_change(ka, regs, frame);
+
+    /* Arguements to the user Signal handler */
+    regs->r0 = sig;
+
+    /* User Stack for signal handler will be above the frame just carved */
+    regs->sp = (unsigned long)frame;
 
     return err;
 }
@@ -467,29 +490,37 @@ static int setup_frame(int sig, struct k_sigaction *ka,
 static int setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t * info,
                sigset_t * set, struct pt_regs *regs)
 {
-    struct rt_sigframe __user *frame;
+    struct rt_sigframe __user *rt_frame;
     stack_t stack;
     int err;
 
-    frame = get_sigframe(ka, regs, sizeof(struct rt_sigframe));
+    rt_frame = get_sigframe(ka, regs, sizeof(struct rt_sigframe));
 
-    if (!frame)
+    if (!rt_frame)
         return 1;
 
-    err = copy_siginfo_to_user(&frame->info, info);
-    err |= __put_user(0, &frame->sig.uc.uc_flags);
-    err |= __put_user(NULL, &frame->sig.uc.uc_link);
+    err = copy_siginfo_to_user(&rt_frame->info, info);
+    err |= __put_user(0, &rt_frame->sig.uc.uc_flags);
+    err |= __put_user(NULL, &rt_frame->sig.uc.uc_link);
 
     memset(&stack, 0, sizeof(stack));
     stack.ss_sp = (void __user *)current->sas_ss_sp;
     stack.ss_flags = sas_ss_flags(regs->sp);
     stack.ss_size  = current->sas_ss_size;
-    err |= __copy_to_user(&frame->sig.uc.uc_stack, &stack, sizeof(stack));
+    err |= __copy_to_user(&rt_frame->sig.uc.uc_stack, &stack, sizeof(stack));
 
-    err |= setup_sigframe(&frame->sig, regs, set);
+    err |= setup_sigframe(&rt_frame->sig, regs, set);
 
     if (!err)
-        err |= setup_mode_change(sig, ka, regs, frame);
+        err |= setup_mode_change(ka, regs, &(rt_frame->sig));
+
+    /* Arguements to the user Signal handler */
+    regs->r0 = sig;
+    regs->r1 = (unsigned long)&rt_frame->info;
+    regs->r2 = (unsigned long)&rt_frame->sig.uc;
+
+    /* User Stack for signal handler will be above the frame just carved */
+    regs->sp = (unsigned long)rt_frame;
 
     return err;
 }
@@ -626,28 +657,26 @@ void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
 }
 
 
-void set_frame_exec(unsigned long vaddr, unsigned long size, bool exec_enable)
+void set_frame_exec(unsigned long vaddr, unsigned int exec_enable)
 {
-    unsigned long paddr, vaddr_pg;
+    unsigned long paddr, vaddr_pg, off_from_pg_start;
     pte_t *ptep, pte;
-    unsigned long size_on_pg1, size_on_pg2;
+    unsigned long size_on_pg, size_on_pg2;
+    unsigned long fr_sz=sizeof(((struct sigframe *)(0))->retcode);
     ASID_DBG_DEFS;
 
-    size_on_pg2 = ~PAGE_MASK & (vaddr + size);
-    if (size_on_pg2 >= size) {
-        /* entire frame can never goto 2nd page
-         * this means all of it lies in 1st page
-         */
-        size_on_pg2 = 0;
-    }
-    size_on_pg1 = size - size_on_pg2;
+    off_from_pg_start = vaddr - (vaddr & PAGE_MASK);
+    size_on_pg = min(fr_sz, PAGE_SIZE - off_from_pg_start);
+    size_on_pg2 = fr_sz - size_on_pg;
+
+do_per_page:
 
     vaddr_pg = vaddr & PAGE_MASK;       /* Get the virtual page address */
 
     /* Get the physical page address for the virtual page address*/
     ptep = pte_offset(
                     pmd_offset (
-                            pgd_offset(current->mm, vaddr_pg),
+                            pgd_offset_fast(current->mm, vaddr_pg),
                             vaddr_pg),
                     vaddr_pg);
 
@@ -664,40 +693,36 @@ void set_frame_exec(unsigned long vaddr, unsigned long size, bool exec_enable)
 
     /* Flush dcache line, and inv Icache line for frame->retcode */
     if (exec_enable)
-        flush_dcache_range(paddr, paddr + size_on_pg1);
-    flush_icache_range(paddr, paddr + size_on_pg1);
+        flush_dcache_range(paddr, paddr + size_on_pg);
+    flush_icache_range(paddr, paddr + size_on_pg);
 
     ASID_DBG1;
     mod_tlb_permission(vaddr_pg, current->mm, exec_enable);
 
 
     if (size_on_pg2) {
-        vaddr_pg = (vaddr + size) & PAGE_MASK;
+        vaddr = vaddr_pg + PAGE_SIZE;
+        size_on_pg = size_on_pg2;
+        size_on_pg2 = 0;
+        goto do_per_page;
+    }
+}
 
-        /* Get the physical page address for the virtual page address*/
-        ptep = pte_offset(
-                    pmd_offset (
-                            pgd_offset(current->mm, vaddr_pg),
-                            vaddr_pg),
-                    vaddr_pg);
+void __init arc_verify_sig_sz(void)
+{
+    struct sigframe __user sf;
+    struct pt_regs regs;
 
-        /* Set the Execution Permission in the pte entry*/
-        pte = *ptep;
-        if (exec_enable)
-            pte = pte_mkexec(pte);
-        else
-            pte = pte_exprotect(pte);
-        set_pte(ptep, pte);
+    void *src_end = &(regs.r0);
+    void *src_start = &(regs.bta);
+    void *dst_end = &(sf.uc.uc_mcontext.r0);
+    void *dst_start = &(sf.uc.uc_mcontext.bta);
 
-        /* Get the physical page address */
-        paddr = pte_val(pte) & PAGE_MASK;
+    unsigned int sz1 = src_end - src_start + 4;
+    unsigned int sz2 = dst_end - dst_start + 4;
 
-        /* Flush dcache line, and inv Icache line for frame->retcode */
-        if (exec_enable)
-            flush_dcache_range(paddr, paddr + size_on_pg2);
-        flush_icache_range(paddr, paddr + size_on_pg2);
-
-        ASID_DBG2;
-        mod_tlb_permission(vaddr_pg, current->mm, exec_enable);
+    if(sz1 != sz2) {
+        printk_init("Signals block copy code buggy\n");
+        panic("\n");
     }
 }

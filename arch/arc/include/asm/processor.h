@@ -76,10 +76,15 @@
  */
 #define TASK_UNMAPPED_BASE      (TASK_SIZE / 3)
 
+/* Arch specific stuff which needs to be saved per task.
+ * However these items are not so important so as to earn a place in
+ * struct thread_info
+ */
 struct thread_struct {
     unsigned long   ksp;            /* kernel mode stack pointer */
     unsigned long   callee_reg;     /* pointer to callee regs */
     unsigned long   fault_address;  /* fault address when exception occurs */
+    unsigned long   cause_code;     /* Exception Cause Code (ECR) */
 #ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     unsigned long   user_r25;
 #endif
@@ -119,7 +124,14 @@ extern int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags);
 #define release_segments(mm)        do { } while (0)
 
 #define KSTK_EIP(tsk)   (task_pt_regs(tsk)->ret)
+
+/* Where abouts of Task's sp, fp, blink when it was last seen in kernel mode.
+ * So these can't be derived from pt_regs as that would give it's
+ * sp, fp, blink of user mode
+ */
 #define KSTK_ESP(tsk)   (tsk->thread.ksp)
+#define KSTK_BLINK(tsk) (*((unsigned int *)((KSTK_ESP(tsk)) + (13+1+1)*4)))
+#define KSTK_FP(tsk)    (*((unsigned int *)((KSTK_ESP(tsk)) + (13+1)*4)))
 
 /*
  * Do necessary setup to start up a newly executed thread.

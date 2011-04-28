@@ -445,3 +445,26 @@ void arc_ctx_callout(struct task_struct *next)
 }
 
 #endif
+
+/*
+ * API: expected by schedular Code: If thread is sleeping where is that.
+ * What is this good for? it will be always the scheduler or ret_from_fork.
+ * So we hard code that anyways.
+ */
+unsigned long thread_saved_pc(struct task_struct *t)
+{
+    struct pt_regs *regs = task_pt_regs(t);
+    unsigned long blink = 0;
+
+    /* If the thread being queried for in not itself calling this, then it
+     * implies it is not executing, which in turn implies it is sleeping,
+     * which in turn implies it got switched OUT by the schedular.
+     * In that case, it's kernel mode blink can reliably retrieved as per
+     * the picture above (right above pt_regs).
+     */
+    if ( t != current && t->state != TASK_RUNNING ) {
+        blink = *((unsigned int *)((unsigned long)regs - 4));
+    }
+
+    return blink;
+}

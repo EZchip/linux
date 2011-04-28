@@ -382,6 +382,24 @@ static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 
 #define pgd_offset(mm, addr)	(((mm)->pgd)+pgd_index(addr))
 
+/* Macro to quickly access the PGD entry, utlising the fact that some
+ * arch may cache the pointer to Page Directory of "current" task
+ * in a MMU register
+ *
+ * Thus task->mm->pgd (3 pointer dereferences, cache misses etc simply
+ * becomes read a register
+ *
+ * ********CAUTION*******:
+ * Kernel code might be dealing with some mm_struct of NON "current"
+ * Thus use this macro only when you are certain that "current" is current
+ * e.g. when dealing with signal frame setup code etc
+ */
+#define pgd_offset_fast(mm, addr)\
+({ \
+    pgd_t *pgd_base = (pgd_t *) read_new_aux_reg(ARC_REG_SCRATCH_DATA0);  \
+    pgd_base + pgd_index(addr); \
+})
+
 /* Find an entry in the second-level page table */
 static inline pmd_t *pmd_offset(pud_t *dir, unsigned long address)
 {

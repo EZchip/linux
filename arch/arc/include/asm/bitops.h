@@ -1,4 +1,12 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2009-2010
+ *
+ * Vineetg: July 2009 (EXT2 bitops API optimisation)
+ *	-Atomic API no longer call spin_lock as we are Uni-processor
+ *	-Non Atomix API no longer disables interrupts
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -360,12 +368,15 @@ static __inline__ unsigned long ffz(unsigned long word)
 /* ARC by deault is little endian */
 #ifndef __BIG_ENDIAN__
 
-#define ext2_set_bit(nr, addr) test_and_set_bit((nr), (addr))
-#define ext2_clear_bit(nr, addr) test_and_clear_bit((nr), (addr))
+#define ext2_set_bit(nr, addr) __test_and_set_bit((nr), (addr))
+#define ext2_clear_bit(nr, addr) __test_and_clear_bit((nr), (addr))
 #define ext2_test_bit(nr, addr) test_bit((nr), (addr))
 #define ext2_find_first_zero_bit(addr, size) find_first_zero_bit((addr), (size))
 #define ext2_find_next_zero_bit(addr, size, offset) \
                 find_next_zero_bit((addr), (size), (offset))
+
+#define ext2_set_bit_atomic(lock, nr, addr) test_and_set_bit((nr), (addr))
+#define ext2_clear_bit_atomic(lock, nr, addr) test_and_clear_bit((nr), (addr))
 
 #else   /* __BIG_ENDIAN__ */
 
@@ -488,7 +499,6 @@ found_middle:
 #include <asm-generic/bitops/fls64.h>
 #include <asm-generic/bitops/find.h>
 #include <asm-generic/bitops/sched.h>
-#include <asm-generic/bitops/ext2-atomic.h>
 #include <asm-generic/bitops/lock.h>
 #endif /* __KERNEL__ */
 

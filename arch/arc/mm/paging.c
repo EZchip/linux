@@ -53,6 +53,7 @@ void copy_page(void *to, void *from)
 	    );
 
 }
+EXPORT_SYMBOL(copy_page);
 
 /* Initialize the new pgd with invalid ptes */
 

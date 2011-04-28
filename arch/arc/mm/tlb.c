@@ -47,15 +47,8 @@
  * a700 specific mmu/tlb code.
  */
 
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/sched.h>
-#include <linux/mm.h>
-#include <linux/interrupt.h>
 #include <linux/module.h>
-#include <asm/page.h>
 #include <asm/arcregs.h>
-#include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 #include <asm/system.h>
 #include <asm/tlb.h>
@@ -210,16 +203,15 @@ unsigned int tlb_entry_erase(unsigned int vaddr_n_asid)
  * utlb_invalidate ( )
  *  -For v2 MMU calls Flush uTLB Cmd
  *  -For v1 MMU does nothing (except for Metal Fix v1 MMU)
- *      This is because in v1 TLbWrite itself invalidate uTLBs
+ *      This is because in v1 TLBWrite itself invalidate uTLBs
  ***************************************************************************/
 
 static void utlb_invalidate(void)
 {
-    unsigned int idx;
-
-    if ( mmu_info.ver == MMU_VER_2 || /* Available only in v2 MMU */
-         METAL_FIX )                  /* Metal Fix v1 MMU also has IVUTLB */
+#if (METAL_FIX || defined(CONFIG_ARCH_ARC_MMU_V2))
     {
+        unsigned int idx;
+
         /* make sure INDEX Reg is valid */
         idx = read_new_aux_reg(ARC_REG_TLBINDEX);
 
@@ -230,6 +222,8 @@ static void utlb_invalidate(void)
 
         write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBIVUTLB);
     }
+#endif
+
 }
 
 /*
@@ -263,7 +257,7 @@ void local_flush_tlb_all(void)
 /*
  * Flush the entrie MM for userland. The fastest way is to move to Next ASID
  */
-void local_flush_tlb_mm(struct mm_struct *mm)
+void noinline local_flush_tlb_mm(struct mm_struct *mm)
 {
     get_new_mmu_context(mm, 1);
 }
@@ -372,7 +366,7 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 /*
  * Routine to create a TLB entry
  */
-void update_mmu_cache(struct vm_area_struct *vma, unsigned long address, pte_t pte)
+void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
 {
     unsigned long flags;
     pgd_t *pgdp;
@@ -380,13 +374,6 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long address, pte_t p
     pte_t *ptep;
     unsigned int idx, pid;
     unsigned long glv_bits;
-    unsigned long pfn = pte_pfn(pte);
-
-    if(!pfn_valid(pfn))
-        return;
-
-    if (current->active_mm != vma->vm_mm)
-        return;
 
     local_irq_save(flags);
     pid = read_new_aux_reg(ARC_REG_PID) & 0xff;
@@ -409,21 +396,23 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long address, pte_t p
 #endif
 
     /* Traverse Page Tables to get PTE */
+    // TODO-vineetg: investigate if really need to do this
     address &= PAGE_MASK;
-    pgdp = pgd_offset(vma->vm_mm, address);
+    pgdp = pgd_offset_fast(vma->vm_mm, address);
     pmdp = pmd_offset(pgdp, address);
     ptep = pte_offset(pmdp, address);
+
+    BUG_ON(pte_val(pte) != pte_val(*ptep));
 
     /* update this PTE credentials */
     pte_val(*ptep) |= (_PAGE_VALID | _PAGE_ACCESSED);
 
     /* Create HW TLB entry Flags (in PD0) from PTE Flags */
-#define GLV_MASK (_PAGE_GLOBAL | _PAGE_LOCKED | _PAGE_VALID)
-    glv_bits = ((pte_val(*ptep) & GLV_MASK) >> 1);
+    glv_bits = ((pte_val(pte) & PTE_BITS_IN_PD0) >> 1);
     write_new_aux_reg(ARC_REG_TLBPD0, (address | glv_bits | pid));
 
     /* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags etc) */
-    write_new_aux_reg(ARC_REG_TLBPD1, (pte_val(*ptep) & TLBPD1_MASK));
+    write_new_aux_reg(ARC_REG_TLBPD1, (pte_val(pte) & PTE_BITS_IN_PD1));
 
     /* First verify if entry for this vaddr+ASID already exists */
     write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBProbe);
@@ -445,7 +434,37 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long address, pte_t p
     write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBWrite);
 
     local_irq_restore(flags);
-    flush_cache_page(vma, address, pfn);
+}
+
+/*
+ * Things to do when a new PTE is entered in Page Tables or an existing one
+ * is modified.
+ * (1) for VIPT caches, deal with Cache flushing.
+ * (2) Also as an optimisation, create/modify the TLB entry corresponding
+ *    to vaddr+pfn. This routine, most likely got called as a result of
+ *    TLB Miss or Prot Violation (to break COW) with fast Path TLB refill code
+ *    unable to create the TLB.
+ *   TLB Miss => page fault hdlr => VM code => chg PTE => update_mmu_cache()
+ *   So it provides an opportunity to create the TLB. Otherwise if we simply fix
+ *   the VM data structures (Page Tables) in this control flow and return away
+ *   from page fault handler, SAME TLB Miss will be taken again, and
+ *   Fast Path TLB Refill code will create the TLB. Creating the TLB here will
+ *   save one TLB Miss exception
+ */
+
+void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t pte)
+{
+    unsigned long pfn = pte_pfn(pte);
+
+    if(!pfn_valid(pfn))
+        return;
+
+    if (current->active_mm != vma->vm_mm)
+        return;
+
+    create_tlb(vma, vaddress, pte);
+
+    flush_cache_page(vma, vaddress, pfn);
 }
 
 char * arc_mmu_mumbojumbo(int cpu_id, char *buf)
@@ -471,7 +490,6 @@ char * arc_mmu_mumbojumbo(int cpu_id, char *buf)
 static void __init probe_tlb(void)
 {
     unsigned int tmp;
-    extern int mmu_write_cmd;
 	char str[256];
 
     /* Read MMU Build Configuration Register */
@@ -492,11 +510,23 @@ static void __init probe_tlb(void)
         panic("Linux TLB sz (%d) mismatches H/W (%d)\n", TLB_SIZE,tmp);
     }
 
-    /* Establish if we need to use TLBWrite or TLBWriteNI */
-    if ( mmu_info.ver == MMU_VER_2 )
-        mmu_write_cmd = TLBWriteNI;
-    else
-        mmu_write_cmd = TLBWrite;  // Old v1 MMU and Metal Fix v1 MMU
+    /* By default, Linux is built for older MMU V1.
+     * This must match the hardware it is running on.
+     * Linux built for MMU V2, if run on MMU V1 will break down because V1
+     *  hardware doesn't understand cmds such as WriteNI, or IVUTLB
+     * On the other hand, Linux built for V1 if run on MMU V2 will do
+     *   un-needed workarounds to prevent memcpy thrashing.
+     */
+#ifdef CONFIG_ARCH_ARC_MMU_V2
+    if ( mmu_info.ver != MMU_VER_2 ) {
+        panic("Linux built for MMU V2, won't function. please rebuild...\n");
+    }
+#else
+    if ( mmu_info.ver == MMU_VER_2 ) {
+        panic("Linux not optimsed for MMU V2. please rebuild...\n");
+    }
+
+#endif
 
     printk("TLB Refill \"will %s\" Flush uTLBs\n",
                 mmu_info.ver == MMU_VER_2 ? "NOT":"");

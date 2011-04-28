@@ -28,7 +28,6 @@ export PLATFORM
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin -D__linux__ -O3
-KBUILD_AFLAGS		+= $(KBUILD_CFLAGS)
 
 MODFLAGS	+= -mlong-calls
 
@@ -58,6 +57,9 @@ KBUILD_AFLAGS		+= -mbig-endian
 LINKFLAGS	+= -EB
 LDFLAGS		+= -EB
 endif
+
+#setup AFLAGS from CFLAGS when we are done with all the CFLAGS
+KBUILD_AFLAGS		+= $(KBUILD_CFLAGS)
 
 LIBGCC		:= $(shell $(CC) $(KBUILD_CFLAGS) --print-libgcc-file-name)
 

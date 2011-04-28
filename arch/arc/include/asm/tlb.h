@@ -54,18 +54,28 @@
  * New Cmds because of MMU Changes
  *************************************/
 
-#if (METAL_FIX==0)      /* MMU v2 or V1 */
+#ifdef CONFIG_ARCH_ARC_MMU_V2
 
 #define TLBWriteNI  0x5     // JH special -- write JTLB without inv uTLBs
 #define TLBIVUTLB   0x6     //JH special -- explicitly inv uTLBs
 
-#else   /* Metal Fix: Old MMU but a new Cmd */
+#elif (METAL_FIX==1)   /* Metal Fix: Old MMU but a new Cmd */
 
 #define TLBWriteNI  TLBWrite    // WriteNI doesn't exist on this H/w
 #define TLBIVUTLB   0x5         // This is the only additional cmd
 
+#else /* MMU V1 */
+
+#undef TLBWriteNI       // These cmds don't exist on older MMU
+#undef TLBIVUTLB
+
 #endif
 
+#define PTE_BITS_IN_PD0    (_PAGE_GLOBAL | _PAGE_LOCKED | _PAGE_VALID)
+#define PTE_BITS_IN_PD1    (PAGE_MASK | \
+                             _PAGE_CACHEABLE | \
+                             _PAGE_EXECUTE | _PAGE_WRITE | _PAGE_READ | \
+                             _PAGE_K_EXECUTE | _PAGE_K_WRITE | _PAGE_K_READ)
 
 #ifndef __ASSEMBLY__
 void tlb_init(void);

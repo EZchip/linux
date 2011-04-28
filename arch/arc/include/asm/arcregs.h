@@ -117,8 +117,6 @@
 #define TIMER_CTRL_IE    (1 << 0)    /* Interupt when Count reachs limit */
 #define TIMER_CTRL_NH    (1 << 1)    /* Count only when CPU NOT halted */
 
-#define TLBPD1_MASK 0xffffe1fc /* Mask of bits to be written to the TLBPD1 */
-
 #ifdef CONFIG_ARCH_ARC800
 
 #define ARC_AUX_IDU_REG_CMD     0x2000
@@ -221,13 +219,17 @@ struct cpuinfo_arc_extn {
         /* Prog Ref Manual */
         swap:1, norm:2, minmax:2, barrel:2, mul:2, ext_arith:2,
 
-        mac_mul:8,          /* DSP Options Ref Manual */
         crc:1,              /* DSP-LIB Ref Manual */
         dccm:1, iccm:1,
         dvfb:1,             /* Dual Viterbi Butterfly Instrn:
                                Exotic but not supported by 700
                              */
-        padding:9;
+        padding:1;
+};
+
+/* DSP Options Ref Manual */
+struct cpuinfo_arc_extn_mac_mul {
+    int ver:8, type:8;
 };
 
 struct cpuinfo_arc_extn_xymem {
@@ -240,6 +242,9 @@ struct bcr_cache {
     unsigned long ver:8, type:4, sz:4, line_len:4, pad:12;
 };
 
+struct bcr_uncached_space {
+    unsigned long pad:8, sz:8, pad2:8, start:8;
+};
 
 #ifdef CONFIG_ARCH_ARC800
 struct cpuinfo_arc800 {
@@ -261,9 +266,11 @@ struct cpuinfo_arc {
     unsigned int timers;
     unsigned int vec_base;
     unsigned int perip_base;
+    struct bcr_uncached_space uncached_space;   // For mapping Periph Regs etc
     struct cpuinfo_arc_mmu mmu;
     struct cpuinfo_arc_extn extn;
-    struct cpuinfo_arc_extn_xymem xymem_extn;
+    struct cpuinfo_arc_extn_xymem extn_xymem;
+    struct cpuinfo_arc_extn_mac_mul extn_mac_mul;
     struct arc_cache *cache;
 #ifdef CONFIG_ARCH_ARC800
     struct cpuinfo_arc800  mp;

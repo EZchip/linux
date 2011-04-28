@@ -32,10 +32,6 @@
 #ifndef _ASM_ARC_MMU_CONTEXT_H
 #define _ASM_ARC_MMU_CONTEXT_H
 
-#include <linux/slab.h>
-#include <linux/interrupt.h> /* For save_and_cli() */
-#include <asm/pgalloc.h>
-#include <asm/pgtable.h>
 #include <asm/arcregs.h>
 #include <asm/tlb.h>
 

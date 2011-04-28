@@ -7,100 +7,86 @@
 #include <linux/ptrace.h>
 #include <linux/module.h>
 #include <asm/arcregs.h>
-#include <asm/traps.h>		/* defines for Reg values */
+#include <asm/traps.h>      /* defines for Reg values */
 #include <asm/utils.h>
 
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
-volatile int debug_user_faults = 1; /* Display Reg file etc on user faults */
-#endif
+static void show_ecr_verbose(struct pt_regs *regs);
+void show_callee_regs(struct callee_regs *cregs);
+
+/* For dumping register file (r0-r12) or (r13-r25), instead of 13 printks,
+ * we simply loop as compiler genrates 13 calls to printk each with it's
+ * own arg setup
+ */
+void noinline print_reg_file(unsigned long *last_reg, int num)
+{
+    unsigned int i;
+
+    for (i = num; i < num + 13; i++) {
+        printk("r%02u: %08lx\t", i, *last_reg);
+        if ( i && ( ( i % 3) == 0 )) printk("\n");
+        last_reg--;
+    }
+}
 
 void show_regs(struct pt_regs *regs)
 {
-    unsigned int i = 0;
-    printk("sp: 0x%08lx\tfp: 0x%08lx\n", regs->sp, regs->fp);
-    printk("ret: 0x%08lx\tblink: 0x%08lx\n", regs->ret, regs->blink);
-    printk("status32: 0x%08lx\n", regs->status32);
-    printk("r%02u: %08lx\t", i++, regs->r0);
-    printk("r%02u: %08lx\t", i++, regs->r1);
-    printk("r%02u: %08lx\t", i++, regs->r2);
-    printk("\n");
-    printk("r%02u: %08lx\t", i++, regs->r3);
-    printk("r%02u: %08lx\t", i++, regs->r4);
-    printk("r%02u: %08lx\t", i++, regs->r5);
-    printk("\n");
-    printk("r%02u: %08lx\t", i++, regs->r6);
-    printk("r%02u: %08lx\t", i++, regs->r7);
-    printk("r%02u: %08lx\t", i++, regs->r8);
-    printk("\n");
-    printk("r%02u: %08lx\t", i++, regs->r9);
-    printk("r%02u: %08lx\t", i++, regs->r10);
-    printk("r%02u: %08lx\t", i++, regs->r11);
-    printk("\n");
-    printk("r%02u: %08lx\t", i++, regs->r12);
+    struct callee_regs *cregs;
+
+    if (current->thread.cause_code)
+        show_ecr_verbose(regs);
+
+    /* print regs->r0 thru regs->r12
+     * Sequential printing was generating horrible code
+     */
+    print_reg_file(&(regs->r0), 0);
+
+    // If Callee regs were saved, display them too
+    cregs = (struct callee_regs *) current->thread.callee_reg;
+    if (cregs) show_callee_regs(cregs);
 }
 
 void show_callee_regs(struct callee_regs *cregs)
 {
-    unsigned int i = 13;
-    printk("r%02u: %08lx\t", i++, cregs->r13);
-    printk("r%02u: %08lx\t", i++, cregs->r14);
+    print_reg_file(&(cregs->r13), 13);
     printk("\n");
-    printk("r%02u: %08lx\t", i++, cregs->r15);
-    printk("r%02u: %08lx\t", i++, cregs->r16);
-    printk("r%02u: %08lx\t", i++, cregs->r17);
-    printk("\n");
-    printk("r%02u: %08lx\t", i++, cregs->r18);
-    printk("r%02u: %08lx\t", i++, cregs->r19);
-    printk("r%02u: %08lx\t", i++, cregs->r20);
-    printk("\n");
-    printk("r%02u: %08lx\t", i++, cregs->r21);
-    printk("r%02u: %08lx\t", i++, cregs->r22);
-    printk("r%02u: %08lx\t", i++, cregs->r23);
-    printk("\n");
-    printk("r%02u: %08lx\t", i++, cregs->r24);
-    printk("r%02u: %08lx\t", i++, cregs->r25);
-    printk("\n\n");
 }
 
 /************************************************************************
  *  Verbose Display of Exception
  ***********************************************************************/
 
-void show_fault_diagnostics(const char *str, struct pt_regs *regs,
-    struct callee_regs *cregs, unsigned long address, unsigned long cause_reg)
+static void show_ecr_verbose(struct pt_regs *regs)
 {
+    unsigned int cause_vec, cause_code, cause_reg;
+    unsigned long address;
     struct task_struct *tsk = current;
-    int cause_vec, cause_code;
 
-    if (user_mode(regs)) {
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
-        if (!debug_user_faults)
-#endif
-		return;
-	}
+    printk("Current task = '%s', PID = %u, ASID = %lu\n", tsk->comm,
+               tsk->pid, tsk->active_mm->context.asid);
 
-    printk("%s\n[ECR]: 0x%08lx\n", str, cause_reg);
-    printk("Faulting Instn : 0x%08lx\n", regs->ret);
+    cause_reg = current->thread.cause_code;
+
+     /* For Data fault, this is data address not instruction addr */
+    address = current->thread.fault_address;
 
     cause_vec = cause_reg >> 16;
     cause_code = ( cause_reg >> 8 ) & 0xFF;
 
     /* For DTLB Miss or ProtV, display the memory involved too */
-    if (cause_vec == 0x22)  // DTLB Miss
+    if ( cause_vec == 0x22)   // DTLB Miss
     {
-
-		if (cause_code != 0x04 ) {	// Mislaigned access doesn't tell R/W/X
-			printk("While (%s): 0x%08lx\n",
-				((cause_code == 0x01)?"Read From":
-				((cause_code == 0x02)?"Write to":"Exchg")),
-				address);
-		}
+        if (cause_code != 0x04 ) {  // Mislaigned access doesn't tell R/W/X
+            printk("While (%s): 0x%08lx by instruction @ 0x%08lx\n",
+                ((cause_code == 0x01)?"Read From":
+                ((cause_code == 0x02)?"Write to":"Exchg")),
+                address, regs->ret);
+        }
     }
     else if (cause_vec == 0x20) {  /* Machine Check */
         printk("Reason: (%s)\n",
-			(cause_code == 0x0)?"Double Fault":"Other Fatal Err");
+            (cause_code == 0x0)?"Double Fault":"Other Fatal Err");
     }
-    else if (cause_vec == 0x23) {   // Protection violation
+    else if (cause_vec == PROTECTION_VIOL) {
         printk("Reason : ");
         if (cause_code == 0x0)
             printk("Instruction fetch protection violation (execute from page marked non-execute)\n");
@@ -115,14 +101,18 @@ void show_fault_diagnostics(const char *str, struct pt_regs *regs,
 
     }
 
-    printk("Current task = '%s', PID = %u, ASID = %lu\n\n", tsk->comm,
-               tsk->pid, tsk->active_mm->context.asid);
 
-    // Basic Regs are always available
+    printk("\n[ECR]: 0x%08x\n", cause_reg);
+    printk("[EFA]: 0x%08lx\n", address);
+}
+
+
+void show_kernel_fault_diag(const char *str, struct pt_regs *regs,
+    unsigned long address, unsigned long cause_reg)
+{
+
+    // Caller and Callee regs
     show_regs(regs);
-
-    // If we have Calle regs, display them too
-    if (cregs) show_callee_regs(cregs);
 
     // Show kernel stack trace if this Fatality happened in kernel mode
     if (!(regs->status32 & STATUS_U_MASK))
@@ -168,42 +158,42 @@ static struct dentry *test_u32_dentry;
 static u32 value = 42;
 
 static ssize_t example_read_file(struct file *file, char __user *user_buf,
-					size_t count, loff_t *ppos)
+                    size_t count, loff_t *ppos)
 {
-	char buf[10];
+    char buf[10];
 
-	sprintf(buf, "foola\n");
-	return simple_read_from_buffer(user_buf, count, ppos, buf, sizeof(buf));
+    sprintf(buf, "foola\n");
+    return simple_read_from_buffer(user_buf, count, ppos, buf, sizeof(buf));
 }
 
 static int example_open(struct inode *inode, struct file *file)
 {
-	return 0;
+    return 0;
 }
 
 static struct file_operations example_file_operations = {
-	.read = example_read_file,
-	.open = example_open,
+    .read = example_read_file,
+    .open = example_open,
 };
 
 static int __init example_init(void)
 {
-	test_dir = debugfs_create_dir("foo_dir", NULL);
+    test_dir = debugfs_create_dir("foo_dir", NULL);
 
-	test_dentry = debugfs_create_file("foo", 0444, test_dir, NULL,
-							&example_file_operations);
+    test_dentry = debugfs_create_file("foo", 0444, test_dir, NULL,
+                            &example_file_operations);
 
-	test_u32_dentry = debugfs_create_u32("foo_u32", 0444, test_dir, &value);
+    test_u32_dentry = debugfs_create_u32("foo_u32", 0444, test_dir, &value);
 
-	return 0;
+    return 0;
 }
 module_init(example_init);
 
 static void __exit example_exit(void)
 {
-	debugfs_remove(test_u32_dentry);
-	debugfs_remove(test_dentry);
-	debugfs_remove(test_dir);
+    debugfs_remove(test_u32_dentry);
+    debugfs_remove(test_dentry);
+    debugfs_remove(test_dir);
 }
 
 #endif

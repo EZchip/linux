@@ -1,6 +1,11 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * Vineetg: July 2009
+ *  -In I-cache flush routine we check for aliasing for every line INV.
+ *   Instead now we setup routines per cache geometry and invoke them
+ *   via function pointers.
+ *
  * Vineetg: Mar 2009
  *  -D-Cache Invalidate mode set to INV ONLY as that is more common than
  *      FLUSH BEFORE INV (not called at all)
@@ -69,14 +74,17 @@
 #include <asm/cacheflush.h>
 #include <asm/mmu_context.h>
 
-//#define ARC_CACHE_DEBUG
-
 /*  Some Bit values */
 #define DC_FLUSH_STATUS_BIT             0x100
 #define INV_MODE_FLUSH                  0x40
 #define CACHE_DISABLE_BIT               0x01
 
 extern struct cpuinfo_arc cpuinfo_arc700[];
+static void ___flush_icache_range_no_alias(unsigned long, unsigned long);
+static void ___flush_icache_range_32k(unsigned long, unsigned long);
+static void ___flush_icache_range_64k(unsigned long, unsigned long);
+
+static void (* ___flush_icache_rtn)(unsigned long, unsigned long);
 
 /* [size,virtual-aliasing] Info for I and D caches
  * Performance critical info seperated from cpuinfo_arc700[ ]
@@ -149,6 +157,21 @@ void __init a7_probe_cache(void)
 
     /* Convert encoded size to real value */
     sz = arc_cache_meta.i_sz = CALC_CACHE_SZ(p_i_bcr->sz);
+
+    switch(sz) {
+    case 8 * 1024:
+    case 16 * 1024:
+        ___flush_icache_rtn = ___flush_icache_range_no_alias;
+        break;
+    case 32 * 1024:
+        ___flush_icache_rtn = ___flush_icache_range_32k;
+        break;
+    case 64 * 1024:
+        ___flush_icache_rtn = ___flush_icache_range_64k;
+        break;
+    default:
+        panic("Unsupported I-Cache Sz\n");
+    }
 
     /* check whether Icache way size greater than PAGE_SIZE as it
      * cause Aliasing Issues and requires special handling
@@ -381,33 +404,42 @@ void flush_icache_all()
  * start, end - PHY Address
  */
 
-void __flush_icache_range(unsigned long start, unsigned long end)
+static void ___flush_icache_range_no_alias(unsigned long start, unsigned long end)
 {
-    unsigned long flags;
-
     start &= ICACHE_LINE_MASK;
-    local_irq_save(flags);
-
     while (end > start) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
-
-        // Invalidates the cache lines in sets x, x+256..
-        // to address the cache aliasing problem.
-
-        if (unlikely(arc_cache_meta.has_aliasing & ARC_IC_ALIASING))
-        {
-            if( arc_cache_meta.i_sz == 32768)
-                write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
-            else if( arc_cache_meta.i_sz == 65536) {
-                write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
-                write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x10);
-                write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x11);
-            }
-        }
-
-        start = start + ARC_ICACHE_LINE_LEN;
+        start += ARC_ICACHE_LINE_LEN;
     }
+}
 
+static void ___flush_icache_range_32k(unsigned long start, unsigned long end)
+{
+    start &= ICACHE_LINE_MASK;
+    while (end > start) {
+        write_new_aux_reg(ARC_REG_IC_IVIL, start);
+        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
+        start += ARC_ICACHE_LINE_LEN;
+    }
+}
+
+static void ___flush_icache_range_64k(unsigned long start, unsigned long end)
+{
+    start &= ICACHE_LINE_MASK;
+    while (end > start) {
+        write_new_aux_reg(ARC_REG_IC_IVIL, start);
+        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
+        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x10);
+        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x11);
+        start += ARC_ICACHE_LINE_LEN;
+    }
+}
+
+static void __flush_icache_range(unsigned long start, unsigned long end)
+{
+    unsigned long flags;
+    local_irq_save(flags);
+    (*___flush_icache_rtn)(start, end);
     local_irq_restore(flags);
 }
 

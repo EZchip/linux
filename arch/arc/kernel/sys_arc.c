@@ -1,4 +1,12 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2008-2010
+ *
+ *  Vineetg: July 2009
+ *    -kernel_execve inline asm optimised to prevent un-needed reg shuffling
+ *     Now have 6 instructions in  generated code as opposed to 16.
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -26,34 +34,34 @@
 
 /* common code for old and new mmaps */
 static inline long do_mmap2(unsigned long addr, unsigned long len,
-			    unsigned long prot, unsigned long flags,
-			    unsigned long fd, unsigned long pgoff)
+                unsigned long prot, unsigned long flags,
+                unsigned long fd, unsigned long pgoff)
 {
-	int error = -EBADF;
-	struct file *file = NULL;
+    int error = -EBADF;
+    struct file *file = NULL;
 
-	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
-	if (!(flags & MAP_ANONYMOUS)) {
-		file = fget(fd);
-		if (!file)
-			goto out;
-	}
+    flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
+    if (!(flags & MAP_ANONYMOUS)) {
+        file = fget(fd);
+        if (!file)
+            goto out;
+    }
 
-	down_write(&current->mm->mmap_sem);
-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
-	up_write(&current->mm->mmap_sem);
+    down_write(&current->mm->mmap_sem);
+    error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
+    up_write(&current->mm->mmap_sem);
 
-	if (file)
-		fput(file);
+    if (file)
+        fput(file);
       out:
-	return error;
+    return error;
 }
 
 asmlinkage long sys_mmap2(unsigned long addr, unsigned long len,
-			  unsigned long prot, unsigned long flags,
-			  unsigned long fd, unsigned long pgoff)
+              unsigned long prot, unsigned long flags,
+              unsigned long fd, unsigned long pgoff)
 {
-	return do_mmap2(addr, len, prot, flags, fd, pgoff);
+    return do_mmap2(addr, len, prot, flags, fd, pgoff);
 }
 
 /*
@@ -64,47 +72,47 @@ asmlinkage long sys_mmap2(unsigned long addr, unsigned long len,
  */
 
 struct mmap_arg_struct {
-	unsigned long addr;
-	unsigned long len;
-	unsigned long prot;
-	unsigned long flags;
-	unsigned long fd;
-	unsigned long offset;
+    unsigned long addr;
+    unsigned long len;
+    unsigned long prot;
+    unsigned long flags;
+    unsigned long fd;
+    unsigned long offset;
 };
 
 asmlinkage int old_mmap(struct mmap_arg_struct *arg)
 {
-	struct mmap_arg_struct a;
-	int err = -EFAULT;
+    struct mmap_arg_struct a;
+    int err = -EFAULT;
 
-	if (copy_from_user(&a, arg, sizeof(a)))
-		goto out;
+    if (copy_from_user(&a, arg, sizeof(a)))
+        goto out;
 
-	err = -EINVAL;
-	if (a.offset & ~PAGE_MASK)
-		goto out;
+    err = -EINVAL;
+    if (a.offset & ~PAGE_MASK)
+        goto out;
 
-	err =
-	    do_mmap2(a.addr, a.len, a.prot, a.flags, a.fd,
-		     a.offset >> PAGE_SHIFT);
+    err =
+        do_mmap2(a.addr, a.len, a.prot, a.flags, a.fd,
+             a.offset >> PAGE_SHIFT);
       out:
-	return err;
+    return err;
 }
 
 struct sel_arg_struct {
-	unsigned long n;
-	fd_set *inp, *outp, *exp;
-	struct timeval *tvp;
+    unsigned long n;
+    fd_set *inp, *outp, *exp;
+    struct timeval *tvp;
 };
 
 asmlinkage int old_select(struct sel_arg_struct *arg)
 {
-	struct sel_arg_struct a;
+    struct sel_arg_struct a;
 
-	if (copy_from_user(&a, arg, sizeof(a)))
-		return -EFAULT;
-	/* sys_select() does the appropriate kernel locking */
-	return sys_select(a.n, a.inp, a.outp, a.exp, a.tvp);
+    if (copy_from_user(&a, arg, sizeof(a)))
+        return -EFAULT;
+    /* sys_select() does the appropriate kernel locking */
+    return sys_select(a.n, a.inp, a.outp, a.exp, a.tvp);
 }
 
 /*
@@ -113,111 +121,115 @@ asmlinkage int old_select(struct sel_arg_struct *arg)
  * This is really horribly ugly.
  */
 asmlinkage int sys_ipc(uint call, int first, int second,
-		       int third, void *ptr, long fifth)
+               int third, void *ptr, long fifth)
 {
-	int version, ret;
+    int version, ret;
 
-	version = call >> 16;	/* hack for backward compatibility */
-	call &= 0xffff;
+    version = call >> 16;   /* hack for backward compatibility */
+    call &= 0xffff;
 
-	switch (call) {
-	case SEMOP:
-		return sys_semop(first, (struct sembuf *)ptr, second);
-	case SEMGET:
-		return sys_semget(first, second, third);
-	case SEMCTL:{
-			union semun fourth;
-			if (!ptr)
-				return -EINVAL;
-			if (get_user(fourth.__pad, (void **)ptr))
-				return -EFAULT;
-			return sys_semctl(first, second, third, fourth);
-		}
+    switch (call) {
+    case SEMOP:
+        return sys_semop(first, (struct sembuf *)ptr, second);
+    case SEMGET:
+        return sys_semget(first, second, third);
+    case SEMCTL:{
+            union semun fourth;
+            if (!ptr)
+                return -EINVAL;
+            if (get_user(fourth.__pad, (void **)ptr))
+                return -EFAULT;
+            return sys_semctl(first, second, third, fourth);
+        }
 
-	case MSGSND:
-		return sys_msgsnd(first, (struct msgbuf *)ptr, second, third);
-	case MSGRCV:
-		switch (version) {
-		case 0:{
-				struct ipc_kludge tmp;
-				if (!ptr)
-					return -EINVAL;
+    case MSGSND:
+        return sys_msgsnd(first, (struct msgbuf *)ptr, second, third);
+    case MSGRCV:
+        switch (version) {
+        case 0:{
+                struct ipc_kludge tmp;
+                if (!ptr)
+                    return -EINVAL;
 
-				if (copy_from_user(&tmp,
-						   (struct ipc_kludge *)ptr,
-						   sizeof(tmp)))
-					return -EFAULT;
-				return sys_msgrcv(first, tmp.msgp, second,
-						  tmp.msgtyp, third);
-			}
-		default:
-			return sys_msgrcv(first,
-					  (struct msgbuf *)ptr,
-					  second, fifth, third);
-		}
-	case MSGGET:
-		return sys_msgget((key_t) first, second);
-	case MSGCTL:
-		return sys_msgctl(first, second, (struct msqid_ds *)ptr);
+                if (copy_from_user(&tmp,
+                           (struct ipc_kludge *)ptr,
+                           sizeof(tmp)))
+                    return -EFAULT;
+                return sys_msgrcv(first, tmp.msgp, second,
+                          tmp.msgtyp, third);
+            }
+        default:
+            return sys_msgrcv(first,
+                      (struct msgbuf *)ptr,
+                      second, fifth, third);
+        }
+    case MSGGET:
+        return sys_msgget((key_t) first, second);
+    case MSGCTL:
+        return sys_msgctl(first, second, (struct msqid_ds *)ptr);
 
-	case SHMAT:
-		switch (version) {
-		default:{
-				ulong raddr;
-				/* Sameer: Things change over time and so do
-				   function signatures and their usage :-P */
-				ret =
-				    do_shmat(first, (char __user *)ptr, second,
-					     &raddr);
-				/* ret = sys_shmat (first, (char *) ptr,
-				   second, &raddr); */
-				if (ret)
-					return ret;
-				return put_user(raddr, (ulong *) third);
-			}
+    case SHMAT:
+        switch (version) {
+        default:{
+                ulong raddr;
+                /* Sameer: Things change over time and so do
+                   function signatures and their usage :-P */
+                ret =
+                    do_shmat(first, (char __user *)ptr, second,
+                         &raddr);
+                /* ret = sys_shmat (first, (char *) ptr,
+                   second, &raddr); */
+                if (ret)
+                    return ret;
+                return put_user(raddr, (ulong *) third);
+            }
 
-		case 1:	/* Of course, we don't support iBCS2! */
-			return -EINVAL;
-			/* /\* iBCS2 emulator entry point *\/ */
-/* 			if (!segment_eq(get_fs(), get_ds())) */
-/* 				return -EINVAL; */
-/* 			return sys_shmat (first, (char *) ptr, second,
-			(ulong *) third); */
-		}
-	case SHMDT:
-		return sys_shmdt((char *)ptr);
-	case SHMGET:
-		return sys_shmget(first, second, third);
-	case SHMCTL:
-		return sys_shmctl(first, second, (struct shmid_ds *)ptr);
-	default:
-		return -EINVAL;
-	}
+        case 1: /* Of course, we don't support iBCS2! */
+            return -EINVAL;
+            /* /\* iBCS2 emulator entry point *\/ */
+/*          if (!segment_eq(get_fs(), get_ds())) */
+/*              return -EINVAL; */
+/*          return sys_shmat (first, (char *) ptr, second,
+            (ulong *) third); */
+        }
+    case SHMDT:
+        return sys_shmdt((char *)ptr);
+    case SHMGET:
+        return sys_shmget(first, second, third);
+    case SHMCTL:
+        return sys_shmctl(first, second, (struct shmid_ds *)ptr);
+    default:
+        return -EINVAL;
+    }
 }
 
 int kernel_execve(const char *filename, char *const argv[], char *const envp[])
 {
-	struct pt_regs regs;
-	int ret;
+    return (int)(
+        ({
+            /* Although the arguments (order, number) to this function are
+             * same as sys call, we don't need to setup args in regs again.
+             * However in case mainline kernel changes the order of args to
+             * kernel_execve, that assumtion will break.
+             * So to be safe, let gcc know the args for sys call.
+             * If they match no extra code will be generated
+             */
+            register int arg1  = (int)filename;
+            register int arg2 asm ("r1") = (int)argv;
+            register int arg3 asm ("r2") = (int)envp;
+            register int ret asm ("r0");
 
-	__asm__ __volatile__("mov	r3, %5\n\t"
-			     "mov	r2, %4\n\t"
-			     "mov	r1, %3\n\t"
-			     "mov	r0, %2\n\t"
-			     "mov	r8, %1\n\t"
-			     "trap0 \n\t"
-			     "nop    \n\t"
-			     "nop    \n\t"
-			     "mov	%0, r0":"=r"(ret)
-			     :"i"(__NR_execve),
-			     "r"((long)(char __user *)filename),
-			     "r"((long)(char __user * __user *)argv),
-			     "r"((long)(char __user * __user *)envp),
-			     "r"((long)(&regs))
-			     :"cc", "r0", "r1", "r2", "r3", "r8");
+            __asm__ __volatile__(
+                 "mov   r8, %0\n\t"
+                 "trap0 \n\t"
+                 "nop    \n\t"
+                 "nop    \n\t"
+                 :
+                 :"i"(__NR_execve), "r"(arg1), "r"(arg2), "r"(arg3)
+                 :"r0","memory");
 
-	return ret;
-
+            ret;
+        })
+    );
 }
-
 EXPORT_SYMBOL(kernel_execve);

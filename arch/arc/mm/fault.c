@@ -102,6 +102,7 @@ asmlinkage int do_page_fault(struct pt_regs *regs, int write,
      */
 good_area:
     info.si_code = SEGV_ACCERR;
+
 // Handle protection violation, execute on heap or stack
 
     if (cause == ((PROTECTION_VIOL <<16) | INST_FETCH_PROT_VIOL)) {
@@ -162,10 +163,8 @@ bad_area:
       bad_area_nosemaphore:
     /* User mode accesses just cause a SIGSEGV */
     if (user_mode(regs)) {
-        show_user_fault_diag("Sending SIGSEGV to task", regs, NULL,
-                                    address, cause);
-
         tsk->thread.fault_address = address;
+        tsk->thread.cause_code = cause;
         info.si_signo = SIGSEGV;
         info.si_errno = 0;
         /* info.si_code has been set above */
@@ -205,9 +204,6 @@ out_of_memory:
     }
     up_read(&mm->mmap_sem);
 
-	show_user_fault_diag("OOM: VM Sending SIGKILL to task", regs, NULL,
-                                    address, cause);
-
     if (user_mode(regs))
         do_exit(SIGKILL);	/* This will never return */
 
@@ -216,16 +212,12 @@ out_of_memory:
 do_sigbus:
     up_read(&mm->mmap_sem);
 
-    if (user_mode(regs)) {
-		show_user_fault_diag("Sending SIGBUS to task", regs, NULL,
-                                    address, cause);
-	}
-
     /*
      * Send a sigbus, regardless of whether we were in kernel
      * or user mode.
      */
     tsk->thread.fault_address = address;
+    tsk->thread.cause_code = cause;
     info.si_signo = SIGBUS;
     info.si_errno = 0;
     info.si_code = BUS_ADRERR;

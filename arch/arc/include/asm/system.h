@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * Vineetg: July 2009
+ *  -Improved xchg implementation by tweaking reg contraints (+r) so that
+ *   unnecessary glue code is not generated
+ *
  * Vineetg: Mar 2009 (Critical look at file)
  *  -Improved local_irq_save() and friends to not use r20 (CALLLEE Saved)
  *      but let the compiler do register allocation
@@ -162,6 +166,43 @@ static inline int irqs_disabled(void)
             )));
 }
 
+/******************************************************************
+ * Atomically Exchange memory with a register
+ ******************************************************************/
+
+static inline unsigned long __xchg_32(unsigned long with, volatile void *ptr)
+{
+    /* On ARC700, "ex" is inherently atomic so don't need IRQ disabling */
+
+    __asm__ __volatile__ (
+                " ex  %0, [%1]"
+                  : "+r" (with)
+                  : "r"(ptr)
+                  : "memory" );
+
+    return (with);
+}
+
+/* This function doesn't exist, so that for non supported xchg (64 bits)
+ * we will get link errors.
+ * shamelessly copied from MIPS
+ */
+extern void __xchg_bad_pointer(void);
+
+static inline unsigned long __xchg(unsigned long val, volatile void *ptr,
+                                        int size)
+{
+    switch (size) {
+        case 4:
+            return __xchg_32(val, ptr);
+        // TODO-vineetg: 64 bit atomic xchg go here
+    }
+    __xchg_bad_pointer();
+    return val;
+}
+
+#define xchg(ptr, with) \
+  ((__typeof__ (*(ptr)))__xchg ((unsigned long)(with), (ptr), sizeof (*(ptr))))
 
 /******************************************************************
  * Barriers
@@ -264,20 +305,6 @@ static inline void sched_cacheflush(void)
 {
 }
 
-extern inline unsigned long __xchg (unsigned long with,
-                                    __volatile__ void *ptr, int size)
-{
-    __asm__ __volatile__ (" ex  %0, [%1]"
-                  : "=r" (with),"=r"(ptr)
-                  : "0" (with), "1" (ptr)
-                  : "memory" );
-
-    return (with);
-}
-
-#define xchg(ptr, with) \
-  ((__typeof__ (*(ptr)))__xchg ((unsigned long)(with), (ptr), sizeof (*(ptr))))
-
 #define arch_align_stack(x) (x)
 
 /******************************************************************
@@ -296,22 +323,6 @@ void raw_printk(const char *str, unsigned int num);
 void raw_printk5(const char *str, unsigned int n1, unsigned int n2,
                     unsigned int n3, unsigned int n4);
 
-/***** Diagnostic routines *******/
-
-void show_fault_diagnostics(const char *str, struct pt_regs *regs,
-    struct callee_regs *cregs, unsigned long address, unsigned long cause_reg);
-
-#define show_kernel_fault_diag(a,b,c,d,e) show_fault_diagnostics(a,b,c,d,e)
-
-/* So that LMBench numbers for Signal handling are not affected
- * by diagnostic stuff
- */
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
-#define show_user_fault_diag(a,b,c,d,e) show_fault_diagnostics(a,b,c,d,e)
-#else
-#define show_user_fault_diag(a,b,c,d,e)
-#endif
-
 /******************************************************************
  * printk calls in __init code, so that their literal strings go into
  * .init.rodata (which gets reclaimed) instead of in .rodata
@@ -319,14 +330,14 @@ void show_fault_diagnostics(const char *str, struct pt_regs *regs,
 #define INIT_PRINT 0
 
 #if (INIT_PRINT == 2)
-#define printk_init(fmt, args...) 	printk(fmt, ## args)
+#define printk_init(fmt, args...)   printk(fmt, ## args)
 #elif (INIT_PRINT == 1)
 #define printk_init(fmt, args...)
 #else
-#define printk_init(fmt, args...) 					\
-({ 													\
-	static const __initconst char __fmt[] = fmt; 	\
-	printk(__fmt, ## args); 						\
+#define printk_init(fmt, args...)                   \
+({                                                  \
+    static const __initconst char __fmt[] = fmt;    \
+    printk(__fmt, ## args);                         \
 })
 #endif
 

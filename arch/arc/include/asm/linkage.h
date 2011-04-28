@@ -1,4 +1,3 @@
-/*Sameer: */
 #ifndef __ASM_LINKAGE_H
 #define __ASM_LINKAGE_H
 
@@ -16,6 +15,16 @@
   .align 4
   SYMBOL_NAME_LABEL(\name)
 .endm
+
+
+.macro ARC_EXIT name
+#define ASM_PREV_SYM_ADDR(name)  .-##name
+  .size \name, ASM_PREV_SYM_ADDR(\name)
+.endm
+
 #endif
+
+#define __arcfp_code __attribute__((__section__(".text.arcfp")))
+#define __arcfp_data __attribute__((__section__(".data.arcfp")))
 
 #endif

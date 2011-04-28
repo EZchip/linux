@@ -67,6 +67,9 @@ config BINFMT_ELF
         bool
         default y
 
+config STACKTRACE_SUPPORT
+	def_bool y
+
 # CONFIG common to all ARC cores (700+800) under this
 #    config option instead of existing ARCH_ARC700
 # Need corresponding change in include/asm-arc/linkage.h
@@ -280,6 +283,19 @@ config ARCH_ARC_LV2_INTR
         default y if EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
         depends on EMAC_LV2 || SERIAL_LV2 || TIMER_LV2
 
+config ARCH_ARC_MMU_V2
+        bool "Build Linux for MMU V2"
+        default n
+        depends on MMU
+        help
+        ARC MMU V1 has a 2 way set assoc J-TLB. This suffers thrashing in a
+        memcpy scenario where 2 D-TLB and 1 I-TLB entries compete for 2 ways
+        of same set. This requires workarounds in TLB refill code which can
+        adversely affect normal case performance. MMU V2 solves this problem
+        in hardware (using the 8 way set assoc uD-TLBs) hence we don't need
+        software workaround. Doing it at runtime was getting costly hence
+        this build option.
+
 config ARCH_ARC_HLINK
         bool "Support for Metaware debugger assisted Host access"
         default n
@@ -416,14 +432,6 @@ config ARC_STACK_UNWIND
 config ARC_TLB_PARANOIA
     bool "Paranoia Checks in Low Level TLB Handlers"
     default n
-
-config ARC_USER_FAULTS_DBG
-    bool "Debug User Faults"
-    default n
-    help
-    This make debugging user programs easier in absence of debugger
-    It prints Diagnostic information when user program crashes due to
-    "Illegal Instrn" or "Segmantation faults" or "unhandled Protection Violation"
 
 config ARC_DBG_EVENT_TIMELINE
     bool "Low level event capture"

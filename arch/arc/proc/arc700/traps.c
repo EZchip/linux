@@ -49,14 +49,9 @@
 #include <asm/event-log.h>
 
 extern int fixup_exception(struct pt_regs *regs);
+void show_kernel_fault_diag(const char *str, struct pt_regs *regs,
+                        unsigned long address, unsigned long cause_reg);
 
-/* vineetg: Feb 20th 2008
-   If running on simulator in case of kernel crash, dont print the err
-   msg as it adds abt 50k instructions to Instrn TRACE so the real cause
-   of panic gets lost.
-   Instead save the faulting instn and mem addr and do a hard stop
- */
-unsigned int panic_cause_instn, panic_cause_mem, panic_cause_code;
 
 /* "volatile" because it causes compiler to optimize away code.
  * Since running_on_hw is init to 1 at compile time, with -O2 compiler
@@ -64,48 +59,25 @@ unsigned int panic_cause_instn, panic_cause_mem, panic_cause_code;
  */
 volatile int running_on_hw = 1;
 
-DEFINE_SPINLOCK(die_lock);
-
 void die(const char *str, struct pt_regs *regs, unsigned long address,
          unsigned long cause_reg)
 {
-    panic_cause_instn = regs->ret;
-    panic_cause_mem  = address;
-    panic_cause_code  = cause_reg;
-
-    if (!running_on_hw) {
-#ifdef CONFIG_SMP
-        smp_send_stop();
-#endif
-        show_regs(regs);
-        __asm__("flag 1");
+    if (running_on_hw) {
+        show_kernel_fault_diag(str, regs, address, cause_reg);
     }
 
-    show_kernel_fault_diag(str, regs, NULL, address, cause_reg);
+    // DEAD END
     __asm__("flag 1");
-
-    console_verbose();
-    spin_lock_irq(&die_lock);
-    bust_spinlocks(1);
-
-    bust_spinlocks(0);
-    spin_unlock_irq(&die_lock);
-    do_exit(SIGSEGV);
 }
 
-static int do_fatal_exception(unsigned long cause, char *str, struct pt_regs *regs,
-         siginfo_t * info)
+static int noinline do_fatal_exception(unsigned long cause, char *str,
+        struct pt_regs *regs, siginfo_t * info)
 {
     if (regs->status32 & STATUS_U_MASK) {
         struct task_struct *tsk = current;
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
-        if (info->si_code != TRAP_BRKPT) {
-            show_user_fault_diag(str, regs, NULL,
-                                    (unsigned long)info->si_addr, cause);
-        }
-#endif              /* CONFIG_ARC_FAULTS_DBG */
 
         tsk->thread.fault_address = (unsigned int)info->si_addr;
+        tsk->thread.cause_code = cause;
 
 		force_sig_info(info->si_signo, info, tsk);
 
@@ -155,17 +127,10 @@ DO_ERROR_INFO(SIGBUS, "Access to Invalid Memory", do_memory_error, BUS_ADRERR)
 DO_ERROR_INFO(SIGTRAP, "Breakpoint Set", do_trap_is_brkpt, TRAP_BRKPT)
 
 
-asmlinkage void do_machine_check_fault(unsigned long cause, unsigned long address,
-                  struct pt_regs *regs, struct callee_regs *cregs)
+void do_machine_check_fault( unsigned long cause, unsigned long address,
+    struct pt_regs *regs)
 {
-    show_kernel_fault_diag("Machine Check Exception", regs, cregs, address,
-							cause);
-
-    // DEAD END
-    __asm__("flag 1");
-    __asm__("nop");
-    __asm__("nop");
-    __asm__("nop");
+    die("Machine Check Exception",regs, address, cause);
 }
 
 void __init trap_init(void)

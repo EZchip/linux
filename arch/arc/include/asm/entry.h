@@ -668,17 +668,6 @@
 
 #endif
 
-
-/* ------------------------------------------------------------------
- * If someone doent want to show diagnostic information on user faults
- * we make ret_from_user_faulst to simply, ret_from_exception
- *
- * Otherwise ret_from_user_faults, shows more diagnostic information
- */
-#ifndef CONFIG_ARC_USER_FAULTS_DBG
-#define ret_from_user_faults    ret_from_exception
-#endif
-
 #endif  /* __ASSEMBLY__ */
 
 #endif  /* __ASM_ARC_ENTRY_H */

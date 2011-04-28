@@ -1,8 +1,18 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * Vineetg: July 2009
+ *  - For MMU V2, we need not do heuristics at the time of commiting a D-TLB
+ *      entry, so that it doesn't knock out it's I-TLB entry
+ *  - Some more fine tuning:
+ *      bmsk instead of add, asl.cc instead of branch, delay slot utilise etc
  *
- *
+ * Vineetg: July 2009
+ *  - Practically rewrote the I/D TLB Miss handlers
+ *    Now 40 and 135 instructions a peice as compared to 131 and 449 resp.
+ *    Hence Leaner by 1.5 K
+ *    Used Conditional arithmetic to replace excessive branching
+ *    Also used short instructions wherever possible
  *
  * Vineetg: Aug 13th 2008
  *  - Passing ECR (Exception Cause REG) to do_page_fault( ) for printing
@@ -40,7 +50,7 @@
 #include <asm/arcregs.h>
 #include <asm/entry.h>
 #include <asm/tlb.h>
-#include <asm/traps.h>	/* DATA_TLB_STORE */
+#include <asm/traps.h>  /* DATA_TLB_STORE */
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <asm/asm-offsets.h>
@@ -55,29 +65,12 @@
 ;--------------------------------------------------------------------------
 .section .bss
 
-    .global ex_saved_reg1       ; Tmp holds r0 for duration of TLB Refill Code
-    .align 4
+    .global ex_saved_reg1       ; Holds r0-r3 for duration of TLB Refill Code
+    .align 32                   ; IMP: Must be Cache Line aligned
     .type   ex_saved_reg1, @object
-    .size   ex_saved_reg1, 4
+    .size   ex_saved_reg1, 16
 ex_saved_reg1:
     .zero 4
-
-    .global ex_saved_reg2       ; Tmp holds r1 for duration of TLB Refill Code
-    .align 4
-    .type   ex_saved_reg2, @object
-    .size   ex_saved_reg2, 4
-ex_saved_reg2:
-    .zero 4
-
-    .global mmu_write_cmd       ; TLBWrite or TLBWriteNI depending on MMU ver
-    .align 4
-    .type   mmu_write_cmd, @object
-    .size   mmu_write_cmd, 4
-mmu_write_cmd:
-    .zero 4
-
-
-.section .text, "ax",@progbits
 
 ;--------------------------------------------------------------------------
 ;  Troubleshooting Stuff
@@ -163,140 +156,80 @@ mmu_write_cmd:
 ;TLB Miss handling Code
 ;-----------------------------------------------------------------------------
 
-/* This macro does the page-table lookup for the faulting address.
- * At the end of the macro pte faulted on will be in register pte
- * and the table in which pte belongs will be in ptr.
- */
-.macro LOAD_PTE pte, ptr, label
+; This macro does the page-table lookup for the faulting address.
+; OUT: r0 = PTE faulted on, r1 = ptr to PTE, r2 = Faulting V-address
+.macro LOAD_PTE
 
-    lr  \pte, [efa]          /* faulting address */
+    lr  r2, [efa]
 
 #ifndef CONFIG_SMP
-    lr  \ptr, [ARC_REG_SCRATCH_DATA0] /* current pgd */
+    lr  r1, [ARC_REG_SCRATCH_DATA0] ; current pgd
 #else
-    GET_CURR_TASK_ON_CPU  \ptr
-    ld  \ptr, [\ptr, TASK_ACT_MM]
-    ld  \ptr, [\ptr, MM_PGD]
+    GET_CURR_TASK_ON_CPU  r1
+    ld  r1, [r1, TASK_ACT_MM]
+    ld  r1, [r1, MM_PGD]
 #endif
 
-    lsr \pte, \pte, PGDIR_SHIFT         /* get pgd offset */
-    asl \pte, \pte, 2     /* multiply by 4 as each entry is 4 bytes */
-    ld  \ptr, [\ptr, \pte]     /* get ptebase */
-    and.f   \ptr, \ptr, PAGE_MASK /* Ignoring protection and other flags */
-    bz  \label      /* if the pgd entry is 0 do page fault */
-    lr  \pte, [efa]          /* load faulting address once again */
-    lsr \pte, \pte, PAGE_SHIFT        /* get pte offset */
-    and \pte, \pte, 0x7FF      /* page table - 11 bits */
-    asl \pte, \pte, 2        /* multiply by 4 */
-    ld.a    \pte, [\ptr, \pte]    /* get the pte entry faulted on and
-                    the table on which it faulted in ptr */
+    lsr     r0, r2, PGDIR_SHIFT     ; Bits for indexing into PGD
+    ld.as   r1, [r1, r0]            ; PGD entry corresp to faulting addr
+    and.f   r1, r1, PAGE_MASK       ; Ignoring protection and other flags
+                                    ;   contains Ptr to Page Table
+    bz.d    do_slow_path_pf         ; if no Page Table, do page fault
+    lsr     r0, r2, (PAGE_SHIFT -2) ; Bits for indexing into Page tbl:
+    and     r0, r0, ( 0x7FF  << 2)  ;    11 bits
+                                    ; No need to multiply by 4
+    ld.aw   r0, [r1, r0]            ; get the pte entry and pte ptr corresp to
+                                    ;    faulted addr
 .endm
 
-.macro PTE_PRESENT pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_READ)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_READ)
-    bnz \label
-    ld  \pte, [\ptr, 0]
+
+; Based on access type, check if PTE is valid
+; IN: r0 = PTE
+.macro VERIFY_PTE
+    mov_s   r2, 0
+    lr      r3, [ecr]
+    btst_s  r3,  DTLB_LD_MISS_BIT
+    or.nz   r2, r2, _PAGE_READ      ; If Read access, check for Read flag in PTE
+    btst_s  r3,  DTLB_ST_MISS_BIT
+    or.nz   r2, r2, _PAGE_WRITE     ; If Write access, chk if Write flag in PTE
+                                    ; Above laddering takes care of XCHG access
+                                    ;   which is both Read and Write
+    lr      r3, [efa]
+    cmp     r3, VMALLOC_START - 1   ; If kernel mode access
+    asl.hi  r2, r2, 3               ; make _PAGE_xx flags as _PAGE_K_xx
+    or      r2, r2, _PAGE_PRESENT   ; Common flag for K/U mode
+
+    ; r2 setup with all the Flags we need to check in PTE
+    and     r3, r0, r2              ; Mask out NON Flag bits from PTE
+    brne.d  r3, r2, do_slow_path_pf ; check ( ( pte & flags_test ) == flags_test )
 .endm
 
-.macro PTE_K_PRESENT pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_K_READ)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_K_READ)
-    bnz \label
-    ld  \pte, [\ptr, 0]
+; Let Linux VM know that page was accessed/dirty
+; IN: r0 = PTE, r1 = ptr to PTE
+.macro UPDATE_PTE
+    lr      r3, [ecr]
+    or      r0, r0, (_PAGE_VALID | _PAGE_ACCESSED)  ; Set Accessed bit for all
+    btst_s  r3,  DTLB_ST_MISS_BIT         ; See if it was a Write Access ?
+    or.nz   r0, r0, _PAGE_MODIFIED        ; if Write, set Dirty bit as well
+    st_s    r0, [r1]                      ; Write back PTE
 .endm
 
-.macro PTE_PRESENTEXEC pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_READ | _PAGE_EXECUTE)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_READ | _PAGE_EXECUTE)
-    bnz \label
-    ld  \pte, [\ptr, 0]
+; Setup PTE bits in TLB entry
+; IN: r0 = PTE
+.macro TLB_RELOAD
+    and r1, r0, PTE_BITS_IN_PD0
+    and r0, r0, PTE_BITS_IN_PD1 ; from PTE, mask out above flags
+    sr  r0, [ARC_REG_TLBPD1]    ; Phy addr and access permission flags in PD1
+
+    lr  r0,[ARC_REG_TLBPD0]     ; MMU prepares PD0 with vaddr and ASID
+    lsr r1, r1                  ; shift PTE flags to match layout in PD0
+    or  r1, r1, r0              ; Stuff the above flags there
+    sr  r1,[ARC_REG_TLBPD0]     ; rewrite PD0
 .endm
 
-.macro PTE_K_PRESENTEXEC pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_EXECUTE)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_EXECUTE)
-    bnz \label
-    ld  \pte, [\ptr, 0]
-.endm
+.macro TLB_WRITE_HEURISTICS
 
-.macro PTE_READWRITABLE pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE)
-    bnz \label
-    ld  \pte, [\ptr, 0]
-.endm
-
-.macro PTE_K_READWRITABLE pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_WRITE)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_WRITE)
-    bnz \label
-    ld  \pte, [\ptr, 0]
-.endm
-
-.macro PTE_WRITABLE pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_WRITE)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_WRITE)
-    bnz \label
-    ld  \pte, [\ptr, 0]
-.endm
-
-.macro PTE_K_WRITABLE pte, ptr, label
-    and \pte, \pte,(_PAGE_PRESENT | _PAGE_K_WRITE)
-    xor.f   \pte, \pte, (_PAGE_PRESENT | _PAGE_K_WRITE)
-    bnz \label
-    ld  \pte, [\ptr, 0]
-.endm
-
-.macro PTE_MAKEVALID pte, ptr
-    or  \pte, \pte, (_PAGE_VALID | _PAGE_ACCESSED)
-    st  \pte, [\ptr, 0]
-.endm
-
-.macro PTE_MAKEWRITE pte, ptr
-    or  \pte, \pte, (_PAGE_VALID | _PAGE_ACCESSED | _PAGE_MODIFIED)
-    st  \pte, [\ptr, 0]
-.endm
-
-.macro DO_FAULT write
-    st  r9, [SYMBOL_NAME(ex_saved_reg1)]
-
-    ; take a snapshot of upon entering SLOW Path TLB Hdlr
-    TAKE_SNAP_ASM r8, r9, SNAP_DO_PF_ENTER
-
-    lr  r9, [erstatus]
-
-    SWITCH_TO_KERNEL_STK
-    SAVE_ALL_SYS
-
-    mov r1, \write
-    lr  r2, [efa]
-    lr  r3, [ecr]
-    mov r0, sp
-
-    ; We dont want exceptions to be disabled while the fault is handled.
-    ; Now that we have saved the context we return from exception hence
-    ; exceptions get re-enable
-
-    FAKE_RET_FROM_EXCPN  r9
-
-    jl  do_page_fault
-    j   ret_from_user_faults
-.endm
-
-.macro TLB_RELOAD pte, ptr
-    ld  \pte, [\ptr, 0]
-    and \ptr, \pte, 0xe00    /* get G,L,V bits from PTE */
-    lsr \ptr, \ptr           /* right shift by 1 */
-    and \pte, \pte, TLBPD1_MASK  /* mask out unused bits */
-    sr  \pte, [ARC_REG_TLBPD1]
-    lr  \pte,[ARC_REG_TLBPD0]
-    or  \ptr,\ptr,\pte
-    sr  \ptr,[ARC_REG_TLBPD0]
-.endm
-
-; This macro essentially
-.macro TLB_WRITE_DATA
+#if !(METAL_FIX || defined(CONFIG_ARCH_ARC_MMU_V2))
 
 #define JH_HACK1
 //#define JH_HACK2
@@ -359,31 +292,37 @@ mmu_write_cmd:
     //
     // Always checks whether instruction will be kicked out by dtlb miss
     //
+        mov_s   r3, r1                  ; save PD0 prepared by TLB_RELOAD in r3
         lr      r0,[eret]               /* instruction address */
         and     r0,r0,PAGE_MASK         /* VPN of instruction address */
-;       lr      r1,[ARC_REG_TLBPD0]     /* Data VPN+ASID - already in r1 from TLB_RELOAD*/
-        and     r1,r1,0xff              /* Data ASID */
-        or      r0,r0,r1                /* Instruction address + Data ASID */
+        bmsk    r1,r3,7                 /* Data ASID, bits 7-0 */
+        or_s    r0,r0,r1                /* Instruction address + Data ASID */
 
-        lr      r1,[ARC_REG_TLBPD0]     /* save TLBPD0 containing data TLB*/
         sr      r0,[ARC_REG_TLBPD0]     /* write instruction address to TLBPD0 */
-        sr  TLBProbe, [ARC_REG_TLBCOMMAND] /* Look for instruction */
+        sr      TLBProbe, [ARC_REG_TLBCOMMAND] /* Look for instruction */
         lr      r0,[ARC_REG_TLBINDEX]   /* r0 = index where instruction is, if at all */
-        sr      r1,[ARC_REG_TLBPD0]     /* restore TLBPD0 */
+        sr      r3,[ARC_REG_TLBPD0]     /* restore TLBPD0 */
 
-        sr  TLBGetIndex, [ARC_REG_TLBCOMMAND]
+        sr      TLBGetIndex, [ARC_REG_TLBCOMMAND]
         lr      r1,[ARC_REG_TLBINDEX]   /* r1 = index where MMU wants to put data */
-        brne    r0,r1,88f               /* if no match on indices, go around */
-        xor     r1,r1,1                 /* flip bottom bit of data index */
+        cmp     r0,r1                   /* if no match on indices, go around */
+        xor.eq  r1,r1,1                 /* flip bottom bit of data index */
         sr      r1,[ARC_REG_TLBINDEX]   /* and put it back */
-88:
 #endif
-#if !(defined(JH_HACK1)|defined(JH_HACK2)|defined(JH_HACK3))
-    /* Here i am not checking if the index returned is error */
-    /* I assume that i will always get an index to the store the TLB entry */
-    /* i.e. there will be atleast one way that is unlocked */
+#else
+    ; No need for heuristics in way detemination. We have newer MMU or fixed MMU
+
     sr  TLBGetIndex, [ARC_REG_TLBCOMMAND]
+
 #endif
+.endm
+
+.macro TLB_WRITE_DATA
+
+    ; MMU with 2 way set assoc J-TLB, needs some help in pathetic case of
+    ; memcpy where 3 parties contend for 2 ways, ensuing a livelock.
+    ; But only for old MMU or one without Metal Fix
+    TLB_WRITE_HEURISTICS
 
     COMMIT_WRITE_CMD
 .endm
@@ -398,13 +337,19 @@ mmu_write_cmd:
 .endm
 
 .macro COMMIT_WRITE_CMD
-    ld  r0, [SYMBOL_NAME(mmu_write_cmd)]
-    sr  r0, [ARC_REG_TLBCOMMAND]
+#ifdef CONFIG_ARCH_ARC_MMU_V2
+    sr TLBWriteNI, [ARC_REG_TLBCOMMAND]
+#else
+    sr TLBWrite, [ARC_REG_TLBCOMMAND]
+#endif
 .endm
 
 .macro SAVE_TEMP
-    st  r0, [ex_saved_reg1]
-    st  r1, [ex_saved_reg2]
+    st    r0, [ex_saved_reg1]
+    mov_s r0, ex_saved_reg1
+    st_s  r1, [r0, 4]
+    st_s  r2, [r0, 8]
+    st_s  r3, [r0, 12]
 
     ; take a snapshot of upon entering FAST Path TLB Hdlr
     TAKE_SNAP_ASM r0, r1, SNAP_EXCP_IN
@@ -417,123 +362,109 @@ mmu_write_cmd:
     ; VERIFY if the cached PGD ptr in MMU-SCRATCH Reg is same as
     ; one in Linux data structures
 
-	DBG_PDG_MISMATCH
+    DBG_PDG_MISMATCH
 .endm
 
 .macro RESTORE_TEMP
-    ld  r0, [ex_saved_reg1]
-    ld  r1, [ex_saved_reg2]
+    mov_s r0, ex_saved_reg1
+    ld_s  r3, [r0,12]
+    ld_s  r2, [r0, 8]
+    ld_s  r1, [r0, 4]
+    ld_s  r0, [r0]
 .endm
 
-; branch range is -255 to 256 hence won't work with inline debug code
-; Need a jmp costing an extra instruction in Fast Path
+;-----------------------------------------------------------------------------
+;I-TLB Miss handling Code
+;-----------------------------------------------------------------------------
 
-.macro BR_OR_JMP_IF_HS  reg,  val, addr
+.section .text, "ax",@progbits
 
-#ifdef CONFIG_ARC_TLB_PARANOIA
-    cmp     \reg, \val
-    jhs    	\addr
-#else
-    brhs    \reg, \val, \addr
-#endif
-.endm
+;-----------------------------------------------------------------------------
+;I-TLB Miss handling Code
+;-----------------------------------------------------------------------------
 
 ARC_ENTRY EV_TLBMissI
 
     SAVE_TEMP
 
-    lr  r0, [efa]
-    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_inst_miss
+    LOAD_PTE
 
-    LOAD_PTE r0, r1, no_page_itlb
-    PTE_PRESENTEXEC r0, r1, no_page_itlb
-reload_tlb_inst_miss:
-    PTE_MAKEVALID r0, r1
-    TLB_RELOAD r0, r1
+    ; Check if PTE flags approp for executing code
+    cmp_s   r2, VMALLOC_START
+    mov.lo  r2, (_PAGE_PRESENT | _PAGE_READ | _PAGE_EXECUTE)
+    mov.hs  r2, (_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_EXECUTE)
+
+    and     r3, r0, r2  ; Mask out NON Flag bits from PTE
+    xor.f   r3, r3, r2  ; check ( ( pte & flags_test ) == flags_test )
+    bnz     do_slow_path_pf
+
+    ; Let Linux VM know that the page was accessed
+    or      r0, r0, (_PAGE_VALID | _PAGE_ACCESSED)  ; set Accessed Bit
+    st_s    r0, [r1]                                ; Write back PTE
+
+    TLB_RELOAD
     TLB_WRITE_INSTR
     RESTORE_TEMP
     rtie
-kernel_inst_miss:
-    LOAD_PTE r0, r1, no_page_itlb
-    PTE_K_PRESENTEXEC r0, r1, no_page_itlb
-    b   reload_tlb_inst_miss
-no_page_itlb:
-    RESTORE_TEMP
-    DO_FAULT 0
 
-SYMBOL_NAME_LABEL(data_tlb_miss_load)
+ARC_EXIT EV_TLBMissI
 
-    lr  r0, [efa]
-    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_data_miss_load
-
-    LOAD_PTE r0, r1, no_page_dtlb_load
-    PTE_PRESENT r0, r1, no_page_dtlb_load
-reload_tlb_data_miss_load:
-    PTE_MAKEVALID r0, r1
-    TLB_RELOAD r0, r1
-    TLB_WRITE_DATA
-    RESTORE_TEMP
-    rtie
-kernel_data_miss_load:
-    LOAD_PTE r0, r1, no_page_dtlb_load
-    PTE_K_PRESENT r0, r1, no_page_dtlb_load
-    b   reload_tlb_data_miss_load
-no_page_dtlb_load:
-    RESTORE_TEMP
-    DO_FAULT 0
-
-SYMBOL_NAME_LABEL(data_tlb_miss_store)
-
-    lr  r0, [efa]
-    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_data_miss_store
-
-    LOAD_PTE r0, r1, no_page_dtlb_store
-    PTE_WRITABLE r0, r1, no_page_dtlb_store
-reload_tlb_data_miss_store:
-    PTE_MAKEWRITE r0, r1
-    TLB_RELOAD r0, r1
-    TLB_WRITE_DATA
-    RESTORE_TEMP
-    rtie
-kernel_data_miss_store:
-    LOAD_PTE r0, r1, no_page_dtlb_store
-    PTE_K_WRITABLE r0, r1, no_page_dtlb_store
-    b   reload_tlb_data_miss_store
-no_page_dtlb_store:
-    RESTORE_TEMP
-    DO_FAULT 1
-
-SYMBOL_NAME_LABEL(data_tlb_miss_xchg)
-
-    lr  r0, [efa]
-    BR_OR_JMP_IF_HS	r0, VMALLOC_START, kernel_data_miss_xchg
-
-    LOAD_PTE r0, r1, no_page_dtlb_xchg
-    PTE_READWRITABLE r0, r1, no_page_dtlb_xchg
-reload_tlb_data_miss_xchg:
-    PTE_MAKEWRITE r0, r1
-    TLB_RELOAD r0, r1
-    TLB_WRITE_DATA
-    RESTORE_TEMP
-    rtie
-kernel_data_miss_xchg:
-    LOAD_PTE r0, r1, no_page_dtlb_xchg
-    PTE_K_READWRITABLE r0, r1, no_page_dtlb_xchg
-    b   reload_tlb_data_miss_xchg
-no_page_dtlb_xchg:
-    RESTORE_TEMP
-    DO_FAULT 1
+;-----------------------------------------------------------------------------
+;D-TLB Miss handling Code
+;-----------------------------------------------------------------------------
 
 ARC_ENTRY EV_TLBMissD
 
     SAVE_TEMP
 
-    lr  r0, [ecr]
-    and r0, r0, ECAUSE_CODE_MASK
-    brne    r0, DATA_TLB_LOAD, not_data_load
-    j   data_tlb_miss_load
-not_data_load:
-    brne    r0, DATA_TLB_STORE, not_data_store
-    j   data_tlb_miss_store
-not_data_store:
-    j   data_tlb_miss_xchg
+    ; Get the PTE corresponding to V-addr accessed
+    ; If PTE exists, it will setup, r0 = PTE, r1 = Ptr to PTE
+    LOAD_PTE
+
+    VERIFY_PTE
+
+    UPDATE_PTE
+    TLB_RELOAD
+    TLB_WRITE_DATA
+    RESTORE_TEMP
+    rtie
+
+;-------- Common routine to call Linux Page Fault Handler -----------
+do_slow_path_pf:
+    RESTORE_TEMP
+    st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+
+    ; take a snapshot of upon entering SLOW Path TLB Hdlr
+    TAKE_SNAP_ASM r8, r9, SNAP_DO_PF_ENTER
+
+    lr  r9, [erstatus]
+
+    SWITCH_TO_KERNEL_STK
+    SAVE_ALL_SYS
+
+    ; ------- setup args for Linux Page fault Hanlder ---------
+    mov_s r0, sp
+    lr  r2, [efa]
+    lr  r3, [ecr]
+
+    ; Both st and ex imply WRITE access of some sort, hence do_page_fault( )
+    ; invoked with write=1 for DTLB-st/ex Miss and write=0 for ITLB miss or
+    ; DTLB-ld Miss
+    ; DTLB Miss Cause code is ld = 0x01 , st = 0x02, ex = 0x03
+    ; Following code cunningly uses that fact that st/ex have one bit in common
+
+    btst_s r3, DTLB_ST_MISS_BIT
+    mov.z  r1, 0
+    mov.nz r1, 1
+
+    ; We dont want exceptions to be disabled while the fault is handled.
+    ; Now that we have saved the context we return from exception hence
+    ; exceptions get re-enable
+
+    FAKE_RET_FROM_EXCPN  r9
+
+    jl  do_page_fault
+    j   ret_from_user_faults
+
+ARC_EXIT EV_TLBMissD
+ARC_ENTRY EV_TLBMissB   ; Bogus entry to measure sz of DTLBMiss hdlr

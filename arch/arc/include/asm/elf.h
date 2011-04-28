@@ -65,8 +65,6 @@ typedef unsigned long elf_fpregset_t;
    have no such handler.  */
 #define ELF_PLAT_INIT(_r, load_addr)	(_r)->r0 = 0
 
-#define USE_ELF_CORE_DUMP
-
 /* The additional layer below is because the stack pointer is missing in
    the pt_regs struct, but needed in a core dump. pr_reg is a elf_gregset_t,
    and should be filled in according to the layout of the user_regs_struct

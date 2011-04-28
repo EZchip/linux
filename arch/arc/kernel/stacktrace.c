@@ -3,6 +3,15 @@
  *
  *              Stack tracing for ARC Linux
  *
+ *  vineetg: aug 2009
+ *  -Implemented CONFIG_STACKTRACE APIs, primarily save_stack_trace_tsk( )
+ *   for displaying task's kernel mode call stack in /proc/<pid>/stack
+ *  -Iterator based approach to have single copy of unwinding core and APIs
+ *   needing unwinding, implement the logic in iterator regarding:
+ *      = which frame onwards to start capture
+ *      = which frame to stop capturing (wchan)
+ *      = specifics of data structs where trace is saved(CONFIG_STACKTRACE etc)
+ *
  *
  *  vineetg: March 2009
  *  -Implemented correct versions of thread_saved_pc() and get_wchan()
@@ -15,22 +24,22 @@
 #include <asm/arcregs.h>
 #include <asm/unwind.h>
 #include <asm/utils.h>
+#include <linux/stacktrace.h>
 
-/* Ofcourse just returning schedule( ) would be pointless so unwind until
- * the function is not in schedular code
- */
 
-/* If tsk is null, display the stack trace of the current task
+/*-------------------------------------------------------------------------
+ *              Unwinding Core
+ *-------------------------------------------------------------------------
  */
-void show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
-{
 #ifdef CONFIG_ARC_STACK_UNWIND
-    struct unwind_frame_info frame_info;
 
-    if (tsk == NULL)
+void seed_unwind_frame_info(struct task_struct *tsk, struct pt_regs *regs,
+    struct unwind_frame_info *frame_info)
+{
+    if (tsk == NULL && regs == NULL)
     {
         unsigned long fp, sp, blink, ret;
-        frame_info.task = current;
+        frame_info->task = current;
 
         __asm__ __volatile__(
                   "1:mov %0,r27\n\t"
@@ -41,39 +50,50 @@ void show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
                    :
                    );
 
-        frame_info.regs.r27 = fp;
-        frame_info.regs.r28 = sp;
-        frame_info.regs.r31 = blink;
-        frame_info.regs.r63 = ret;
-        frame_info.call_frame = 0;
+        frame_info->regs.r27 = fp;
+        frame_info->regs.r28 = sp;
+        frame_info->regs.r31 = blink;
+        frame_info->regs.r63 = ret;
+        frame_info->call_frame = 0;
     }
-    else
-    {
-        frame_info.task = tsk;
+    else if (regs == NULL ) {
 
-        frame_info.regs.r27 = regs->fp;
-        frame_info.regs.r28 = regs->sp;
-        frame_info.regs.r31 = regs->blink;
-        frame_info.regs.r63 = regs->ret;
-        frame_info.call_frame = 0;
+        frame_info->task = tsk;
+
+        frame_info->regs.r27 = KSTK_FP(tsk);
+        frame_info->regs.r28 = KSTK_ESP(tsk);
+        frame_info->regs.r31 = KSTK_BLINK(tsk);
+        frame_info->regs.r63 = (unsigned int )__switch_to;
+        frame_info->call_frame = 0;
+
     }
+    else {
+        frame_info->task = tsk;
 
-    printk("\nStack Trace:\n");
+        frame_info->regs.r27 = regs->fp;
+        frame_info->regs.r28 = regs->sp;
+        frame_info->regs.r31 = regs->blink;
+        frame_info->regs.r63 = regs->ret;
+        frame_info->call_frame = 0;
+    }
+}
+
+unsigned int noinline arc_unwind_core(struct task_struct *tsk,
+    struct pt_regs *regs, int (*consumer_fn)(unsigned int, void *), void *arg)
+{
+    int ret = 0;
+    unsigned int address;
+    struct unwind_frame_info frame_info;
+
+    seed_unwind_frame_info(tsk, regs, &frame_info);
 
     while(1)
     {
-        char namebuf[KSYM_NAME_LEN+1];
-        unsigned long address;
-        int ret = 0;
-
         address = UNW_PC(&frame_info);
-        if(address) {
-#ifdef CONFIG_KALLSYMS
-            printk("  %#lx :", address);
-#endif
-            // if KALLSYMS prints name, else prints just addr
-            printk("  %s\n",
-                arc_identify_sym_r(address, namebuf, sizeof(namebuf)));
+
+        if (address && __kernel_text_address(address )) {
+            if (consumer_fn(address, arg) == -1 )
+                break;
         }
 
         ret = arc_unwind(&frame_info);
@@ -86,56 +106,122 @@ void show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
             break;
         }
     }
-#else
-    printk("CONFIG_ARC_STACK_UNWIND needs to be enabled\n");
-#endif
-    return;
+
+    return address; // return the last address it saw
 }
-EXPORT_SYMBOL(show_stacktrace);
 
+#else
+unsigned int arc_unwind_core(struct task_struct *tsk, struct pt_regs *regs,
+    int (*fn)(unsigned int))
+{
+    /* On ARC, only Dward based unwinder works. fp based backtracing is
+     * not possible even with -fno-omit-frame-pointer
+     */
+    printk("CONFIG_ARC_STACK_UNWIND needs to be enabled\n");
+}
+#endif
 
-/*
- * Expected by sched Code
+/*-------------------------------------------------------------------------
+ *  iterators called by unwinding core to implement APIs expected by kernel
+ *
+ *  Return value protocol:
+ *      (-1) to stop unwinding
+ *      (xx) continue unwinding
+ *-------------------------------------------------------------------------
  */
+
+/* Call-back which plugs into unwinding core to dump the stack in
+ * case of panic/OOPs/BUG etc
+ */
+int vebose_dump_stack(unsigned int address, void *unused)
+{
+    char namebuf[KSYM_NAME_LEN+1];
+
+    printk("\nStack Trace:\n");
+
+#ifdef CONFIG_KALLSYMS
+    printk("  %#x :", address);
+#endif
+    // if KALLSYMS prints name, else prints just addr
+    printk("  %s\n",arc_identify_sym_r(address, namebuf, sizeof(namebuf)));
+
+    return 0;
+}
+
+#ifdef CONFIG_STACKTRACE
+
+/* Call-back which plugs into unwinding core to capture the
+ * traces needed by kernel on /proc/<pid>/stack
+ */
+int fill_backtrace(unsigned int address, void *arg)
+{
+    struct stack_trace *trace = arg;
+
+    if (trace->skip > 0)
+        trace->skip--;
+    else
+        trace->entries[trace->nr_entries++] = address;
+
+    if (trace->nr_entries >= trace->max_entries)
+        return -1;
+
+    return 0;
+}
+#endif
+
+int get_first_nonsched_frame(unsigned int address, void *unused)
+{
+    if (in_sched_functions(address))
+        return 0;
+
+    return -1;
+}
+
+/*-------------------------------------------------------------------------
+ *              APIs expected by various kernel sub-systems
+ *-------------------------------------------------------------------------
+ */
+
+/* Expected by sched Code */
 void show_stack(struct task_struct *tsk, unsigned long *sp)
 {
-    show_stacktrace(0,0);
+    arc_unwind_core(0,0,vebose_dump_stack, NULL);
     sort_snaps(1);
 }
 
-/*
- * Expected by Rest of kernel code
- */
+/* Expected by Rest of kernel code */
 void dump_stack(void)
 {
-    show_stacktrace(0,0);
+    arc_unwind_core(0,0,vebose_dump_stack, NULL);
 }
 
+void show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
+{
+    arc_unwind_core(tsk, regs, vebose_dump_stack, NULL);
+    sort_snaps(1);
+}
 
-/*
- * API: expected by schedular Code: If thread is sleeping where is that.
- * What is this good for? it will be always the scheduler or ret_from_fork.
+EXPORT_SYMBOL(show_stacktrace);
+
+/* Another API expected by schedular, shows up in "ps" as Wait Channel
+ * Ofcourse just returning schedule( ) would be pointless so unwind until
+ * the function is not in schedular code
  */
-unsigned long thread_saved_pc(struct task_struct *t)
+unsigned int get_wchan(struct task_struct *tsk)
 {
-    struct pt_regs *regs = task_pt_regs(t);
-    struct unwind_frame_info frame_info;
-    unsigned long address;
-
-    frame_info.task = t;
-
-    frame_info.regs.r27 = regs->fp;
-    frame_info.regs.r28 = regs->sp;
-    frame_info.regs.r31 = regs->blink;
-    frame_info.regs.r63 = regs->ret;
-    frame_info.call_frame = 0;
-
-    address = UNW_PC(&frame_info);
-
-    return address;
+    return arc_unwind_core(tsk, NULL, get_first_nonsched_frame, NULL);
 }
 
-unsigned int get_wchan(struct task_struct *p)
+#ifdef CONFIG_STACKTRACE
+
+extern struct task_struct *__switch_to(struct task_struct *prev,
+                                    struct task_struct *next);
+
+/* API required by CONFIG_STACKTRACE.
+ * A typical use is when /proc/<pid>/stack is queried by userland
+ */
+void save_stack_trace_tsk(struct task_struct *tsk, struct stack_trace *trace)
 {
-    return 0;
+    arc_unwind_core(tsk, NULL, fill_backtrace, trace);
 }
+#endif

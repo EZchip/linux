@@ -1,5 +1,11 @@
 /******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+ * Copyright ARC International (www.arc.com) 2009-2010
+ *
+ *
+ * Vineetg: July 2009
+ *  -Removed CONFIG_ARC_USER_FAULTS_DEBUG (dumping regs in case of fatal
+ *    signal in user faults return path) as it is already provided by
+ *    /proc/sys/kernel/print-fatal-signals
  *
  * Vineetg: April 2009:
  *  -Check for Valid sys call number in EV_Trap was bogus
@@ -363,25 +369,14 @@ ARC_ENTRY EV_MachineCheck
 
 not_tlb_overlap:
 
-    ; FIXME: Maybe a hack, to solve bug 1384
-    ; Check if an access to above 0x8000000 (i.e. in user-mode) caused the MC
-    ; If so, do not panic, treat it as a ProtV
-
-    lr  r9, [erstatus]
-    bbit0   r9, STATUS_U_BIT,  display_machine_state
-
-    bbit1    r1, ARC_UNTRANS_ADDR_START, treat_mchk_as_protV
-
     ; DEAD END: can't do much, display Regs and HALT
-display_machine_state:
     SAVE_CALLEE_SAVED
-    mov r3, sp
-    bl  do_machine_check_fault
 
-treat_mchk_as_protV:
+    GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
+    st  sp, [r10, THREAD_CALLEE_REG]
 
-    RESTORE_ALL_SYS
-    ; fall through to TLBProtV
+    j  do_machine_check_fault
+
 
 ; ---------------------------------------------
 ; Protection Violation Exception Handler
@@ -820,38 +815,28 @@ not_level1_interrupt:
 debug_marker_syscall:
     rtie
 
-;---------------------------------------------------------
-;  To debug user Program Crashes better, we need to display the
-;     complete REG File. Fault handlers "C" code only have access
-;     to CALLER REGS so they can't print CALLEE REGS (r13 to r25).
-;     Thus when we return from a Critical Fault such as
-;     Illegal Instruction, Mem Error, Unhandled Prot Violation,
-;     we save the CALLEE REGS and dump them.
-;---------------------------------------------------------
-#ifdef CONFIG_ARC_USER_FAULTS_DBG
+ARC_EXIT ret_from_exception
+
+
+;----------------------------------------------------------------------
+; This is hook incase some one wants to do more in case of a User FAULT
+; All user faults fall off thru this routine.
+; However Right now we don't anything specific, so its branching off to
+; normal excpetion return path
+;
+; Our requirement for dumping reg file on fatal signals is catered to by
+; /proc/sys/kernel/print-fatal-signals in generic signal code
+;-----------------------------------------------------------------------
 
 ARC_ENTRY ret_from_user_faults
 
-    ; do_page_fault ( ) returns 1 for fatal signals
-    brne r0, 1, 1f
+    ; Add code here
+    ; .........
+    ; .........
 
-    ; check if toggle for displaying regs on faults is set
-    ld r0, [SYMBOL_NAME(debug_user_faults)]
-    brne r0, 1, 1f
+    b ret_from_exception
 
-    ; ok save the callee regs and call dump rtn
-    SAVE_CALLEE_SAVED
-    mov r0, sp
-    bl show_callee_regs
-    RESTORE_CALLEE_SAVED
-
-    ;complete exception processing
-1:
-
-    j ret_from_exception
-
-#endif
-
+ARC_EXIT ret_from_user_faults
 
 
 ARC_ENTRY ret_from_fork
@@ -860,46 +845,6 @@ ARC_ENTRY ret_from_fork
     ; put last task in scheduler queue
     jl  SYMBOL_NAME(schedule_tail)
     jal SYMBOL_NAME(ret_from_exception)
-
-;################### Low Level Context Switch ##########################
-
-ARC_ENTRY __switch_to
-    /* save return address onto stack */
-    st.a    blink, [sp, -4]
-    /* save frame pointer stack */
-    st.a    fp, [sp, -4]
-    SAVE_CALLEE_SAVED
-    /* save kernel stack pointer */
-    add r9, r0, (TASK_THREAD + THREAD_KSP)
-    st  sp, [r9]
-
-    /* Return last task in r0 (return reg)
-         On ARC, Return reg = First Arg reg = r0.
-         Since we already have last task in r0,
-         don't need to do anything special to return it
-    */
-
-    ; Ensure all pending memory operations have physically completed before
-    ; switching contexts. This is to make sure that the right process is
-    ; killed in case of a memory error
-    sync
-
-    /* switch to new task , second parameter to this function , ie r1*/
-    // Temp reg r3 is required to get the ptr to store val
-    PUT_CURR_TASK_ON_CPU  r1, r3
-
-    /* load kernel stack pointer from the new task struct */
-    ld  sp, [r1, TASK_THREAD + THREAD_KSP]
-    /* restore the registers for the new task */
-    RESTORE_CALLEE_SAVED
-
-    /* restore the frame pointer */
-    ld.ab   fp, [sp, 4]
-    /* restore blink (return address) */
-    ld.ab   blink, [sp, 4]
-    /* return to the point where this thread "slept" */
-    j   [blink]
-    /* FIXME : unused delay slot */
 
 ;################### Special Sys Call Wrappers ##########################
 

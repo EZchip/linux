@@ -53,7 +53,6 @@ typedef struct {
 /* In memory PTE bits (shown above).
  * (S) -> Bits implemented in software
  * (H) -> Bits provided by hardware
- * _PAGE_EXECUTE not used currently
  */
 #define _PAGE_PRESENT       (1<<0)  /* Page present in memory (S)*/
 #define _PAGE_ACCESSED      (1<<1)  /* Page is accesses (S) */

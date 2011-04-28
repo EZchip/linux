@@ -61,6 +61,8 @@ extern int root_mountflags;
 extern void arc_irq_init(void);
 extern char * arc_mmu_mumbojumbo(int cpu_id, char *buf);
 extern char * arc_cache_mumbojumbo(int cpu_id, char *buf);
+extern void __init arc_verify_sig_sz(void);
+
 
 struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
 
@@ -122,40 +124,50 @@ typedef struct {
 }
 cpuinfo_data_t;
 
+
+#define READ_BCR(reg, into)             \
+{                                       \
+    unsigned int tmp;                   \
+    tmp = read_new_aux_reg(reg);        \
+    if (sizeof(tmp) == sizeof(into))    \
+        into = *((typeof(into) *)&tmp); \
+    else  {                             \
+        extern void bogus_undefined(void);\
+        bogus_undefined();              \
+    }                                   \
+}
+
 int __init read_arc_build_cfg_regs(void)
 {
-    unsigned int tmp;
     int cpu = smp_processor_id();
     struct cpuinfo_arc *p_cpu = &cpuinfo_arc700[cpu];
 
-    tmp = read_new_aux_reg(AUX_IDENTITY);
-    p_cpu->cpu = *((struct cpuinfo_arc_processor*)&tmp);
+    READ_BCR(AUX_IDENTITY, p_cpu->cpu);
 
     p_cpu->timers = read_new_aux_reg(ARC_REG_TIMERS_BCR);
     p_cpu->vec_base = read_new_aux_reg(AUX_INTR_VEC_BASE);
     p_cpu->perip_base = read_new_aux_reg(ARC_REG_PERIBASE_BCR);
+    READ_BCR(ARC_REG_D_UNCACH_BCR, p_cpu->uncached_space);
 
     p_cpu->extn.mul = read_new_aux_reg(ARC_REG_MUL_BCR);
     p_cpu->extn.swap = read_new_aux_reg(ARC_REG_SWAP_BCR);
     p_cpu->extn.norm = read_new_aux_reg(ARC_REG_NORM_BCR);
     p_cpu->extn.minmax = read_new_aux_reg(ARC_REG_MIXMAX_BCR);
     p_cpu->extn.barrel = read_new_aux_reg(ARC_REG_BARREL_BCR);
-    p_cpu->extn.mac_mul = read_new_aux_reg(ARC_REG_MAC_BCR);
+    READ_BCR(ARC_REG_MAC_BCR, p_cpu->extn_mac_mul);
+
     p_cpu->extn.ext_arith = read_new_aux_reg(ARC_REG_EXTARITH_BCR);
     p_cpu->extn.crc = read_new_aux_reg(ARC_REG_CRC_BCR);
     p_cpu->extn.dccm = read_new_aux_reg(ARC_REG_DCCM_BCR);
     p_cpu->extn.iccm = read_new_aux_reg(ARC_REG_ICCM_BCR);
 
-    tmp = read_new_aux_reg(ARC_REG_XY_MEM_BCR);
-    p_cpu->xymem_extn = *((struct cpuinfo_arc_extn_xymem *)&tmp);
+    READ_BCR(ARC_REG_XY_MEM_BCR, p_cpu->extn_xymem);
 
 #ifdef CONFIG_ARCH_ARC800
-    tmp = read_new_aux_reg(ARC_REG_MP_BCR);
-    p_cpu->mp = *((struct cpuinfo_arc800 *)&tmp);
+    READ_BCR(ARC_REG_MP_BCR, p_cpu->mp);
 #endif
 
     return cpu;
-
 }
 
 
@@ -195,6 +207,9 @@ char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
     num += sprintf(buf+num,"Interrupt Vect Base: \t0x%x \n", p_cpu->vec_base);
     num += sprintf(buf+num,"Peripheral Base: \t0x%x \n", p_cpu->perip_base);
 
+    num += sprintf(buf+num, "Data UNCACHED Base (I/O): start %#x Sz, %d MB \n",
+            p_cpu->uncached_space.start, (0x10 << p_cpu->uncached_space.sz) );
+
     return buf;
 }
 
@@ -203,26 +218,32 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
     int num=0;
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
 
-cpuinfo_data_t extn_mul_type_nm [] = {
+const cpuinfo_data_t mul_type_nm [] = {
     { 0x0, "Not Present" },
     { 0x1, "32x32 with SPECIAL Result Reg" },
     { 0x2, "32x32 with ANY Result Reg" }
 };
 
-#if 0
-cpuinfo_data_t extn_mac_mul_nm[] = {
+const cpuinfo_data_t mac_mul_nm[] = {
+    { 0x0, "Not Present" },
+    { 0x1, "Not Present" },
     { 0x2, "Dual 16 x 16" },
+    { 0x3, "Not Present" },
     { 0x4, "32 x 16" },
-    { 0x6, "Dual 16 x 16 and 32 x 16" },
-    { 0x0, NULL }
+    { 0x5, "Not Present" },
+    { 0x6, "Dual 16 x 16 and 32 x 16" }
 };
-#endif
 
 #define IS_AVAIL1(var)   ((var)? "Present" :"NA")
 
     num += sprintf(buf+num, "Extensions:\n");
 
-    num += sprintf(buf+num, "Multiplier: %s\n", extn_mul_type_nm[p_cpu->extn.mul].str);
+    num += sprintf(buf+num, "Multiplier: %s",
+                        mul_type_nm[p_cpu->extn.mul].str);
+
+    num += sprintf(buf+num, "   MAC Multiplier: %s\n",
+                        mac_mul_nm[p_cpu->extn_mac_mul.type].str);
+
     num += sprintf(buf+num, "DCCM: %s,", IS_AVAIL1(p_cpu->extn.dccm));
     num += sprintf(buf+num, "   ICCM: %s\n", IS_AVAIL1(p_cpu->extn.iccm));
     num += sprintf(buf+num, "CRC  Instrn: %s,", IS_AVAIL1(p_cpu->extn.crc));
@@ -235,10 +256,8 @@ cpuinfo_data_t extn_mac_mul_nm[] = {
     num += sprintf(buf+num, "   Barrel Shift Rotate Instrn: %s\n",
                         IS_AVAIL2(p_cpu->extn.barrel));
 
-    num += sprintf(buf+num, "Ext Arith Instrn: %s,",
+    num += sprintf(buf+num, "Ext Arith Instrn: %s\n",
                         IS_AVAIL2(p_cpu->extn.ext_arith));
-
-    num += sprintf(buf+num, "   MAC Multiplier: %s\n", IS_AVAIL1(p_cpu->extn.mac_mul));
 
 #ifdef CONFIG_ARCH_ARC800
     num += sprintf(buf+num, "MP Extensions: Ver (%d), Arch (%d)\n",
@@ -262,7 +281,6 @@ void __init setup_processor(void)
 {
     char str[512];
     int cpu_id = read_arc_build_cfg_regs();
-    unsigned int tmp;
 
     arc_irq_init();
 
@@ -274,15 +292,11 @@ void __init setup_processor(void)
     a7_cache_init();
 
     printk(arc_extn_mumbojumbo(cpu_id, str));
-
-    tmp = read_new_aux_reg(ARC_REG_D_UNCACH_BCR);
-    printk("Data UNCACHED Region (I/O Region): start %#x Sz %d MB \n",
-            (tmp & 0xFF000000), (0x10 << ((tmp >> 8) & 0xFF) ) );
 }
 
 static int __init parse_tag_core(struct tag *tag)
 {
-    printk("ATAG_CORE: successful parsing\n");
+    printk_init("ATAG_CORE: successful parsing\n");
     return 0;
 }
 
@@ -290,7 +304,7 @@ __tagtable(ATAG_CORE, parse_tag_core);
 
 static int __init parse_tag_mem32(struct tag *tag)
 {
-    printk("ATAG_MEM: size = 0x%x\n", tag->u.mem.size);
+    printk_init("ATAG_MEM: size = 0x%x\n", tag->u.mem.size);
 
     end_mem = CONFIG_SRAM_BASE + CONFIG_SRAM_SIZE + PHYS_SRAM_OFFSET;
 
@@ -301,7 +315,7 @@ __tagtable(ATAG_MEM, parse_tag_mem32);
 
 static int __init parse_tag_clk_speed(struct tag *tag)
 {
-    printk("ATAG_CLK_SPEED: clock-speed = %d\n",
+    printk_init("ATAG_CLK_SPEED: clock-speed = %d\n",
            tag->u.clk_speed.clk_speed_hz);
     clk_speed = tag->u.clk_speed.clk_speed_hz;
     return 0;
@@ -312,10 +326,10 @@ __tagtable(ATAG_CLK_SPEED, parse_tag_clk_speed);
 /* not yet useful... */
 static int __init parse_tag_ramdisk(struct tag *tag)
 {
-    printk("ATAG_RAMDISK: Flags for ramdisk = 0x%x\n",
+    printk_init("ATAG_RAMDISK: Flags for ramdisk = 0x%x\n",
            tag->u.ramdisk.flags);
-    printk("ATAG_RAMDISK: ramdisk size = 0x%x\n", tag->u.ramdisk.size);
-    printk("ATAG_RAMDISK: ramdisk start address = 0x%x\n",
+    printk_init("ATAG_RAMDISK: ramdisk size = 0x%x\n", tag->u.ramdisk.size);
+    printk_init("ATAG_RAMDISK: ramdisk start address = 0x%x\n",
            tag->u.ramdisk.start);
     return 0;
 
@@ -326,8 +340,8 @@ __tagtable(ATAG_RAMDISK, parse_tag_ramdisk);
 /* not yet useful.... */
 static int __init parse_tag_initrd2(struct tag *tag)
 {
-    printk("ATAG_INITRD2: initrd start = 0x%x\n", tag->u.initrd.start);
-    printk("ATAG_INITRD2: initrd size = 0x%x\n", tag->u.initrd.size);
+    printk_init("ATAG_INITRD2: initrd start = 0x%x\n", tag->u.initrd.start);
+    printk_init("ATAG_INITRD2: initrd size = 0x%x\n", tag->u.initrd.size);
     return 0;
 
 }
@@ -336,8 +350,8 @@ __tagtable(ATAG_INITRD2, parse_tag_initrd2);
 
 static int __init parse_tag_cache(struct tag *tag)
 {
-    printk("ATAG_CACHE: ICACHE status = 0x%x\n", tag->u.cache.icache);
-    printk("ATAG_CACHE: DCACHE status = 0x%x\n", tag->u.cache.dcache);
+    printk_init("ATAG_CACHE: ICACHE status = 0x%x\n", tag->u.cache.icache);
+    printk_init("ATAG_CACHE: DCACHE status = 0x%x\n", tag->u.cache.dcache);
     return 0;
 
 }
@@ -346,9 +360,9 @@ __tagtable(ATAG_CACHE, parse_tag_cache);
 
 static int __init parse_tag_serial(struct tag *tag)
 {
-    printk("ATAG_SERIAL: serial_nr = %d\n", tag->u.serial.serial_nr);
+    printk_init("ATAG_SERIAL: serial_nr = %d\n", tag->u.serial.serial_nr);
     /* when we have multiple uart's serial_nr should also be processed */
-    printk("ATAG_SERIAL: serial baudrate = %d\n", tag->u.serial.baudrate);
+    printk_init("ATAG_SERIAL: serial baudrate = %d\n", tag->u.serial.baudrate);
     serial_baudrate = tag->u.serial.baudrate;
     return 0;
 
@@ -359,7 +373,7 @@ __tagtable(ATAG_SERIAL, parse_tag_serial);
 static int __init parse_tag_vmac(struct tag *tag)
 {
     int i;
-    printk("ATAG_VMAC: vmac address = %d:%d:%d:%d:%d:%d\n",
+    printk_init("ATAG_VMAC: vmac address = %d:%d:%d:%d:%d:%d\n",
            tag->u.vmac.addr[0], tag->u.vmac.addr[1], tag->u.vmac.addr[2],
            tag->u.vmac.addr[3], tag->u.vmac.addr[4], tag->u.vmac.addr[5]);
 
@@ -376,7 +390,7 @@ __tagtable(ATAG_VMAC, parse_tag_vmac);
 
 static int __init parse_tag_cmdline(struct tag *tag)
 {
-    printk("ATAG_CMDLINE: command line = %s\n", tag->u.cmdline.cmdline);
+    printk_init("ATAG_CMDLINE: command line = %s\n", tag->u.cmdline.cmdline);
     strcpy(command_line, tag->u.cmdline.cmdline);
     return 0;
 
@@ -403,7 +417,7 @@ static void __init parse_tags(struct tag *tags)
     while (tags->hdr.tag != ATAG_NONE) {
 
         if (!parse_tag(tags))
-            printk("Ignoring unknown tag type\n");
+            printk_init("Ignoring unknown tag type\n");
 
         tags = tag_next(tags);
     }
@@ -476,13 +490,13 @@ void __init setup_arch(char **cmdline_p)
         tags = (struct tag *)atag_head;
 
         if (tags->hdr.tag == ATAG_CORE) {
-            printk("Parsing ATAG parameters from bootloader\n");
+            printk_init("Parsing ATAG parameters from bootloader\n");
             parse_tags(tags);
         } else
-            printk("INVALID ATAG parameters from bootloader\n");
+            printk_init("INVALID ATAG parameters from bootloader\n");
     }
     else {
-        printk("SKIPPING ATAG parsing...\n");
+        printk_init("SKIPPING ATAG parsing...\n");
     }
 
     /* clk_speed and serial_baudrate intialised during parsing
@@ -555,6 +569,8 @@ void __init setup_arch(char **cmdline_p)
        conswitchp = &dummy_con;
 #endif
     paging_init();
+
+    arc_verify_sig_sz();
 
     arc_unwind_init();
     arc_unwind_setup();

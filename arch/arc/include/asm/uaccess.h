@@ -461,6 +461,8 @@ if( ((unsigned long) to & 0x3) || ((unsigned long) from & 0x3))  // unaligned
     return (res);
 }
 
+//#define NONINLINE_USR_CPY
+#ifndef NONINLINE_USR_CPY
 /*
   documentation says that copy_from_user should return the number of
   bytes that couldn't be copied, we return 0 indicating that all data
@@ -492,6 +494,12 @@ __copy_from_user(void *to, const void *from, unsigned long n)
 {
     return (__generic_copy_from_user(to, from, n));
 }
+#else
+
+unsigned long copy_from_user(void *to, const void *from, unsigned long n);
+unsigned long __copy_from_user(void *to, const void *from, unsigned long n);
+
+#endif
 
 static inline unsigned long
 __generic_copy_to_user(void *to, const void *from, unsigned long n)
@@ -701,6 +709,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
     return (res);
 }
 
+#ifndef NONINLINE_USR_CPY
 /*
   documentation says that copy_to_user should return the number of
   bytes that couldn't be copied, we return 0 indicating that all data
@@ -730,6 +739,12 @@ __copy_to_user(void *to, const void *from, unsigned long n)
 {
     return(__generic_copy_to_user(to, from, n));
 }
+
+#else
+
+unsigned long copy_to_user(void *to, const void *from, unsigned long n);
+unsigned long __copy_to_user(void *to, const void *from, unsigned long n);
+#endif
 
 #define __copy_to_user_inatomic __copy_to_user
 #define __copy_from_user_inatomic __copy_from_user

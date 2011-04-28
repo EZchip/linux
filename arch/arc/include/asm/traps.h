@@ -51,3 +51,6 @@
 #define DATA_TLB_LOAD  0x0100
 #define DATA_TLB_STORE 0x0200
 #define DATA_TLB_XCHG  0x0300
+
+#define DTLB_LD_MISS_BIT	8
+#define DTLB_ST_MISS_BIT	9
