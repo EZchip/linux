@@ -146,7 +146,6 @@ void ptrace_disable(struct task_struct *child)
   /* DUMMY: dummy function to resolve undefined references */
 }
 
-
 unsigned long
 getreg(unsigned int offset,struct task_struct *child)
 {
@@ -177,17 +176,18 @@ getreg(unsigned int offset,struct task_struct *child)
          */
         if(in_brkpt_trap(ptregs) || (in_syscall(ptregs)))
         {
-            DBG(" stop_pc (Syscall) ********  \n");
             data = child->thread.fault_address;
+            DBG("\t\tstop_pc (brk-pt)\n");
         }
         else
         {
-            DBG(" stop_pc (NORMAL) ********  \n");
             data = ptregs->ret;
+            DBG("\t\tstop_pc (others)\n");
         }
     }
 
-    DBG("  %s:0x%2x (%s) = %x\n", __FUNCTION__,offset, get_str_from_id(offset, &reg_names), data);
+    DBG("\t\t%s:0x%2x (%s) = %x\n", __FUNCTION__,offset,
+            get_str_from_id(offset, &reg_names), data);
 
     return data;
 }
@@ -199,7 +199,8 @@ setreg(unsigned int offset, unsigned int data, struct task_struct *child)
     unsigned int *reg_file;
     struct pt_regs *ptregs = task_pt_regs(child);
 
-    DBG("  %s:0x%2x (%s) = 0x%x\n", __FUNCTION__,offset, get_str_from_id(offset, &reg_names),data);
+    DBG("\t\t%s:0x%2x (%s) = 0x%x\n", __FUNCTION__,offset,
+            get_str_from_id(offset, &reg_names),data);
 
     if(offset ==offsetof(struct user_regs_struct, reserved1) ||
         offset == offsetof(struct user_regs_struct, reserved2) ||
@@ -210,7 +211,7 @@ setreg(unsigned int offset, unsigned int data, struct task_struct *child)
 
     if(offset == offsetof(struct user_regs_struct,stop_pc))
     {
-        DBG("   ******** @@@@ ********  \n");
+        DBG("\t\tstop_pc (others)\n");
         ptregs->ret = data;
     }
     else if(offset < offsetof(struct user_regs_struct, reserved2)) {
@@ -234,10 +235,10 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     int i;
     unsigned long tmp;
 
-    if (! (request == PTRACE_PEEKUSR || request == PTRACE_POKEUSR)) {
-        DBG("Tsk 0x%p, ptregs 0x%p: REQ=%ld (%s), ADDR =%lx, DATA=%lx)\n",
-            child, task_pt_regs(child),request,
-            get_str_from_id(request, &req_names),addr, data);
+    if (! (request == PTRACE_PEEKTEXT || request == PTRACE_PEEKDATA ||
+           request == PTRACE_PEEKUSR )) {
+        DBG("REQ=%ld (%s), ADDR =0x%lx, DATA=0x%lx)\n",
+            request, get_str_from_id(request, &req_names),addr, data);
     }
 
     switch (request) {
@@ -248,7 +249,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     case PTRACE_PEEKTEXT:
     case PTRACE_PEEKDATA:
             ret = generic_ptrace_peekdata(child, addr, data);
-            DBG("    Peek @ 0x%lx = 0x%lx \n",addr, data);
+            DBG("\tPeek-data @ 0x%lx = 0x%lx \n",addr, data);
             break;
 
     case PTRACE_POKETEXT: /* write the word at location addr. */
@@ -324,6 +325,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         if(addr > (unsigned)offsetof(struct user,regs) &&
            addr < (unsigned)offsetof(struct user,regs) + sizeof(struct user_regs_struct))
         {
+            DBG("\tPeek-usr\n");
             tmp = getreg(addr,child);
             ret = put_user(tmp, ((unsigned long *)data));
         }
