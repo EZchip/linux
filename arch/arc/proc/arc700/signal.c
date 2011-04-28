@@ -69,27 +69,17 @@
  *
  * Author(s) :  Rahul Trivedi, Kanika Nema
  */
-#include <linux/sys.h>      /* for NR_syscalls */
-#include <linux/sched.h>
-#include <linux/mm.h>
-#include <linux/smp.h>
-#include <linux/smp_lock.h>
-#include <linux/kernel.h>
-#include <linux/errno.h>
 #include <linux/signal.h>
-#include <linux/wait.h>
 #include <linux/ptrace.h>
 #include <linux/unistd.h>
 #include <linux/personality.h>
-#include <linux/syscalls.h> /* Sameer: For sys_wait4() */
 #include <linux/freezer.h>
 #include <asm/ucontext.h>
 #include <asm/uaccess.h>
 
 /* for changing permissions of stackpage*/
-#include <asm/pgtable.h>
-#include <asm/arcregs.h>
 #include <asm/tlb.h>
+#include <asm/cacheflush.h>
 
 #define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
 
@@ -731,7 +721,7 @@ do_per_page:
     paddr = (vaddr & ~PAGE_MASK) | (pte_val(pte) & PAGE_MASK);
 
     /* Flush dcache line, and inv Icache line for frame->retcode */
-    flush_icache_range(paddr, paddr + size_on_pg);
+    flush_icache_range_vaddr(paddr, vaddr, size_on_pg);
 
     mod_tlb_permission(vaddr_pg, current->mm, exec_enable);
 

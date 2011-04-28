@@ -2,6 +2,10 @@
  * Copyright ARC International (www.arc.com) 2007-2009
  *
  * vineetg: Mar 2011
+ *  -optimised version of flush_icache_range( ) for making I/D coherent
+ *   when vaddr is available
+ *
+ * vineetg: Mar 2011
  *  -Added documentation about I-cache aliasing on ARC700 and the way it
  *   was handled up until MMU V2.
  *  -Spotted a three year old bug when killing the 4 aliases, bottom 2
@@ -550,6 +554,9 @@ static void __arc_icache_inv_lines(unsigned long start, unsigned long sz)
     unsigned long flags;
     int num_lines, slack;
 
+    /* ensure we properly floor/ceil the non-line aligned/sized requests
+     * and have @start - aligned to pag sz, and integral @num_lines
+     */
     slack = start & ~ICACHE_LINE_MASK;
     sz += slack;
     start -= slack;
@@ -557,6 +564,30 @@ static void __arc_icache_inv_lines(unsigned long start, unsigned long sz)
 
     local_irq_save(flags);
     (*___flush_icache_rtn)(start, num_lines);
+    local_irq_restore(flags);
+}
+
+static void __arc_icache_inv_lines_vaddr(unsigned long phy_start,
+                unsigned long vaddr, unsigned long sz)
+{
+    unsigned long flags;
+    int num_lines, slack;
+    unsigned int vbits;
+
+    slack = phy_start & ~ICACHE_LINE_MASK;
+    sz += slack;
+    phy_start -= slack;
+    num_lines = (sz + ICACHE_COMPILE_LINE_LEN - 1)/ICACHE_COMPILE_LINE_LEN;
+
+    // bits 17:13
+    vbits = ( vaddr >> 13 ) & 0x1F;
+    phy_start |= vbits;
+
+    local_irq_save(flags);
+    while (num_lines-- > 0) {
+        write_new_aux_reg(ARC_REG_IC_IVIL, phy_start);
+        phy_start += ICACHE_COMPILE_LINE_LEN;
+    }
     local_irq_restore(flags);
 }
 
@@ -621,6 +652,20 @@ void flush_icache_range(unsigned long kstart, unsigned long kend)
         tot_sz -= PAGE_SIZE;
     }
 
+}
+
+/* Optimised ver of flush_icache_range() with spec callers: ptrace/signals
+ * where vaddr is also available. This allows passing both vaddr and paddr
+ * bits to CDU for cache flush, short-circuting the current pessimistic algo
+ * which kills all possible aliases.
+ * An added adv of knowing that vaddr is user-vaddr avoids various checks
+ * and handling for k-vaddr, k-paddr as done in orig ver above
+ */
+void flush_icache_range_vaddr(unsigned long paddr, unsigned long u_vaddr,
+                                int len)
+{
+    __arc_icache_inv_lines_vaddr(paddr, u_vaddr, len);
+    __arc_dcache_flush_lines(paddr, len);
 }
 
 /*
