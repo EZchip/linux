@@ -33,6 +33,11 @@ void __iomem * __ioremap(unsigned long phys_addr, unsigned long size, unsigned l
     /*
      * Don't allow anybody to remap normal RAM that we're using..
      */
+
+    /*  We are using this API to mark a portion of memory as coherent -
+        by mapping the memory to virtual address space to enable
+        page translation at mmu and marking the page as uncacheable
+
     if (phys_addr <= virt_to_phys(high_memory - 1)) {
         char *t_addr, *t_end;
         struct page *page;
@@ -44,6 +49,7 @@ void __iomem * __ioremap(unsigned long phys_addr, unsigned long size, unsigned l
             if(!PageReserved(page))
                 return NULL;
     }
+	*/
 
     if( flags == ARC_IOMAP_NOCACHE )
         prot = __pgprot(_PAGE_KERNEL_NO_CACHE);
