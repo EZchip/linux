@@ -73,14 +73,76 @@ typedef struct {
 #define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 
 /* Kernel allowed all permissions for all pages */
-#define _KERNEL_PAGE_PERMS  (_PAGE_K_EXECUTE | _PAGE_K_WRITE | \
-                    _PAGE_K_READ)
+#define _KERNEL_PAGE_PERMS  (_PAGE_K_EXECUTE | _PAGE_K_WRITE |  _PAGE_K_READ)
 
 #ifdef  CONFIG_ARC700_CACHE_PAGES
 #define _PAGE_DEFAULT_CACHEABLE _PAGE_CACHEABLE
 #else
 #define _PAGE_DEFAULT_CACHEABLE (0)
 #endif
+
+/* ARC700 can do exclusive execute/write protection but most of the other
+ * architectures implement it such that execute implies read permission
+ * and write imples read permission. So to be compatible we do the same
+ */
+#define _PAGE_TABLE	(_PAGE_PRESENT \
+			| _PAGE_ACCESSED | _PAGE_MODIFIED \
+			| _KERNEL_PAGE_PERMS)
+#define _PAGE_CHG_MASK	(PAGE_MASK | _PAGE_ACCESSED | _PAGE_MODIFIED)
+#define PAGE_NONE	__pgprot(_PAGE_PRESENT | _PAGE_DEFAULT_CACHEABLE \
+			| _KERNEL_PAGE_PERMS)
+#define PAGE_SHARED	__pgprot(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE \
+			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
+#define PAGE_SHARED_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE \
+			        | _PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE\
+                                | _KERNEL_PAGE_PERMS)
+#define	PAGE_COPY	__pgprot(_PAGE_PRESENT | _PAGE_READ \
+			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
+#define	PAGE_COPY_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ \
+				|_PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE \
+				| _KERNEL_PAGE_PERMS)
+#define PAGE_READONLY	__pgprot(_PAGE_PRESENT | _PAGE_READ \
+			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
+#define PAGE_READONLY_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ \
+				| _PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE \
+				| _KERNEL_PAGE_PERMS )
+/* Kernel only page (vmalloc) : global page with all user mode perms
+ * denied. kernel mode perms are set for all pages */
+
+/* Disabling cacheable bit so vmalloc'ed pages will not be cached.
+ * This is done to work around a problem in loading modules vmalloc area.
+ * FIXME : Need to see how we can support caching of module pages by looking
+ * at the module loading code. It does not seem to be flushing the Dcache */
+
+
+#define _PAGE_KERNEL	(_PAGE_PRESENT | _PAGE_GLOBAL \
+			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
+
+#define _PAGE_KERNEL_NO_CACHE	(_PAGE_PRESENT | _PAGE_GLOBAL \
+			|  _KERNEL_PAGE_PERMS)
+
+#define PAGE_KERNEL	__pgprot(_PAGE_KERNEL)
+
+#define _KERNPG_TABLE   (_PAGE_TABLE | _PAGE_KERNEL)
+        /* xwr */
+#define __P000	PAGE_NONE
+#define __P001	PAGE_READONLY
+#define __P010	PAGE_COPY
+#define __P011	PAGE_COPY
+#define __P100	PAGE_READONLY_EXECUTE
+#define __P101	PAGE_READONLY_EXECUTE
+#define __P110	PAGE_COPY_EXECUTE
+#define __P111	PAGE_COPY_EXECUTE
+
+#define __S000	PAGE_NONE
+#define __S001	PAGE_READONLY
+#define __S010	PAGE_SHARED
+#define __S011	PAGE_SHARED
+#define __S100	PAGE_READONLY_EXECUTE
+#define __S101	PAGE_READONLY_EXECUTE
+#define __S110	PAGE_SHARED_EXECUTE
+#define __S111	PAGE_SHARED_EXECUTE
+
 
 /* ARC700 specifies that addr above 0x8000_0000 are not
  * translated by the MMU (reserved for kernel)

@@ -65,68 +65,6 @@
 /* Sameer: Need to recheck this value for ARC. */
 #define FIRST_USER_ADDRESS      0
 
-/* ARC700 can do exclusive execute/write protection but most of the other
- * architectures implement it such that execute implies read permission
- * and write imples read permission. So to be compatible we do the same
- */
-#define _PAGE_TABLE	(_PAGE_PRESENT \
-			| _PAGE_ACCESSED | _PAGE_MODIFIED \
-			| _KERNEL_PAGE_PERMS)
-#define _PAGE_CHG_MASK	(PAGE_MASK | _PAGE_ACCESSED | _PAGE_MODIFIED)
-#define PAGE_NONE	__pgprot(_PAGE_PRESENT | _PAGE_DEFAULT_CACHEABLE \
-			| _KERNEL_PAGE_PERMS)
-#define PAGE_SHARED	__pgprot(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
-#define PAGE_SHARED_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ | _PAGE_WRITE \
-			        | _PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE\
-                                | _KERNEL_PAGE_PERMS)
-#define	PAGE_COPY	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
-#define	PAGE_COPY_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-				|_PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE \
-				| _KERNEL_PAGE_PERMS)
-#define PAGE_READONLY	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
-#define PAGE_READONLY_EXECUTE	__pgprot(_PAGE_PRESENT | _PAGE_READ \
-				| _PAGE_EXECUTE | _PAGE_DEFAULT_CACHEABLE \
-				| _KERNEL_PAGE_PERMS )
-/* Kernel only page (vmalloc) : global page with all user mode perms
- * denied. kernel mode perms are set for all pages */
-
-/* Disabling cacheable bit so vmalloc'ed pages will not be cached.
- * This is done to work around a problem in loading modules vmalloc area.
- * FIXME : Need to see how we can support caching of module pages by looking
- * at the module loading code. It does not seem to be flushing the Dcache */
-
-
-#define _PAGE_KERNEL	(_PAGE_PRESENT | _PAGE_GLOBAL \
-			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)
-
-#define _PAGE_KERNEL_NO_CACHE	(_PAGE_PRESENT | _PAGE_GLOBAL \
-			|  _KERNEL_PAGE_PERMS)
-
-#define PAGE_KERNEL	__pgprot(_PAGE_KERNEL)
-
-#define _KERNPG_TABLE   (_PAGE_TABLE | _PAGE_KERNEL)
-        /* xwr */
-#define __P000	PAGE_NONE
-#define __P001	PAGE_READONLY
-#define __P010	PAGE_COPY
-#define __P011	PAGE_COPY
-#define __P100	PAGE_READONLY_EXECUTE
-#define __P101	PAGE_READONLY_EXECUTE
-#define __P110	PAGE_COPY_EXECUTE
-#define __P111	PAGE_COPY_EXECUTE
-
-#define __S000	PAGE_NONE
-#define __S001	PAGE_READONLY
-#define __S010	PAGE_SHARED
-#define __S011	PAGE_SHARED
-#define __S100	PAGE_READONLY_EXECUTE
-#define __S101	PAGE_READONLY_EXECUTE
-#define __S110	PAGE_SHARED_EXECUTE
-#define __S111	PAGE_SHARED_EXECUTE
-
 
 #ifndef __ASSEMBLY__
 
@@ -150,22 +88,16 @@ static inline void flush_tlb_pgtables(struct mm_struct *mm,
   /* ARC doesn't keep page table caches in TLB */
 }
 
-/* Certain architectures need to do special things when pte's
- * within a page table are directly modified.  Thus, the following
- * hook is made available.
- */
 #define set_pte(pteptr, pteval) ((*(pteptr)) = (pteval))
-/*
- * (pmds are folded into pgds so this doesn't get actually called,
- * but the define is needed for a generic inline function.)
- */
 #define set_pmd(pmdptr, pmdval) (*(pmdptr) = pmdval)
 
-#define pmd_page(pmd) virt_to_page(__va(pmd_val(pmd) & PAGE_MASK))
+/* find the page descriptor of the Page Tbl ref by PMD entry */
+#define pmd_page(pmd) virt_to_page(pmd_val(pmd) & PAGE_MASK)
 
+/* find the logical addr (phy for ARC) of the Page Tbl ref by PMD entry */
 #define pmd_page_vaddr(pmd)	(pmd_val(pmd) & PAGE_MASK)
 
-/* 	{ return (pmd_val(pmd) & PAGE_MASK); } */
+/* In a 2 level sys, setup the PGD entry with PTE value */
 static inline void pmd_set(pmd_t * pmdp, pte_t * ptep)
 {
     pmd_val(*pmdp) = (unsigned long) ptep;
@@ -173,8 +105,6 @@ static inline void pmd_set(pmd_t * pmdp, pte_t * ptep)
 
 #define pte_none(x)	(!pte_val(x))
 #define pte_present(x)	(pte_val(x) & _PAGE_PRESENT)
-/* #define pte_clear(xp)	do { pte_val(*(xp)) = 0; } while (0) */
-
 #define pte_clear(mm,addr,ptep)	set_pte_at((mm),(addr),(ptep), __pte(0))
 #define pmd_none(x)	    (!pmd_val(x))
 #define	pmd_bad(x)      ((pmd_val(x) & ~PAGE_MASK))
