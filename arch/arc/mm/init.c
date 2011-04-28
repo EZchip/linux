@@ -31,8 +31,6 @@
 pgd_t swapper_pg_dir[PTRS_PER_PGD] __attribute__ ((aligned(PAGE_SIZE)));
 char empty_zero_page[PAGE_SIZE] __attribute__ ((aligned(PAGE_SIZE)));
 
-struct pgtable_cache_struct quicklists;
-
 /* static unsigned long totalram_pages = 0; */
 extern char _etext, _text, _edata, _end, _init_end, _init_begin;
 

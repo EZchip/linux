@@ -38,17 +38,6 @@ pmd_populate(struct mm_struct *mm, pmd_t *pmd, pgtable_t ptep)
     pmd_set(pmd, (pte_t *)(unsigned long)page_address(ptep));
 }
 
-extern struct pgtable_cache_struct {
-        unsigned long *pgd_cache;
-        unsigned long *pte_cache;
-        unsigned long pgtable_cache_sz;
-} quicklists;
-
-#define pgd_quicklist           (quicklists.pgd_cache)
-#define pmd_quicklist           ((unsigned long *)0)
-#define pte_quicklist           (quicklists.pte_cache)
-#define pgtable_cache_size      (quicklists.pgtable_cache_sz)
-
 #define PTE_ORDER 0
 
 extern __inline__ pgd_t *get_pgd_slow(void)
@@ -67,26 +56,6 @@ extern __inline__ pgd_t *get_pgd_slow(void)
 extern __inline__ void free_pgd_slow(pgd_t *pgd)
 {
         free_page((unsigned long)pgd);
-}
-
-extern __inline__ pgd_t *get_pgd_fast(void)
-{
-        unsigned long *ret;
-
-        if ((ret = pgd_quicklist) != NULL) {
-                pgd_quicklist = (unsigned long *)(*ret);
-                ret[0] = 0;
-                pgtable_cache_size--;
-        } else
-                ret = (unsigned long *)get_pgd_slow();
-        return (pgd_t *)ret;
-}
-
-extern __inline__ void free_pgd_fast(pgd_t *pgd)
-{
-        *(unsigned long *)pgd = (unsigned long) pgd_quicklist;
-        pgd_quicklist = (unsigned long *) pgd;
-        pgtable_cache_size++;
 }
 
 static inline pte_t *
@@ -126,7 +95,7 @@ static inline void pte_free(struct mm_struct *mm, pgtable_t ptep)
 
 
 #define pgd_free(mm, pgd)      free_pgd_slow(pgd)
-#define pgd_alloc(mm)          get_pgd_fast()
+#define pgd_alloc(mm)          get_pgd_slow()
 
 /*
  * We don't have any real pmd's, and this code never triggers because
