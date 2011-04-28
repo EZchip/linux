@@ -78,18 +78,6 @@
 /* Sameer: Need to recheck this value for ARC. */
 #define FIRST_USER_ADDRESS      0
 
-
-/* Kernels Virtual memory area.
- * Unlike other architectures(MIPS, sh, cris ) ARC 700 does not have a
- * "kernel translated" region (like KSEG2 in MIPS). So we use a upper part
- * of the translated bottom 2GB for kernel virtual memory and protect
- * these pages from user accesses by disabling Ru, Eu and Wu.
- */
-#define VMALLOC_SIZE	(CONFIG_VMALLOC_SIZE * 1024 * 1024)
-#define VMALLOC_START	(PAGE_OFFSET - VMALLOC_SIZE)
-#define VMALLOC_END	(PAGE_OFFSET)
-#define VMALLOC_VMADDR(x) ((unsigned long)(x))
-
 /* ARC700 can do exclusive execute/write protection but most of the other
  * architectures implement it such that execute implies read permission
  * and write imples read permission. So to be compatible we do the same

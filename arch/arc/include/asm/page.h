@@ -131,6 +131,17 @@ extern __inline__ int get_order(unsigned long size)
 /* rtee: check if not using the page_address  macro helps */
 #define WANT_PAGE_VIRTUAL   1
 
+/* Kernels Virtual memory area.
+ * Unlike other architectures(MIPS, sh, cris ) ARC 700 does not have a
+ * "kernel translated" region (like KSEG2 in MIPS). So we use a upper part
+ * of the translated bottom 2GB for kernel virtual memory and protect
+ * these pages from user accesses by disabling Ru, Eu and Wu.
+ */
+#define VMALLOC_SIZE	(CONFIG_VMALLOC_SIZE * 1024 * 1024)
+#define VMALLOC_START	(PAGE_OFFSET - VMALLOC_SIZE)
+#define VMALLOC_END	(PAGE_OFFSET)
+#define VMALLOC_VMADDR(x) ((unsigned long)(x))
+
 #endif  /* __KERNEL__ */
 
 #endif /* __ASM_ARC_PAGE_H */

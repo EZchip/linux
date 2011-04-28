@@ -36,18 +36,9 @@
 #ifndef __ASM_ARC_PROCESSOR_H
 #define __ASM_ARC_PROCESSOR_H
 
-#include <linux/linkage.h>
-
-/*
- * Default implementation of macro that returns current
- * instruction pointer ("program counter").
- * Should the PC register be read instead ? This macro does not seem to
- * be used in many places so this wont be all that bad.
- */
-#define current_text_addr() ({ __label__ _l; _l: &&_l;})
-
 #ifdef __KERNEL__
 
+//#include <linux/linkage.h>
 #include <asm/page.h>       /* for PAGE_OFFSET  */
 #include <asm/arcregs.h>    /* for STATUS_E1_MASK et all */
 
@@ -57,18 +48,19 @@
  * later if not required.
  * 256 MB so last user addr will be 0x5FFF_FFFF
  */
-#define ARC_SOME_PADDING    0x10000000
+#define USER_KERNEL_GUTTER    0x10000000
 
-/* User space process size:
- * Untraslated start - kernel VM size (CONFIG_VMALLOC_SIZE) - ARC_SOME_PADDING.
+/* User address space:
+ * On ARC700, CPU allows the entire lower half of 32 bit address space to be
+ * translated. Thus potentially 2G (0 - 0x7FFF_FFFF) could be user virt addr space.
+ * However we steal 256M for kernel virtual memory (0x7000_0000 - 0x7FFF_FFFF)
+ * and another 256M (0x6000_0000 - 0x6FFF_FFFF) is gutter betn user/kernel spaces
+ * Thus user virtual addr space is (0 - 0x5FFF_FFFF)
  */
-#define TASK_SIZE   (PAGE_OFFSET - (CONFIG_VMALLOC_SIZE * 1024 * 1024) - ARC_SOME_PADDING)
+#define TASK_SIZE   (PAGE_OFFSET - VMALLOC_SIZE - USER_KERNEL_GUTTER)
 
-#define STACK_TOP_MAX TASK_SIZE
-
-#ifdef __KERNEL__
-#define STACK_TOP TASK_SIZE
-#endif
+#define STACK_TOP_MAX   TASK_SIZE
+#define STACK_TOP       TASK_SIZE
 
 
 /* This decides where the kernel will search for a free chunk of vm
@@ -159,6 +151,14 @@ do {                            \
 } while(0)
 
 extern unsigned int get_wchan(struct task_struct *p);
+
+/*
+ * Default implementation of macro that returns current
+ * instruction pointer ("program counter").
+ * Should the PC register be read instead ? This macro does not seem to
+ * be used in many places so this wont be all that bad.
+ */
+#define current_text_addr() ({ __label__ _l; _l: &&_l;})
 
 #endif  /* __KERNEL__ */
 #endif  /* __ASM_ARC_PROCESSOR_H */
