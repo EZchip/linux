@@ -1,6 +1,9 @@
 /*****************************************************************
  * STRING LIBRARY
  *
+ * vineetg: January 2010 (Rewrite of function variant of memset)
+ *  -All the code in inline asm as opposed to mix of "C"/asm
+ *
  * ARC International
  * Simon Spooner
  * Oct 2nd 2008
@@ -76,64 +79,52 @@ EXPORT_SYMBOL(slowpath_copy_to_user);
 
 #undef memset
 
-// somewhat optized version of memset.
-// Note : the code got larger in order to get faster.
-// The original can be accessed by unsetting OPTIMIZED and setting STOCK
-
-void * memset (void * dest, int c, size_t count)
+void *memset(void * dest, int c, size_t count)
 {
+    unsigned char *d_char = dest;
+    unsigned char ch = (unsigned char)c;
 
-    unsigned int counter;   // words left.
-    unsigned int *d;        // dest
-    unsigned char *d_char;  // dest as a char
-    unsigned int remainder; // what's left.
-    unsigned int word;      // word to write.
+    /* IMP: 32 is arbit, given the cost of branches etc. */
+    if(count > 32)
+    {
+        unsigned int chchchch = 0;
 
-// See if there are enough words to copy to make the extra code
-// introduced on the optimized version worth while.
-// picking an arbitary number of bytes just to start with
-
-
-    if((((unsigned int) dest) & 0x03) || (count < 256))
-    {           // unaligned - slow
-        d_char = dest;
-        while(count--)
-            *d_char++ = c;
-    }
-    else
-    {   // it's aligned
-        counter = count / 4;    // whole words to write.
-        remainder = count % 4;
-
-        d = (unsigned int *) dest;
-
-        /* For word set, need to stitch four "FILL" chars to make
-         *   a word. However if FILL word is zero dont need to do it.
-         *   This saves 7 instructions
-         */
-        if (likely( !c ))
-            word = 0;
-        else
-            word = (c << 24) | ( c << 16) | (c <<8) | c;
-
-        /* Meat of the stuff. Do WORD sets */
+        if (c) {
+            unsigned short chch = ch | (ch << 8);
+            chchchch = chch | (chch << 16);
+        }
 
         __asm__ __volatile__ (
-        "   mov.f   lp_count, %2\n"     // setup ZOL counter Reg
-        "   lpnz    1f\n"               // Enter the Loop
-        "   st.ab   %3, [%1,4]\n"       // memset + ptr increment
-        "1:\n"                          // End of loop
-        "   mov  %0, %1"                // setup final ptr into d_char
-        :"=r"(d_char)
-        :"r" (d), "r" (counter), "r" (word)
-        :"lp_count");
-
-        /* Any BYTES left are done here.
-         * Note: At the end of loop above d_char was setup
-         */
+        "   bbit0   %0, 0, 1f \n"
+        "   stb.ab  %2, [%0,1]\n"
+        "   sub %1, %1, 1     \n"
+        "1: \n"
+        "   bbit0   %0, 1, 2f \n"
+        "   stw.ab  %2, [%0,2]\n"
+        "   sub %1, %1, 2     \n"
+        "2: \n"
+        "   asr.f   lp_count, %1, 2\n"
+        "   lpnz    3f\n"
+        "   st.ab   %2, [%0,4]\n"
+        "   sub %1, %1, 4     \n"
+        "3:\n"
+        "   bbit0   %1, 1, 4f \n"
+        "   stw.ab  %2, [%0,2]\n"
+        "   sub %1, %1, 2     \n"
+        "4: \n"
+        "   bbit0   %1, 0, 5f \n"
+        "   stb.ab  %2, [%0,1]\n"
+        "   sub %1, %1, 1     \n"
+        "5: \n"
+        :"+r" (d_char), "+r" (count)
+        :"ir" (chchchch)
+        :"lp_count","lp_start","lp_end");
+    }
+    else {
+        int remainder = count;
         while(remainder--)
         {
-            *d_char++ = c;
+            *d_char++ = ch;
         }
     }
 
