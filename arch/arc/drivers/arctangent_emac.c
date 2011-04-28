@@ -2,6 +2,9 @@
  * Copyright ARC International (www.arc.com) 2009-2010
  *
  * vineetg: Nov 2009
+ *  -Unified NAPI and Non-NAPI Code.
+ *
+ * vineetg: Nov 2009
  *  -Rewrote the driver register access macros so that multiple accesses
  *   in same function use "anchor" reg to save the base addr causing
  *   shorter instructions
@@ -69,9 +72,14 @@ static int arc_thread(void *unused);
 
 #ifdef CONFIG_EMAC_NAPI
 static int aa3_poll (struct napi_struct *napi, int budget);
-static int  aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigned int work_to_do);
-static int aa3_tx_clean(struct net_device *netdev);
 #endif
+
+static int aa3_clean(struct net_device *dev
+#ifdef CONFIG_EMAC_NAPI
+    ,unsigned int work_to_do
+#endif
+);
+static int aa3_tx_clean(struct net_device *dev);
 static irqreturn_t aa3_emac_intr (int irq, void *dev_instance);
 
 //Stats proc file system
@@ -257,14 +265,14 @@ static inline arc_emac_reg *const EMAC_REG(void * ap)   \
 	val &= 0xffff;              \
 }
 
-	struct aa3_buffer_desc
-	{
+struct aa3_buffer_desc
+{
 		unsigned int    info;
 		void           *data;
-	};
+};
 
-	struct aa3_emac_priv
-	{
+struct aa3_emac_priv
+{
 		struct net_device_stats stats;
 		/* base address of the register set for this device */
 		arc_emac_reg  *reg_base_addr;
@@ -289,7 +297,7 @@ static inline arc_emac_reg *const EMAC_REG(void * ap)   \
 		 */
 		volatile unsigned int mdio_complete;
         struct napi_struct napi;
-	};
+};
 
 /*
  * This MAC addr is given to the first opened EMAC, the last byte will be
@@ -355,20 +363,15 @@ static void     dump_phy_status(unsigned int status)
 
 static int aa3_poll (struct napi_struct *napi, int budget)
 {
+   struct net_device *dev = aa3_root_dev;
+   struct aa3_emac_priv *ap = netdev_priv(dev);
+   unsigned int work_done;
 
+     work_done = aa3_clean(dev, budget);
 
-   struct net_device *netdev = aa3_root_dev;
-   struct aa3_emac_priv *ap = (struct aa3_emac_priv *) netdev->priv;
-   unsigned int work_done = 0;
-
-
-
-     aa3_clean(netdev,&work_done, budget);
-//     aa3_tx_clean(netdev);
-//    printk("%u\n", work_done);
         if(work_done < budget)
         {
-            netif_rx_complete(netdev, napi);
+            netif_rx_complete(dev, napi);
             EMAC_REG(ap)->enable |= RXINT_MASK;
         }
 
@@ -376,117 +379,107 @@ static int aa3_poll (struct napi_struct *napi, int budget)
     return(work_done);
 }
 
-
-static int aa3_clean(struct net_device *netdev, unsigned int *work_done, unsigned int work_to_do)
-
-{
-    unsigned int    flags;
-	struct net_device *dev = (struct net_device *) aa3_root_dev;
-	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
-	unsigned int    status, len, i, info;
-	struct sk_buff *skb, *skbnew;
-
-
-//printk("work done %p, *work_done %u\n", work_done, *work_done);
-
-		for (i = 0; i < RX_BDT_LEN; i++)
-		{
-			/* Why not to go in a round-robin order */
-			info = arc_read_uncached_32(&ap->rxbd[i].info);
-			if ((info & OWN_MASK) == FOR_CPU)
-			{
-				if ((info & FRST_MASK) && (info & LAST_MASK))
-				{
-					len = info & LEN_MASK;
-					ap->stats.rx_packets++;
-					ap->stats.rx_bytes += len;
-
-					if (skb_count)
-					{
-						skbnew = skb_prealloc[skb_count];
-						skb_count--;
-					} else
-					{
-						if (!(skbnew = dev_alloc_skb(dev->mtu + VMAC_BUFFER_PAD)))
-						{
-							printk(KERN_INFO "Out of Memory, dropping packet\n");
-							/*
-							 * return buffer to
-							 * VMAC
-							 */
-							arc_write_uncached_32(&ap->rxbd[i].info,
-									      (FOR_EMAC| (dev->mtu + VMAC_BUFFER_PAD)));
-							ap->stats.rx_dropped++;
-						}
-                        else {
-                            // Not fatal, purely for statistical purposes
-							skb_not_preallocated++;
-						}
-					}
-
-					if (skbnew)
-					{
-                        /* Prepare the BD for next cycle */
-
-						skb = ap->rx_skbuff[i];
-
-						inv_dcache_range((unsigned long)skb->data,
-                                         (unsigned long)skb->data + len);
-						/*
-						 * IP header Alignment (14
-						 * byte Ethernet header)
-						 */
-						skb_reserve(skbnew, 2);
-						/*
-						 * replace by newly allocated
-						 * sk buff
-						 */
-						arc_write_uncached_32(&ap->rxbd[i].data, skbnew->data);
-						ap->rx_skbuff[i] = skbnew;
-						/*
-						 * Set length and give buffer
-						 * to VMAC
-						 */
-						arc_write_uncached_32(&ap->rxbd[i].info,
-								      (OWN_MASK | (dev->mtu + VMAC_BUFFER_PAD)));
-						/*
-						 * Give arrived sk buff to
-						 * system
-						 */
-						skb->dev = dev;
-						skb_put(skb, len - 4);	/* Make room for data */
-						skb->protocol = eth_type_trans(skb, dev);
-
-                        if(*work_done >= work_to_do)
-				            dev_kfree_skb_irq(skb);  // drop packet
-                        else
-                        {
-                            *work_done = *work_done +1;
-						    netif_receive_skb(skb);
-                        }
-
-//                        printk("wd after %u\n", *work_done);
-#if 0
-                        if(work_done && *work_done >= work_to_do)
-                        {
-//                           printk("too much work wd %u wtd %u\n",*work_done,work_to_do);
-                            return -EAGAIN;
-                        }
 #endif
-					}
-            }
-    }
-    }
 
+static int aa3_clean(struct net_device *dev
+#ifdef CONFIG_EMAC_NAPI
+    ,unsigned int work_to_do
+#endif
+)
+{
+	struct aa3_emac_priv *ap = netdev_priv(dev);
+	unsigned int len, info;
+	struct sk_buff *skb, *skbnew;
+    int work_done=0, i;
+
+    for (i = 0; i < RX_BDT_LEN; i++)
+	{
+		info = arc_read_uncached_32(&ap->rxbd[i].info);
+
+        /* BD contains a packet for CPU to grab */
+        if ((info & OWN_MASK) == FOR_CPU)
+        {
+            /* Packet fits in one BD (Non Fragmented) */
+			if ((info & FRST_MASK) && (info &LAST_MASK))
+			{
+				len = info & LEN_MASK;
+				ap->stats.rx_packets++;
+				ap->stats.rx_bytes += len;
+                skb = ap->rx_skbuff[i];
+
+                /* Get a new SKB for replenishing BD for next cycle */
+				if (skb_count) { /* Cached skbs ready to go */
+					skbnew = skb_prealloc[skb_count];
+					skb_count--;
+				}
+                else { /* get it from stack */
+					if (!(skbnew = dev_alloc_skb(dev->mtu + VMAC_BUFFER_PAD)))
+					{
+						printk(KERN_INFO "Out of Memory, dropping packet\n");
+
+						/* return buffer to VMAC */
+						arc_write_uncached_32(&ap->rxbd[i].info,
+							      (FOR_EMAC| (dev->mtu + VMAC_BUFFER_PAD)));
+						ap->stats.rx_dropped++;
+					}
+                    else {
+                        // Not fatal, purely for statistical purposes
+						skb_not_preallocated++;
+					}
+				}
+
+                if (skbnew)
+                {
+                /* Prepare the BD for next cycle */
+
+				skb_reserve(skbnew, 2); /* IP hdr align, eth is 14 bytes */
+				ap->rx_skbuff[i] = skbnew;
+
+				arc_write_uncached_32(&ap->rxbd[i].data, skbnew->data);
+				arc_write_uncached_32(&ap->rxbd[i].info,
+							      (FOR_EMAC | (dev->mtu + VMAC_BUFFER_PAD)));
+
+                /* Prepare arrived pkt for delivery to stack */
+
+				inv_dcache_range((unsigned long)skb->data,
+                                 (unsigned long)skb->data + len);
+
+				skb->dev = dev;
+				skb_put(skb, len - 4);	/* Make room for data */
+				skb->protocol = eth_type_trans(skb, dev);
+
+#ifdef CONFIG_EMAC_NAPI
+                if(work_done >= work_to_do)
+			        dev_kfree_skb_irq(skb);  // drop packet
+                else
+                {
+                    work_done++;
+					netif_receive_skb(skb);
+                }
+#else
+                netif_rx(skb);
+#endif
+                }
+            }
+            else {
+				printk(KERN_INFO "Rx chained, Packet bigger than device MTU\n");
+				/* Return buffer to VMAC */
+				arc_write_uncached_32(&ap->rxbd[i].info,
+							      (FOR_EMAC| (dev->mtu + VMAC_BUFFER_PAD)));
+				ap->stats.rx_length_errors++;
+		    }
+
+        }  // BD for CPU
+    } // BD chain loop
+
+    return work_done;
 }
 
 static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 {
 	struct net_device *dev = (struct net_device *) dev_instance;
-	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
-
-	unsigned int    status, len, i, info,enable, rx_ring,mdio_reg;
-	struct sk_buff *skb, *skbnew;
+	struct aa3_emac_priv *ap = netdev_priv(dev);
+	unsigned int status, enable;
 
 	status = EMAC_REG(ap)->status;
     EMAC_REG(ap)->status = status;
@@ -500,18 +493,22 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 	 */
 	if (status & RXINT_MASK)
 	{
+
+#ifdef CONFIG_EMAC_NAPI
         if(likely(netif_rx_schedule_prep(dev, &ap->napi)))
         {
             EMAC_REG(ap)->enable &= ~RXINT_MASK; // no more interrupts.
             __netif_rx_schedule(dev,&ap->napi);
         }
+#else
+        aa3_clean(dev);
+#endif
     }
 
     if (status & MDIO_MASK)
 	{
-		/*
-		 * Mark the mdio operation as complete. This is reset by the
-		 * MDIO reader
+		/* Mark the mdio operation as complete.
+		 * This is reset by the MDIO reader
 		 */
 		ap->mdio_complete = 1;
 	}
@@ -549,181 +546,16 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 			printk(KERN_ERR "ARCTangent Vmac: Unkown Error status = 0x%x\n", status);
 		}
 	}
-return IRQ_HANDLED;
+    return IRQ_HANDLED;
 }
 
 
-static int aa3_tx_clean(struct net_device *netdev)
+static int aa3_tx_clean(struct net_device *dev)
 {
-    unsigned int    flags;
-	struct net_device *dev = (struct net_device *) aa3_root_dev;
-	struct aa3_emac_priv *ap = (struct aa3_emac_priv *) dev->priv;
-	unsigned int    status, len, i, info;
-	struct sk_buff *skb, *skbnew;
-
-
-		/*
-		 * Kind of short circuiting code taking advantage of the fact
-		 * that the ARC emac will release multiple "sent" packets in
-		 * order. So if this interrupt was not for the current
-		 * (txbd_dirty) packet then no other "next" packets were
-		 * sent. The manual says that TX interrupt can occur even if
-		 * no packets were sent and there may not be 1 to 1
-		 * correspondence of interrupts and number of packets queued
-		 * to send
-		 */
-		for (i = 0; i < TX_BDT_LEN; i++)
-		{
-			info = arc_read_uncached_32(&ap->txbd[ap->txbd_dirty].info);
-
-#ifdef EMAC_STATS
-			//if (info & RTRY)
-				//printk(KERN_CRIT "had to retry\n");
-
-			if (info & DROP)
-				emac_drop++;
-			if (info & DEFR)
-				emac_defr++;
-			if (info & LTCL)
-				emac_ltcl++;
-			if (info & UFLO)
-				emac_uflo++;
-#endif
-			if (info & OWN_MASK)
-			{
-				dbg_printk("TXINT, OWN_MASK set\n");
-				goto err_int;
-			}
-			if (!(arc_read_uncached_32(&ap->txbd[ap->txbd_dirty].data)))
-			{
-				dbg_printk("TXINT, no data !!!\n");
-				goto err_int;
-			}
-			if (info & FRST_MASK)
-			{
-				skb = ap->tx_skbuff[ap->txbd_dirty];
-				ap->stats.tx_packets++;
-				ap->stats.tx_bytes += skb->len;
-				/* return the sk_buff to system */
-				dev_kfree_skb_irq(skb);
-			}
-			arc_write_uncached_32(&ap->txbd[ap->txbd_dirty].data, 0x0);
-			arc_write_uncached_32(&ap->txbd[ap->txbd_dirty].info, 0x0);
-			ap->txbd_dirty = (ap->txbd_dirty + 1) % TX_BDT_LEN;
-		}
-err_int:
-	return IRQ_HANDLED;
-
-
-}
-
-
-#else
-
-
-/* aa3 emac interrupt handler */
-static irqreturn_t
-aa3_emac_intr(int irq, void *dev_instance)
-{
-	struct net_device *dev = (struct net_device *) dev_instance;
 	struct aa3_emac_priv *ap = netdev_priv(dev);
-	unsigned int    status, len, i, info;
-	struct sk_buff *skb, *skbnew;
+	unsigned int i, info;
+	struct sk_buff *skb;
 
-	/* Check what kind of interrupt */
-	status = EMAC_REG(ap)->status;
-    EMAC_REG(ap)->status = status;
-
-	/*
-	 * We dont allow chaining of recieve packets. We want to do "zero
-	 * copy" and sk_buff structure is not chaining friendly when we dont
-	 * want to copy data. We preallocate buffers of MTU size so incoming
-	 * packets wont be chained
-	 */
-	if (status & RXINT_MASK)
-	{
-		for (i = 0; i < RX_BDT_LEN; i++)
-		{
-			/* Why not to go in a round-robin order */
-			info = arc_read_uncached_32(&ap->rxbd[i].info);
-			if ((info & OWN_MASK) == 0)
-			{
-				if ((info & FRST_MASK) && (info & LAST_MASK))
-				{
-					len = info & LEN_MASK;
-					ap->stats.rx_packets++;
-					ap->stats.rx_bytes += len;
-
-					if (skb_count)
-					{
-						skbnew = skb_prealloc[skb_count];
-						skb_count--;
-					} else
-					{
-						if (!(skbnew = dev_alloc_skb(dev->mtu + VMAC_BUFFER_PAD)))
-						{
-							printk(KERN_INFO "Out of Memory, dropping packet\n");
-							/*
-							 * return buffer to
-							 * VMAC
-							 */
-							arc_write_uncached_32(&ap->rxbd[i].info,
-									      (OWN_MASK | (dev->mtu + VMAC_BUFFER_PAD)));
-							ap->stats.rx_dropped++;
-						} else
-						{
-
-							skb_not_preallocated++;
-						}
-					}
-
-					if (skbnew)
-					{
-						skb = ap->rx_skbuff[i];
-//						dbg_printk("RXINT: invalidating cache for data: 0x%lx-0x%lx\n",
-//							   skb->data, skb->data + skb->len);
-						inv_dcache_range((unsigned long)skb->data,
-                                         (unsigned long)skb->data + len);
-						/*
-						 * IP header Alignment (14
-						 * byte Ethernet header)
-						 */
-						skb_reserve(skbnew, 2);
-						/*
-						 * replace by newly allocated
-						 * sk buff
-						 */
-						arc_write_uncached_32(&ap->rxbd[i].data, skbnew->data);
-						ap->rx_skbuff[i] = skbnew;
-						/*
-						 * Set length and give buffer
-						 * to VMAC
-						 */
-						arc_write_uncached_32(&ap->rxbd[i].info,
-								      (OWN_MASK | (dev->mtu + VMAC_BUFFER_PAD)));
-						/*
-						 * Give arrived sk buff to
-						 * system
-						 */
-						skb->dev = dev;
-						skb_put(skb, len - 4);	/* Make room for data */
-						skb->protocol = eth_type_trans(skb, dev);
-						/* Raise rx soft irq */
-						netif_rx(skb);
-					}
-				} else
-				{
-					printk(KERN_INFO "Rx chained, Packet bigger than device MTU\n");
-					/* Return buffer to VMAC */
-					arc_write_uncached_32(&ap->rxbd[i].info,
-							      (OWN_MASK | (dev->mtu + VMAC_BUFFER_PAD)));
-					ap->stats.rx_length_errors++;
-				}
-			}
-		}
-	}
-	if (status & TXINT_MASK)
-	{
 		/*
 		 * Kind of short circuiting code taking advantage of the fact
 		 * that the ARC emac will release multiple "sent" packets in
@@ -739,17 +571,13 @@ aa3_emac_intr(int irq, void *dev_instance)
 			info = arc_read_uncached_32(&ap->txbd[ap->txbd_dirty].info);
 
 #ifdef EMAC_STATS
-			//if (info & RTRY)
-				//printk(KERN_CRIT "had to retry\n");
 
-			if (info & DROP)
-				emac_drop++;
-			if (info & DEFR)
-				emac_defr++;
-			if (info & LTCL)
-				emac_ltcl++;
-			if (info & UFLO)
-				emac_uflo++;
+            if ( info & (DROP|DEFR|LTCL|UFLO)) {
+			    if (info & DROP) emac_drop++;
+			    if (info & DEFR) emac_defr++;
+			    if (info & LTCL) emac_ltcl++;
+			    if (info & UFLO) emac_uflo++;
+            }
 #endif
 			if (info & OWN_MASK)
 			{
@@ -773,49 +601,9 @@ aa3_emac_intr(int irq, void *dev_instance)
 			arc_write_uncached_32(&ap->txbd[ap->txbd_dirty].info, 0x0);
 			ap->txbd_dirty = (ap->txbd_dirty + 1) % TX_BDT_LEN;
 		}
-	}
-	if (status & MDIO_MASK)
-	{
-		/*
-		 * Mark the mdio operation as complete. This is reset by the
-		 * MDIO reader
-		 */
-		ap->mdio_complete = 1;
-	}
 err_int:
-	if (status & ERR_MASK)
-	{
-//		printk(KERN_DEBUG "ARCTangent Vmac: Error...status = 0x%x\n", status);
-		if (status & TXCH_MASK)
-		{
-			ap->stats.tx_errors++;
-			ap->stats.tx_aborted_errors++;
-			printk(KERN_ERR "Transmit_chaining error! txbd_dirty = %u\n", ap->txbd_dirty);
-		} else if (status & MSER_MASK)
-		{
-			ap->stats.rx_missed_errors += 255;
-			ap->stats.rx_errors += 255;
-		} else if (status & RXCR_MASK)
-		{
-			ap->stats.rx_crc_errors += 255;
-			ap->stats.rx_errors += 255;
-		} else if (status & RXFR_MASK)
-		{
-			ap->stats.rx_frame_errors += 255;
-			ap->stats.rx_errors += 255;
-		} else if (status & RXFL_MASK)
-		{
-			ap->stats.rx_over_errors += 255;
-			ap->stats.rx_errors += 255;
-		} else
-		{
-			printk(KERN_ERR "ARCTangent Vmac: Unkown Error status = 0x%x\n", status);
-		}
-	}
 	return IRQ_HANDLED;
 }
-
-#endif // NAPI test.
 
 /* aa3 emac open routine */
 int
@@ -1018,7 +806,7 @@ aa3_emac_ioctl(struct net_device * dev, struct ifreq * rq, int cmd)
 struct net_device_stats *
 aa3_emac_stats(struct net_device * dev)
 {
-	unsigned long  flags;
+	unsigned long flags;
 	struct aa3_emac_priv *ap = netdev_priv(dev);
 
 	dbg_printk("get stats called\n");
@@ -1199,7 +987,7 @@ static const struct net_device_ops aa3_emac_netdev_ops = {
 int __init
 aa3_module_init(void)
 {
-	int             vmacs = 0;	/* Number of vmac's detected */
+	int  vmacs = 0;	/* Number of vmac's detected */
 	struct net_device *dev;
 	struct aa3_emac_priv *priv;
 	int             err = -ENODEV;
@@ -1350,7 +1138,6 @@ static int read_proc(char *sysbuf, char **start,
 	len += sprintf(sysbuf + len, "EMAC LTCL count : %u\n", emac_ltcl);
 	len += sprintf(sysbuf + len, "EMAC UFLO count : %u\n", emac_uflo);
 	return (len);
-
 }
 
 module_init(aa3_module_init);
