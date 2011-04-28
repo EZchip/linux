@@ -32,6 +32,9 @@
 #include <asm/board/plat_memmap.h>
 #include <asm/board/plat_irq.h>
 
+/* workaround for ISS VUART baudh=0 bug */
+extern int running_on_hw;
+
 /*************************************
  * ARC UART Hardware Specs
  ************************************/
@@ -464,6 +467,17 @@ arc_serial_set_termios(struct uart_port *port, struct ktermios *termios,
     hw_val = uart->port.uartclk / (baud*4) -1;
     uartl = hw_val & 0xFF;
     uarth = (hw_val >> 8) & 0xFF;
+
+    /* ISS UART emulation has a subtle bug:
+     * A existing value of Baudh = 0 is used as a indication to startup
+     * it's internal state machine.
+     * Thus if baudh is set to 0, 2 times, it chokes.
+     * This happens with BAUD=115200 and the formaula above
+     * Until that is fixed, when runnign on ISS, we will set baudh to !0
+     */
+    if (!running_on_hw) {
+        uarth = 1;
+    }
 
 	spin_lock_irqsave(&uart->port.lock, flags);
 
