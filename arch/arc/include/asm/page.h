@@ -96,18 +96,27 @@ extern __inline__ int get_order(unsigned long size)
     return order;
 }
 
-#define __pa(vaddr)  (((unsigned long)vaddr - PAGE_OFFSET) + CONFIG_LINUX_LINK_BASE)
-#define __va(paddr)  ((void *)(((unsigned long)(paddr) - CONFIG_LINUX_LINK_BASE) + PAGE_OFFSET))
-
-/* These macros have historically been misnamed
+/* __pa, __va, virt_to_page
+ * ALERT: These macros are deprecated, dont use them
+ *
+ * These macros have historically been misnamed
  * virt here means link-address/program-address as embedded in object code.
  * So if kernel img is linked at 0x8000_0000 onwards, 0x8010_0000 will be
  * 128th page, and virt_to_page( ) will return the struct page corresp to it.
  * Note that mem_map[ ] is an array of struct page for each page frame in
  * the system.
  */
-#define virt_to_page(kaddr) (mem_map + (__pa(kaddr) >> PAGE_SHIFT) - \
-                                (CONFIG_LINUX_LINK_BASE >> PAGE_SHIFT))
+
+/* __pa, __va
+ * Independent of where linux is linked at, link-addr = physical address
+ * So the old macro  __pa = vaddr + PAGE_OFFSET - CONFIG_LINUX_LINK_BASE
+ * would have been wrong in case kernel is not at 0x8zs
+ */
+#define __pa(vaddr)  ((unsigned long)vaddr)
+#define __va(paddr)  ((void *)((unsigned long)(paddr)))
+
+#define virt_to_page(kaddr) (mem_map + \
+        ((__pa(kaddr) - CONFIG_LINUX_LINK_BASE) >> PAGE_SHIFT))
 
 #define virt_addr_valid(kaddr)  pfn_valid(__pa(kaddr) >> PAGE_SHIFT)
 
