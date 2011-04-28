@@ -132,10 +132,7 @@ void flush_and_inv_dcache_all(void);
     } while (0)
 
 
-#include <asm/processor.h>      /* for struct arc_cache */
-extern struct arc_cache arc_cache_meta;
-
-#define ARC_DC_ALIASING     0x1
-#define ARC_IC_ALIASING     0x2
+#include <asm/arcregs.h>
+extern struct cpuinfo_arc cpuinfo_arc700[];
 
 #endif

@@ -83,7 +83,7 @@ void clear_user_page(void *addr, unsigned long vaddr, struct page *page)
 {
     clear_page(addr);
 
-    if (arc_cache_meta.has_aliasing & ARC_DC_ALIASING)
+    if (cpuinfo_arc700[0].dcache.has_aliasing)
         flush_dcache_page_virt((unsigned long *)page);
 
 }
@@ -92,6 +92,6 @@ void copy_user_page(void *vto, void *vfrom, unsigned long vaddr, struct page *to
 {
     copy_page(vto,vfrom);
 
-    if (arc_cache_meta.has_aliasing & ARC_DC_ALIASING)
+    if (cpuinfo_arc700[0].dcache.has_aliasing)
         flush_dcache_page_virt((unsigned long*)vto);
 }

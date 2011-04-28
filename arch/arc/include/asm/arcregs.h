@@ -99,6 +99,10 @@
 #define ARC_REG_IC_IVIC     0x10
 #define ARC_REG_IC_CTRL     0x11
 #define ARC_REG_IC_IVIL     0x19
+
+/* Bit val in IC_CTRL */
+#define BIT_IC_CTRL_CACHE_DISABLE   0x1
+
 /* Data cache related Auxiliary registers */
 #define ARC_REG_D_CACHE_BUILD_REG 0x72
 #define ARC_REG_DC_IVDC     0x47
@@ -106,6 +110,10 @@
 #define ARC_REG_DC_IVDL     0x4A
 #define ARC_REG_DC_FLSH     0x4B
 #define ARC_REG_DC_FLDL     0x4C
+
+/* Bit val in DC_CTRL */
+#define BIT_DC_CTRL_INV_MODE_FLUSH  0x40
+#define BIT_DC_CTRL_FLUSH_STATUS    0x100
 
 /* Timer related Aux registers */
 #define ARC_REG_TIMER0_LIMIT 0x23 /* timer 0 limit */
@@ -239,7 +247,7 @@ struct cpuinfo_arc_extn_xymem {
 };
 
 struct bcr_cache {
-    unsigned long ver:8, type:4, sz:4, line_len:4, pad:12;
+    unsigned long ver:8, config:4, sz:4, line_len:4, pad:12;
 };
 
 struct bcr_uncached_space {
@@ -270,9 +278,8 @@ struct cpuinfo_arc800 {
 };
 #endif
 
-struct arc_cache {
-    unsigned int has_aliasing;
-    unsigned int i_sz, d_sz;
+struct cpuinfo_arc_cache {
+    unsigned int has_aliasing, sz, line_len, assoc;
 };
 
 /*************************************************************
@@ -280,6 +287,7 @@ struct arc_cache {
  * Cache info, MMU info etc to rest of ARCH specific Code
  */
 struct cpuinfo_arc {
+    struct cpuinfo_arc_cache icache, dcache;
     struct cpuinfo_arc_processor cpu;
     unsigned int timers;
     unsigned int vec_base;
@@ -290,13 +298,25 @@ struct cpuinfo_arc {
     struct cpuinfo_arc_extn_xymem extn_xymem;
     struct cpuinfo_arc_extn_mac_mul extn_mac_mul;// DCCM RAM SZ
     struct cpuinfo_arc_ccm iccm, dccm;
-    struct arc_cache *cache;
 #ifdef CONFIG_ARCH_ARC800
     struct cpuinfo_arc800  mp;
 #endif
 };
 
+/* Helpers */
 #define TO_KB(x) (x >> 10)
+
+#define READ_BCR(reg, into)             \
+{                                       \
+    unsigned int tmp;                   \
+    tmp = read_new_aux_reg(reg);        \
+    if (sizeof(tmp) == sizeof(into))    \
+        into = *((typeof(into) *)&tmp); \
+    else  {                             \
+        extern void bogus_undefined(void);\
+        bogus_undefined();              \
+    }                                   \
+}
 
 #endif  /* __KERNEL__ */
 

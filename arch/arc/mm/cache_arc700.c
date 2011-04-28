@@ -74,40 +74,22 @@
 #include <asm/cacheflush.h>
 #include <asm/mmu_context.h>
 
-/*  Some Bit values */
-#define DC_FLUSH_STATUS_BIT             0x100
-#define INV_MODE_FLUSH                  0x40
-#define CACHE_DISABLE_BIT               0x01
-
 extern struct cpuinfo_arc cpuinfo_arc700[];
 static void ___flush_icache_range_no_alias(unsigned long, unsigned long);
 static void ___flush_icache_range_32k(unsigned long, unsigned long);
 static void ___flush_icache_range_64k(unsigned long, unsigned long);
 
+/* Holds the ptr to flush routine, dependign on size due to aliasing issues */
 static void (* ___flush_icache_rtn)(unsigned long, unsigned long);
-
-/* [size,virtual-aliasing] Info for I and D caches
- * Performance critical info seperated from cpuinfo_arc700[ ]
- * so that it sits in it's own cache line
- */
-struct arc_cache arc_cache_meta;
-
-/* Cache Build Config Reg encodes size in 4 bits as follows:
- *  Binary 0100 =>  8k
- *  Binary 0101 => 16k
- *  Binary 0110 => 32k
- *  Binary 0111 => 64k
- *  True for Both I$ and D$
- */
-#define CALC_CACHE_SZ(hw_val)   (0x200 << hw_val)
 
 char * arc_cache_mumbojumbo(int cpu_id, char *buf)
 {
     int num = 0;
+    struct cpuinfo_arc_cache *p_cache = &cpuinfo_arc700[0].icache;
 
     num += sprintf(buf+num,"Detected I-cache : \n");
     num += sprintf(buf+num,"  Type=%d way set-assoc, Line length=%u, Size=%uK",
-            ARC_ICACHE_WAY_NUM, ARC_ICACHE_LINE_LEN, arc_cache_meta.i_sz>>10);
+            p_cache->assoc, p_cache->line_len, TO_KB(p_cache->sz));
 
 #ifdef CONFIG_ARC700_USE_ICACHE
     num += sprintf(buf+num," (enabled)\n");
@@ -115,9 +97,10 @@ char * arc_cache_mumbojumbo(int cpu_id, char *buf)
     num += sprintf(buf+num," (disabled)\n");
 #endif
 
+    p_cache = &cpuinfo_arc700[0].dcache;
     num += sprintf(buf+num,"Detected D-cache : \n");
     num += sprintf(buf+num,"  Type=%d way set-assoc, Line length=%u, Size=%uK",
-             ARC_DCACHE_WAY_NUM, ARC_DCACHE_LINE_LEN, arc_cache_meta.d_sz>>10);
+            p_cache->assoc, p_cache->line_len, TO_KB(p_cache->sz));
 
 #ifdef  CONFIG_ARC700_USE_DCACHE
     num += sprintf(buf+num," (enabled)\n");
@@ -128,38 +111,68 @@ char * arc_cache_mumbojumbo(int cpu_id, char *buf)
     return buf;
 }
 
-//void __init a7_probe_cache(void)
-void  a7_probe_cache(void)
+/* Read the Cache Build Confuration Registers, Decode them and save into
+ * the cpuinfo structure for later use.
+ * No Validation is done here, simply read/convert the BCRs
+ */
+void __init read_decode_cache_bcr(void)
 {
+    struct bcr_cache ibcr, dbcr;
 
-    unsigned int temp, sz;
-    struct bcr_cache *p_i_bcr, *p_d_bcr;  /* Build Config Reg */
+#ifdef CONFIG_ARC700_USE_ICACHE
+    {
+        struct cpuinfo_arc_cache *p_ic = &cpuinfo_arc700[0].icache;
+        READ_BCR(ARC_REG_I_CACHE_BUILD_REG, ibcr);
 
-    /* Plug in the seperated Cache meta data struct to
-     * the top level structure which contains info abt
-     * other components such as MMU, EXTENSIONs etc
-     */
-    cpuinfo_arc700[smp_processor_id()].cache = &arc_cache_meta;
+        if (ibcr.config == 0x3)
+            p_ic->assoc = 2;
+
+        p_ic->line_len = 8 << ibcr.line_len;
+        p_ic->sz = 0x200 << ibcr.sz;
+    }
+#endif
+
+#ifdef CONFIG_ARC700_USE_DCACHE
+    {
+        struct cpuinfo_arc_cache *p_dc = &cpuinfo_arc700[0].dcache;
+        READ_BCR(ARC_REG_D_CACHE_BUILD_REG, dbcr);
+
+        if (dbcr.config == 0x2)
+            p_dc->assoc = 4; // 4 way set assoc
+
+        p_dc->line_len = 16 << dbcr.line_len;
+        p_dc->sz = 0x200 << dbcr.sz;
+    }
+#endif
+
+}
+
+/* 1. Validate the Cache Geomtery (compile time config matches hardware)
+ * 2. If I-cache suffers from aliasing, setup work arounds (difft flush rtn)
+ * 3. Enable the Caches, setup default flush mode for D-Cache
+ * 3. Calculate the SHMLBA used by user space
+ */
+void __init arc_cache_init(void)
+{
+    struct cpuinfo_arc_cache *dc, *ic;
+    unsigned int temp;
 
     ARC_shmlba = max(ARC_shmlba, (unsigned int)PAGE_SIZE);
 
-    /****************** I-cache Probing *******************/
-
-    /* load the icache build register */
-    temp = read_new_aux_reg(ARC_REG_I_CACHE_BUILD_REG);
-    p_i_bcr = (struct bcr_cache *)&temp;
-
-#ifndef CONFIG_XILINX_TEMAC
-    /* Confirm some of I-cache params which Linux assumes */
-    if ( ( p_i_bcr->type != 0x3 ) ||      /* 2 way set assoc */
-         ( p_i_bcr->line_len != 0x2 ) )   /* 32 byte line length */
-        goto sw_hw_mismatch;
-#endif
+    /***********************************************
+     * I-Cache related init
+     **********************************************/
 
 #ifdef CONFIG_ARC700_USE_ICACHE
-    /* Convert encoded size to real value */
-    sz = arc_cache_meta.i_sz = CALC_CACHE_SZ(p_i_bcr->sz);
-    switch(sz) {
+    ic = &cpuinfo_arc700[0].icache;
+
+    /* 1. Confirm some of I-cache params which Linux assumes */
+    if ( ( ic->assoc != ICACHE_COMPILE_WAY_NUM) ||
+         ( ic->line_len != ICACHE_COMPILE_LINE_LEN ) ) {
+        goto sw_hw_mismatch;
+    }
+
+    switch(ic->sz) {
     case 8 * 1024:
     case 16 * 1024:
         ___flush_icache_rtn = ___flush_icache_range_no_alias;
@@ -173,61 +186,61 @@ void  a7_probe_cache(void)
     default:
         panic("Unsupported I-Cache Sz\n");
     }
-#endif
+
     /* check whether Icache way size greater than PAGE_SIZE as it
      * cause Aliasing Issues and requires special handling
      */
-    if ( (sz / ARC_ICACHE_WAY_NUM) > PAGE_SIZE) {
-        arc_cache_meta.has_aliasing |= ARC_IC_ALIASING;
-        ARC_shmlba = max(ARC_shmlba, sz / ARC_ICACHE_WAY_NUM);
+    if ( (ic->sz / ICACHE_COMPILE_WAY_NUM) > PAGE_SIZE) {
+        ic->has_aliasing = 1;
+        ARC_shmlba = max(ARC_shmlba, ic->sz / ICACHE_COMPILE_WAY_NUM);
     }
+#endif
 
-    /* load the icache Control register */
+    /* Enable/disable I-Cache */
     temp = read_new_aux_reg(ARC_REG_IC_CTRL);
 
 #ifdef CONFIG_ARC700_USE_ICACHE
-    write_new_aux_reg(ARC_REG_IC_CTRL, temp & (~CACHE_DISABLE_BIT));
+    temp &= (~BIT_IC_CTRL_CACHE_DISABLE);
 #else
-    write_new_aux_reg(ARC_REG_IC_CTRL, (temp | CACHE_DISABLE_BIT));
+    temp |= (BIT_IC_CTRL_CACHE_DISABLE);
 #endif
 
-    /****************** D-cache Probing *******************/
+     write_new_aux_reg(ARC_REG_IC_CTRL, temp);
 
-    /* load the dcache build register */
+    /***********************************************
+     * D-Cache related init
+     **********************************************/
+
 #ifdef CONFIG_ARC700_USE_DCACHE
-    temp = read_new_aux_reg(ARC_REG_D_CACHE_BUILD_REG);
-    p_d_bcr = (struct bcr_cache *)&temp;
+    dc = &cpuinfo_arc700[0].dcache;
 
-    /* Confirm some of D-cache params which Linux assumes */
-    if ( ( p_d_bcr->type != 0x2 ) ||      /* 4 way set assoc */
-         ( p_d_bcr->line_len != 0x01 ) )  /* 32 byte line length */
-       goto sw_hw_mismatch;
-    /* Convert encoded size to real value */
-    sz = arc_cache_meta.d_sz = CALC_CACHE_SZ(p_d_bcr->sz);
-    /* check whether dcache way size greater than PAGE_SIZE */
-    if ((sz / ARC_DCACHE_WAY_NUM) > PAGE_SIZE) {
-        arc_cache_meta.has_aliasing |= ARC_DC_ALIASING;
-        ARC_shmlba = max(ARC_shmlba, sz / ARC_DCACHE_WAY_NUM);
+    if ( ( dc->assoc != DCACHE_COMPILE_WAY_NUM) ||
+         ( dc->line_len != DCACHE_COMPILE_LINE_LEN ) ) {
+        goto sw_hw_mismatch;
     }
 
-    /* load the dcache Control register */
-    temp = read_new_aux_reg(ARC_REG_DC_CTRL);
+    /* check for D-Cache aliasing */
+    if ((dc->sz / DCACHE_COMPILE_WAY_NUM) > PAGE_SIZE) {
+        dc->has_aliasing = 1;
+        ARC_shmlba = max(ARC_shmlba, dc->sz / DCACHE_COMPILE_WAY_NUM);
+    }
+#endif
 
     /* Set the default Invalidate Mode to "simpy discard dirty lines"
      *  as this is more frequent then flush before invalidate
      * Ofcourse we toggle this default behviour when desired
      */
-    temp &= ~INV_MODE_FLUSH;
-#endif
+    temp = read_new_aux_reg(ARC_REG_DC_CTRL);
+    temp &= ~BIT_DC_CTRL_INV_MODE_FLUSH;
 
 #ifdef  CONFIG_ARC700_USE_DCACHE
     /* Enable D-Cache: Clear Bit 0 */
-    write_new_aux_reg(ARC_REG_DC_CTRL, temp & (~CACHE_DISABLE_BIT));
+    write_new_aux_reg(ARC_REG_DC_CTRL, temp & (~BIT_IC_CTRL_CACHE_DISABLE));
 #else
     /* Flush D cache */
     write_new_aux_reg(ARC_REG_DC_FLSH, 0x1);
     /* Disable D cache */
-    write_new_aux_reg(ARC_REG_DC_CTRL, temp | CACHE_DISABLE_BIT);
+    write_new_aux_reg(ARC_REG_DC_CTRL, temp | BIT_IC_CTRL_CACHE_DISABLE);
 #endif
 
     {
@@ -250,16 +263,16 @@ inline void flush_and_inv_dcache_all(void)
 
     /* Set the Invalidate mode to FLUSH BEFORE INV */
     dc_ctrl = read_new_aux_reg(ARC_REG_DC_CTRL);
-    write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl | INV_MODE_FLUSH);
+    write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl | BIT_DC_CTRL_INV_MODE_FLUSH);
 
     /* Invoke Cache INV CMD */
     write_new_aux_reg(ARC_REG_DC_IVDC, 0x1);
 
     /* wait for the flush to complete, poll on the FS Bit */
-    while (read_new_aux_reg(ARC_REG_DC_CTRL) & DC_FLUSH_STATUS_BIT) ;
+    while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
 
     /* Set the Invalidate mode back to INV ONLY */
-	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl & ~INV_MODE_FLUSH);
+	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl & ~BIT_DC_CTRL_INV_MODE_FLUSH);
 
     local_irq_restore(flags);
 }
@@ -279,11 +292,11 @@ void flush_dcache_range(unsigned long start, unsigned long end)
 
     while (end > start) {
         write_new_aux_reg(ARC_REG_DC_FLDL, start);
-        start = start + ARC_DCACHE_LINE_LEN;
+        start = start + DCACHE_COMPILE_LINE_LEN;
     }
 
     /* wait for the flush to complete, poll on the FS Bit */
-    while (read_new_aux_reg(ARC_REG_DC_CTRL) & DC_FLUSH_STATUS_BIT) ;
+    while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
 
     local_irq_restore(flags);
 }
@@ -311,7 +324,7 @@ void flush_dcache_all()
     write_new_aux_reg(ARC_REG_DC_FLSH, 1);
 
     /* wait for the flush to complete, poll on the FS Bit */
-    while (read_new_aux_reg(ARC_REG_DC_CTRL) & DC_FLUSH_STATUS_BIT) ;
+    while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
 
     local_irq_restore(flags);
 }
@@ -333,19 +346,19 @@ inline void flush_and_inv_dcache_range(unsigned long start, unsigned long end)
 
     /* Set the Invalidate mode to FLUSH BEFORE INV */
     dc_ctrl = read_new_aux_reg(ARC_REG_DC_CTRL);
-	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl | INV_MODE_FLUSH);
+	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl | BIT_DC_CTRL_INV_MODE_FLUSH);
 
     /* Invoke Cache INV CMD */
     while (end > start) {
         write_new_aux_reg(ARC_REG_DC_IVDL, start);
-        start = start + ARC_DCACHE_LINE_LEN;
+        start = start + DCACHE_COMPILE_LINE_LEN;
     }
 
     /* wait for the flush to complete, poll on the FS Bit */
-    while (read_new_aux_reg(ARC_REG_DC_CTRL) & DC_FLUSH_STATUS_BIT) ;
+    while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
 
     /* Switch back the DISCARD ONLY Invalidate mode */
-	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl & ~INV_MODE_FLUSH);
+	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl & ~BIT_DC_CTRL_INV_MODE_FLUSH);
 
     local_irq_restore(flags);
 }
@@ -361,7 +374,7 @@ inline void inv_dcache_range(unsigned long start, unsigned long end)
        Throw away the Dcache lines */
     while (end > start) {
         write_new_aux_reg(ARC_REG_DC_IVDL, start);
-        start = start + ARC_DCACHE_LINE_LEN;
+        start = start + DCACHE_COMPILE_LINE_LEN;
     }
 
     local_irq_restore(flags);
@@ -410,7 +423,7 @@ static void ___flush_icache_range_no_alias(unsigned long start, unsigned long en
     start &= ICACHE_LINE_MASK;
     while (end > start) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
-        start += ARC_ICACHE_LINE_LEN;
+        start += ICACHE_COMPILE_LINE_LEN;
     }
 }
 
@@ -420,7 +433,7 @@ static void ___flush_icache_range_32k(unsigned long start, unsigned long end)
     while (end > start) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
-        start += ARC_ICACHE_LINE_LEN;
+        start += ICACHE_COMPILE_LINE_LEN;
     }
 }
 
@@ -432,7 +445,7 @@ static void ___flush_icache_range_64k(unsigned long start, unsigned long end)
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x10);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x11);
-        start += ARC_ICACHE_LINE_LEN;
+        start += ICACHE_COMPILE_LINE_LEN;
     }
 }
 
@@ -591,8 +604,3 @@ void flush_cache_page(struct vm_area_struct *vma, unsigned long page,
 }
 
 #endif
-
-void __init a7_cache_init(void)
-{
-    a7_probe_cache();
-}

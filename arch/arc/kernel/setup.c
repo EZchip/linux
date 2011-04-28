@@ -59,10 +59,11 @@ extern unsigned long ramd_start, ramd_end;
 extern int root_mountflags;
 
 extern void arc_irq_init(void);
+extern void arc_cache_init(void);
 extern char * arc_mmu_mumbojumbo(int cpu_id, char *buf);
 extern char * arc_cache_mumbojumbo(int cpu_id, char *buf);
 extern void __init arc_verify_sig_sz(void);
-
+extern void __init read_decode_cache_bcr(void);
 
 struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
 
@@ -132,18 +133,6 @@ typedef struct {
 cpuinfo_data_t;
 
 
-#define READ_BCR(reg, into)             \
-{                                       \
-    unsigned int tmp;                   \
-    tmp = read_new_aux_reg(reg);        \
-    if (sizeof(tmp) == sizeof(into))    \
-        into = *((typeof(into) *)&tmp); \
-    else  {                             \
-        extern void bogus_undefined(void);\
-        bogus_undefined();              \
-    }                                   \
-}
-
 int __init read_arc_build_cfg_regs(void)
 {
     int cpu = smp_processor_id();
@@ -194,6 +183,8 @@ int __init read_arc_build_cfg_regs(void)
     }
 
     READ_BCR(ARC_REG_XY_MEM_BCR, p_cpu->extn_xymem);
+
+    read_decode_cache_bcr();
 
 #ifdef CONFIG_ARCH_ARC800
     READ_BCR(ARC_REG_MP_BCR, p_cpu->mp);
@@ -356,7 +347,7 @@ void __init setup_processor(void)
     /* Enable MMU */
     tlb_init();
 
-    a7_cache_init();
+    arc_cache_init();
 
     arc_chk_ccms();
 

@@ -23,26 +23,25 @@
 #ifndef __ARC_ASM_CACHE_H
 #define __ARC_ASM_CACHE_H
 
-/* Cache Line lengths fixed to 32 bytes */
+/* Hardware Config Specific Items */
 #define L1_CACHE_SHIFT      5
 #define L1_CACHE_BYTES      ( 1 << L1_CACHE_SHIFT )
 
-#define ARC_ICACHE_LINE_LEN     L1_CACHE_BYTES
-#define ARC_DCACHE_LINE_LEN     L1_CACHE_BYTES
+#define ICACHE_COMPILE_WAY_NUM      2
+#define DCACHE_COMPILE_WAY_NUM      4
 
-#define ICACHE_LINE_MASK     (~(ARC_ICACHE_LINE_LEN - 1))
-#define DCACHE_LINE_MASK     (~(ARC_DCACHE_LINE_LEN - 1))
+/* Helpers */
+#define ICACHE_COMPILE_LINE_LEN     L1_CACHE_BYTES
+#define DCACHE_COMPILE_LINE_LEN     L1_CACHE_BYTES
 
-#if ARC_ICACHE_LINE_LEN != ARC_DCACHE_LINE_LEN
+#define ICACHE_LINE_MASK     (~(ICACHE_COMPILE_LINE_LEN - 1))
+#define DCACHE_LINE_MASK     (~(DCACHE_COMPILE_LINE_LEN - 1))
+
+#if ICACHE_COMPILE_LINE_LEN != DCACHE_COMPILE_LINE_LEN
 #error "Need to fix some code as I/D cache lines not same"
 #else
-#define is_not_cache_aligned(p) ((unsigned long)p & (ARC_DCACHE_LINE_LEN - 1))
+#define is_not_cache_aligned(p) ((unsigned long)p & (~DCACHE_LINE_MASK))
 #endif
-
-
-/* ICACHE & DCACHE are fixed to 2-way and 4-way set associative resp */
-#define ARC_ICACHE_WAY_NUM 2
-#define ARC_DCACHE_WAY_NUM 4
 
 
 /* Uncached access macros */
@@ -60,7 +59,5 @@
 
 /* used to give SHMLBA a value to avoid Cache Aliasing */
 extern unsigned int ARC_shmlba ;
-extern void a7_cache_init(void);
-
 
 #endif /* _ASM_CACHE_H */
