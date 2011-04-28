@@ -1,6 +1,16 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: Mar 2011
+ *  -Added documentation about I-cache aliasing on ARC700 and the way it
+ *   was handled up until MMU V2.
+ *  -Spotted a three year old bug when killing the 4 aliases, bottom 2
+ *   bits correspond to 4 aliases, so need to do:
+ *   paddr | 0x00, paddr | 0x01, paddr | 0x02, paddr | 0x03
+ *      instead of
+ *   paddr | 0x00, paddr | 0x01, paddr | 0x10, paddr | 0x11
+ *   (Rajesh you owe me one now)
+ *
  * vineetg: Dec 2010
  *  -Off-by-one error when computing num_of_lines to flush
  *   This broke signal handling with bionic which uses synthetic sigret stub
@@ -439,6 +449,68 @@ EXPORT_SYMBOL(flush_dcache_page);
  * Machine specific helpers for per line I-Cache invalidate
  * We have 3 different routines to take care of I-cache aliasing
  * in specific configurations of ARC700
+ *
+ * For VIPT caches on ARC700, the internal logic of CPU, when fetching code,
+ * needs to lookup I$. It uses vaddr (embedded in program code) to calc
+ * the set-idx of cache-line and the corresponding paddr from MMU to match
+ * the cache-line-tag. However the CDU iterface (to flush/inv) lines from
+ * software, only takes paddr (partially to have simpler interface and moreso
+ * because lot of times page is not yet mapped, so vaddr is not avail).
+ * For simpler cases, using paddr alone suffices.
+ * e.g. 2-way-set-assoc, 16K I$ (8k MMU pg sz, 32b cache line size):
+ *      way_sz = cache_sz / num_ways = 16k/2 = 8k
+ *      num_sets = way_sz / line_sz = 8k/32 = 256 => 8 bits
+ *   Ignoring the bottom 5 bits corresp to the pffset within a 32b cacheline,
+ *   bits req for calc set-index = bits 12:5 (0 based). Since this range fits
+ *   inside the bottom 13 bits of paddr, which are same for vaddr and paddr
+ *   (with 8k pg sz), paddr alone can be safely used by CDU to calc line's
+ *   set-index
+ *
+ * However for a difft sized cache, say 32k I$, above math yields need
+ * for 14 bits of vaddr to locate a cache line, which can't be provided by
+ * paddr, since the bit 13 may differ between the two.
+ *
+ * This lack of extra bits needed for correct line addressing, defines the
+ * classical problem of Cache aliasing with VIPT architectures
+ * num_aliases = 1 << extra_bits
+ * e.g. 2-way-set-assoc, 32K I$ with 8k MMU pg sz => 2 aliases
+ *      2-way-set-assoc, 64K I$ with 8k MMU pg sz => 4 aliases
+ *      2-way-set-assoc, 16K I$ with 8k MMU pg sz => NO aliases
+ *
+ * The solution was to provide CDU with these additonal vaddr bits. These
+ * would be bits [x:13], x would depend on cache-geom.
+ * H/w folks chose [17:13] to be a future safe range, and moreso these 5 bits
+ * of vaddr could easily be "stuffed" in the paddr as bits [4:0] since the
+ * orig 5 bits of paddr were anyways ignored by CDU line ops, since they
+ * represent the offset within cache-line. The adv of using this "clumsy"
+ * interace for additional info was no new reg was needed in CDU.
+ *
+ * 17:13 represented the max num of bits passable, actual bits needed were
+ * fewer, based on the num-of-aliases possible.
+ * -for 2 alias possibility, only bit 13 needed (32K cache)
+ * -for 4 alias possibility, bits 14:13 needed (64K cache)
+ *
+ * Since vaddr was not available for all instances of I$ flush req by core
+ * kernel, the only safe way (non-optimal though) was to kill all possible
+ * lines which could represent an alias (even if they didnt represent one
+ * in execution).
+ * e.g. for 64K I$, 4 aliases possible, so we did
+ *      flush start
+ *      flush start | 0x01
+ *      flush start | 0x2
+ *      flush start | 0x3
+ *
+ * The penalty was invoking the operation itself, since tag match is anyways
+ * paddr based, a line which didn't represent an alias would not match the
+ * paddr, hence wont be killed
+ *
+ * Note that aliasing concerns are independent of line-sz for a given cache
+ * geometry (size + set_assoc) because the extra bits required by line-sz are
+ * reduced from the set calc.
+ * e.g. 2-way-set-assoc, 32K I$ with 8k MMU pg sz and using match above
+ *  32b line-sz: 9 bits set-index-calc, 5 bits offset-in-line => 1 extra bit
+ *  64b line-sz: 8 bits set-index-calc, 6 bits offset-in-line => 1 extra bit
+ *
  **********************************************************/
 
 /*
@@ -467,8 +539,8 @@ static void __arc_icache_inv_lines_64k(unsigned long start, int num_lines)
     while (num_lines-- > 0) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
-        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x10);
-        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x11);
+        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x02);
+        write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x03);
         start += ICACHE_COMPILE_LINE_LEN;
     }
 }
