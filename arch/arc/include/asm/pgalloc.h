@@ -97,26 +97,8 @@ static inline void pte_free(struct mm_struct *mm, pgtable_t ptep)
 #define pgd_free(mm, pgd)      free_pgd_slow(pgd)
 #define pgd_alloc(mm)          get_pgd_slow()
 
-/*
- * We don't have any real pmd's, and this code never triggers because
- * the pgd will always be present..
- */
-
-#define pmd_alloc_one_fast(mm, addr)    ({ BUG(); ((pmd_t *)1); })
-#define pmd_alloc_one(mm, addr)         ({ BUG(); ((pmd_t *)2); })
-#define pmd_free_slow(x)                do { } while (0)
-#define pmd_free_fast(x)                do { } while (0)
-#define pmd_free(x)                     do { } while (0)
-#define pgd_populate(mm, pmd, pte)      BUG()
-
-/* other stuff */
-
-/* Sameer: courtesy MIPS port */
-#define __pmd_free_tlb(tlb,x)       do { } while (0)
-
 #define __pte_free_tlb(tlb,pte)     tlb_remove_page((tlb),(pte))
 
-extern int do_check_pgt_cache(int, int);
 extern void pgd_init(unsigned long page);
 
 #define check_pgt_cache()   do { } while (0)

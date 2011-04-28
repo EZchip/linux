@@ -370,6 +370,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
 {
     unsigned long flags;
     pgd_t *pgdp;
+    pud_t *pudp;
     pmd_t *pmdp;
     pte_t *ptep;
     unsigned int idx, pid;
@@ -399,7 +400,8 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
     // TODO-vineetg: investigate if really need to do this
     address &= PAGE_MASK;
     pgdp = pgd_offset_fast(vma->vm_mm, address);
-    pmdp = pmd_offset(pgdp, address);
+    pudp = pud_offset(pgdp, address);
+    pmdp = pmd_offset(pudp, address);
     ptep = pte_offset(pmdp, address);
 
     BUG_ON(pte_val(pte) != pte_val(*ptep));

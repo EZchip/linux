@@ -254,25 +254,26 @@ vmalloc_fault:
          * Synchronize this task's top level page-table
          * with the 'reference' page table.
          */
-        int offset = pgd_index(address);
         pgd_t *pgd, *pgd_k;
+        pud_t *pud, *pud_k;
         pmd_t *pmd, *pmd_k;
 
-        pgd = tsk->active_mm->pgd + offset;
-        pgd_k = init_mm.pgd + offset;
+        pgd = pgd_offset_fast(mm,address);
+        pgd_k = pgd_offset_k(address);
 
-        if (!pgd_present(*pgd)) {
-            if (!pgd_present(*pgd_k))
-                goto bad_area_nosemaphore;
-            set_pgd(pgd, *pgd_k);
-            return 0;
-        }
-
-        pmd = pmd_offset(pgd, address);
-        pmd_k = pmd_offset(pgd_k, address);
-
-        if (pmd_present(*pmd) || !pmd_present(*pmd_k))
+        if (!pgd_present(*pgd_k))
             goto bad_area_nosemaphore;
+
+        pud = pud_offset(pgd, address);
+        pud_k = pud_offset(pgd_k, address);
+        if (!pud_present(*pud_k))
+            goto bad_area_nosemaphore;
+
+        pmd = pmd_offset(pud, address);
+        pmd_k = pmd_offset(pud_k, address);
+        if (!pmd_present(*pmd_k))
+            goto bad_area_nosemaphore;
+
         set_pmd(pmd, *pmd_k);
     }
 

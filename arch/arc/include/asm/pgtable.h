@@ -25,38 +25,13 @@
 
 #include <asm/page.h>
 #include <asm/mmu.h>
-#include <asm-generic/4level-fixup.h>
-/* The linux MM assumes a 3 level page table mechanism. The ARC 700 MMU has
- * a software managed TLB so it can support any levels of paging. We use a 3
- * level page table which folds into a 2 level page table (similar to i386)
- * since it seems to be more memory efficient this way.
- */
-
-/* PMD_SHIFT determines the size of the area that can be mapped by a second
- * level page table. In memory ARC700 linux PTE's are 4 bytes wide as follows :
- *
- *	31            13|12      8        5      3      0
- * 	 -------------------------------------------------
- * 	|       PFN     |M|V|L|G|Rk|Wk|Ek|Ru|Wu|Eu|Fc|A|P |
- *	 -------------------------------------------------
- *
- *	Rk, Ek and Wk are not used by linux. The kernel has all permissions
- *	hence they are each set to 1.
- *	M -> Modified(dirty) , A -> Accessed , P -> Present are implemented
- *	in software.
- *	V->Valid, L->Locked, G->Global are kept here and copied into TLBPD0
- *	when updating the TLB.
- */
-#define __PAGETABLE_PMD_FOLDED 1
-#define PMD_SHIFT	(PAGE_SHIFT + (PAGE_SHIFT -2 )) /* 24 , PAGE_SHIFT 13 */
-#define PMD_SIZE	(1UL << PMD_SHIFT)
-#define PMD_MASK	(~(PMD_SIZE-1))
+#include <asm-generic/pgtable-nopmd.h>
 
 /* PGDIR_SHIFT determines the size of the area mapped by a third level page
  * table entry. Since we fold into a 2 level structure this is the same as
  * PMD_SHIFT.
  */
-#define PGDIR_SHIFT	PMD_SHIFT
+#define PGDIR_SHIFT	24
 #define PGDIR_SIZE	(1UL << PGDIR_SHIFT)
 #define PGDIR_MASK	(~(PGDIR_SIZE-1))
 
@@ -121,8 +96,6 @@
 #define PAGE_KERNEL	__pgprot(_PAGE_KERNEL)
 
 #define _KERNPG_TABLE   (_PAGE_TABLE | _PAGE_KERNEL)
-
-
         /* xwr */
 #define __P000	PAGE_NONE
 #define __P001	PAGE_READONLY
@@ -142,12 +115,11 @@
 #define __S110	PAGE_SHARED_EXECUTE
 #define __S111	PAGE_SHARED_EXECUTE
 
+
 #ifndef __ASSEMBLY__
 
 #define pte_ERROR(e) \
 	printk("%s:%d: bad pte %08lx.\n", __FILE__, __LINE__, pte_val(e))
-#define pmd_ERROR(e) \
-	printk("%s:%d: bad pmd %08lx.\n", __FILE__, __LINE__, pmd_val(e))
 #define pgd_ERROR(e) \
 	printk("%s:%d: bad pgd %08lx.\n", __FILE__, __LINE__, pgd_val(e))
 
@@ -176,14 +148,7 @@ static inline void flush_tlb_pgtables(struct mm_struct *mm,
  * but the define is needed for a generic inline function.)
  */
 #define set_pmd(pmdptr, pmdval) (*(pmdptr) = pmdval)
-#define set_pgd(pgdptr, pgdval) (*(pgdptr) = pgdval)
 
-/*
- * Conversion functions: convert a page and protection to a page entry,
- * and a page entry and page directory to the page they refer to.
- */
-/* #define pmd_phys(pmd)		(pmd_val(pmd) - PAGE_OFFSET) */
-/* #define pmd_page(pmd)		(pfn_to_page(pmd_phys(pmd) >> PAGE_SHIFT)) */
 #define pmd_page(pmd) virt_to_page(__va(pmd_val(pmd) & PAGE_MASK))
 
 #define pmd_page_vaddr(pmd)	(pmd_val(pmd) & PAGE_MASK)
@@ -206,15 +171,6 @@ static inline void pmd_set(pmd_t * pmdp, pte_t * ptep)
 #define pmd_present(x)	(pmd_val(x) & _PAGE_PRESENT)
 #define pmd_clear(xp)	do { pmd_val(*(xp)) = 0; } while (0)
 
-/*
- * The "pgd_xxx()" functions here are trivial for a folded two-level
- * setup: the pgd is never bad, and a pmd always exists (as it's folded
- * into the pgd entry)
- */
-static inline int pgd_none(pgd_t pgd)		{ return 0; }
-static inline int pgd_bad(pgd_t pgd)		{ return 0; }
-static inline int pgd_present(pgd_t pgd)	{ return 1; }
-static inline void pgd_clear(pgd_t * pgdp)	{ }
 
 #define pte_page(x) (mem_map + (unsigned long)(((pte_val(x)-PAGE_OFFSET) >> PAGE_SHIFT)))
 /*
@@ -255,7 +211,6 @@ static inline int pte_file(pte_t pte)	{ return pte_val(pte) & _PAGE_FILE; }
 #define pte_offset_map(dir,addr)	((pte_t *)pmd_page_vaddr(*(dir)) + __pte_index(addr))
 #define pte_offset_map_nested(dir,addr)	((pte_t *)pmd_page_vaddr(*(dir)) + __pte_index(addr))
 
-/*  Sameer: MIPS-clone. Defining a macro instead of function in old 2.4 days */
 #define pte_offset(dir, address)					\
 	((pte_t *) (pmd_page_vaddr(*dir)) + __pte_offset(address))
 
@@ -336,19 +291,12 @@ static inline pgprot_t pgprot_noncached(pgprot_t _prot)
 	return __pgprot(prot);
 }
 
-#if 0
-#define __mk_pte(page_nr, pgprot) __pte(((page_nr) << PAGE_SHIFT) | 	\
-						pgprot_val(pgprot))
-#define mk_pte(page, pgprot) __mk_pte((page) - mem_map, (pgprot))
-#else
-
 #define mk_pte(page, pgprot)  \
  ({ \
       pte_t pte;  \
       pte_val(pte) = __pa(page_address(page)) + pgprot_val(pgprot); \
       pte; \
  })
-#endif
 
 static inline pte_t mk_pte_phys(unsigned long physpage, pgprot_t pgprot)
 {
@@ -387,19 +335,6 @@ static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
     pgd_t *pgd_base = (pgd_t *) read_new_aux_reg(ARC_REG_SCRATCH_DATA0);  \
     pgd_base + pgd_index(addr); \
 })
-
-/* Find an entry in the second-level page table */
-static inline pmd_t *pmd_offset(pud_t *dir, unsigned long address)
-{
-	return (pmd_t *) dir;
-}
-
-/* /\* Find an entry in the third-level page table.. *\/ */
-/* static inline pte_t *pte_offset(pmd_t * dir, unsigned long address) */
-/* { */
-/* 	return (pte_t *) (pmd_page(*dir)) + */
-/* 	       ((address >> PAGE_SHIFT) & (PTRS_PER_PTE - 1)); */
-/* } */
 
 extern int do_check_pgt_cache(int, int);
 extern void paging_init(void);

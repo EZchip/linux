@@ -652,6 +652,9 @@ void mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
 void set_frame_exec(unsigned long vaddr, unsigned int exec_enable)
 {
     unsigned long paddr, vaddr_pg, off_from_pg_start;
+    pgd_t *pgdp;
+    pud_t *pudp;
+    pmd_t *pmdp;
     pte_t *ptep, pte;
     unsigned long size_on_pg, size_on_pg2;
     unsigned long fr_sz=sizeof(((struct sigframe *)(0))->retcode);
@@ -665,11 +668,10 @@ do_per_page:
     vaddr_pg = vaddr & PAGE_MASK;       /* Get the virtual page address */
 
     /* Get the physical page address for the virtual page address*/
-    ptep = pte_offset(
-                    pmd_offset (
-                            pgd_offset_fast(current->mm, vaddr_pg),
-                            vaddr_pg),
-                    vaddr_pg);
+    pgdp = pgd_offset_fast(current->mm, vaddr_pg),
+    pudp = pud_offset(pgdp, vaddr_pg);
+    pmdp = pmd_offset(pudp, vaddr_pg);
+    ptep = pte_offset(pmdp, vaddr_pg);
 
     /* Set the Execution Permission in the pte entry*/
     pte = *ptep;
