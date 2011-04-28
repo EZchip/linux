@@ -231,14 +231,16 @@ ex_saved_reg1:
 ; IN: r0 = PTE, r1 = ptr to PTE
 .macro UPDATE_PTE
     lr      r3, [ecr]
-    or      r0, r0, (_PAGE_VALID | _PAGE_ACCESSED)  ; Set Accessed bit for all
+    or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED)  ; Set Accessed bit for all
     btst_s  r3,  DTLB_ST_MISS_BIT         ; See if it was a Write Access ?
     or.nz   r0, r0, _PAGE_MODIFIED        ; if Write, set Dirty bit as well
     st_s    r0, [r1]                      ; Write back PTE
 .endm
 
-; Setup PTE bits in TLB entry
-; IN: r0 = PTE
+; Convert Linux PTE entry into TLB entry
+; A one-word PTE entry is programmed as two-word TLB Entry [PD0:PD1] in mmu
+; IN: r0 = PTE, r1 = ptr to PTE
+
 .macro TLB_RELOAD
     and r1, r0, PTE_BITS_IN_PD0 ; Valid, Global
 #if (CONFIG_ARC_MMU_VER <= 2)   // Neednot be done with v3 onwards
@@ -430,7 +432,7 @@ ARC_ENTRY EV_TLBMissI
     bnz     do_slow_path_pf
 
     ; Let Linux VM know that the page was accessed
-    or      r0, r0, (_PAGE_VALID | _PAGE_ACCESSED)  ; set Accessed Bit
+    or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED)  ; set Accessed Bit
     st_s    r0, [r1]                                ; Write back PTE
 
     TLB_RELOAD

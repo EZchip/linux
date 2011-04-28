@@ -368,11 +368,10 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
     pud_t *pudp;
     pmd_t *pmdp;
     pte_t *ptep;
-    unsigned int idx, pid;
-    unsigned long glv_bits;
+    unsigned int idx, asid=0;
+    unsigned long pd0_flags;
 
     local_irq_save(flags);
-    pid = read_new_aux_reg(ARC_REG_PID) & 0xff;
 
 #ifdef CONFIG_ARC_TLB_PARANOIA
     /* vineetg- April 2008
@@ -405,16 +404,17 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
     //BUG_ON(pte_val(pte) != pte_val(*ptep));
 
     /* update this PTE credentials */
-    pte_val(*ptep) |= (_PAGE_VALID | _PAGE_ACCESSED);
+    pte_val(*ptep) |= (_PAGE_PRESENT | _PAGE_ACCESSED);
 
 #if (CONFIG_ARC_MMU_VER <= 2)
     /* Create HW TLB entry Flags (in PD0) from PTE Flags */
-    glv_bits = ((pte_val(*ptep) & PTE_BITS_IN_PD0) >> 1);
+    pd0_flags = ((pte_val(*ptep) & PTE_BITS_IN_PD0) >> 1);
 #else
-    glv_bits = ((pte_val(*ptep) & PTE_BITS_IN_PD0));
+    pd0_flags = ((pte_val(*ptep) & PTE_BITS_IN_PD0));
 #endif
+    asid = read_new_aux_reg(ARC_REG_PID) & 0xff;
 
-    write_new_aux_reg(ARC_REG_TLBPD0, (address | glv_bits | pid));
+    write_new_aux_reg(ARC_REG_TLBPD0, (address|pd0_flags|asid));
 
     /* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags etc) */
     write_new_aux_reg(ARC_REG_TLBPD1, (pte_val(*ptep) & PTE_BITS_IN_PD1));

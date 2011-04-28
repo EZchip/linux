@@ -1,7 +1,12 @@
 /******************************************************************************
  * Copyright Synopsys 2011-2012
  *
- * vineetg: MMU TLB Page Descriptor Flags mods
+ * vineetg: May 2011
+ *  -Folded PAGE_PRESENT (used by VM) and PAGE_VALID (used by MMU) into 1.
+ *     They are semantically the same although in different contexts
+ *     VALID marks a TLB entry exists and it will only happen if PRESENT
+ *
+ * vineetg: Mar 2011 - changes to accomodate MMU TLB Page Descriptor mods
  *  -TLB Locking never really existed, except for initial specs
  *  -SILENT_xxx not needed for our port
  *  -Per my request, MMU V3 changes the layout of some of the bits
@@ -60,7 +65,6 @@ typedef struct {
 
 #if (CONFIG_ARC_MMU_VER <= 2)
 
-#define _PAGE_PRESENT       (1<<0)  /* Page present in memory (S)*/
 #define _PAGE_ACCESSED      (1<<1)  /* Page is accesses (S) */
 #define _PAGE_CACHEABLE     (1<<2)  /* Page is cached (H) */
 #define _PAGE_EXECUTE       (1<<3)  /* Page has user execute perm (H) */
@@ -71,6 +75,7 @@ typedef struct {
 #define _PAGE_K_READ        (1<<8)  /* Page has kernel perm (H) */
 #define _PAGE_GLOBAL        (1<<9)  /* Page is global (H) */
 #define _PAGE_VALID         (1<<11) /* Page is valid (H) */
+#define _PAGE_PRESENT       _PAGE_VALID  /* Page present in memory (S)*/
 #define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
 
 #else
@@ -88,7 +93,7 @@ typedef struct {
 /* PD0 */
 #define _PAGE_GLOBAL        (1<<8)  /* Page is global (H) */
 #define _PAGE_VALID         (1<<9)  /* Page is valid (H) */
-#define _PAGE_PRESENT       (1<<10) /* Page present in memory (S)*/
+#define _PAGE_PRESENT       _PAGE_VALID /* Page present in memory (S)*/
 #define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
 
 #endif
