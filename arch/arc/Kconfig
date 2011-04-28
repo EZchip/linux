@@ -501,6 +501,20 @@ config ARCH_ARC_SPACE_RND
           Note that it could lead to some performance degradation especially
           for shared libraries so use it only if needed
 
+config MMAP_CODE_CMN_VADDR
+        bool "mmap shared lib code at same vaddr across proceses"
+        default Y
+        select GENERIC_ALLOCATOR
+        help
+        This feature forces kernel to map a particular shared lib's code
+        at same vaddr across processes using a dedicated
+        mmap-shared-code-virtual-address-space. Any lib's code page frames
+        are already shared using page-cache; same vaddr ensures a single
+        v:p mapping, preventing virtual aliases in ARC VIPT I-Caches.
+        This boosts performance because each alias occupies a cache-line
+        of own hence needs to be fetched per instance as opposed to just
+        once.
+
 config HZ
     int "Timer Frequency"
     default 100

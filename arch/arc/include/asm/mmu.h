@@ -27,9 +27,12 @@
  */
 #ifndef __ASSEMBLY__
 typedef struct {
-    unsigned long asid;
+    unsigned long asid;         /* Pvt Addr-Space ID for mm */
 #ifdef CONFIG_ARC_TLB_DBG
     struct task_struct *tsk;
+#endif
+#ifdef CONFIG_MMAP_CODE_CMN_VADDR
+    unsigned long sasid;        /* bitmap of Shared Addr-space IDs */
 #endif
 } mm_context_t;
 

@@ -27,6 +27,7 @@
 
 #include <asm/page.h>
 #include <asm/pgalloc.h>
+#include <asm/mmapcode.h>
 
 pgd_t swapper_pg_dir[PTRS_PER_PGD] __attribute__ ((aligned(PAGE_SIZE)));
 char empty_zero_page[PAGE_SIZE] __attribute__ ((aligned(PAGE_SIZE)));
@@ -108,6 +109,8 @@ void free_initmem(void)
 	}
 	printk(KERN_INFO "Freeing unused kernel memory: %luk freed [%p] TO [%p]\n",
 	       (&_init_end - &_init_begin) >> 10, &_init_begin, &_init_end);
+
+    mmapcode_space_init();
 }
 
 void show_mem(void)

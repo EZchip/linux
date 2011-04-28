@@ -35,7 +35,13 @@
 #include <asm/arcregs.h>
 #include <asm/tlb.h>
 
+#ifndef CONFIG_MMAP_CODE_CMN_VADDR
 #include <asm-generic/mm_hooks.h>
+#else
+extern void arch_dup_mmap(struct mm_struct *oldmm, struct mm_struct *mm);
+extern void arch_exit_mmap(struct mm_struct *mm);
+#endif
+
 
 #define FIRST_ASID  0
 #define MAX_ASID    255 /* ARC 700 8 bit PID field in PID Aux reg */

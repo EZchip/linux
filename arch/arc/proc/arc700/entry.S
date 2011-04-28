@@ -986,7 +986,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_reboot)
         .long   SYMBOL_NAME(sys_old_readdir) /* used by libc4 */
   /* 90 */  .long   SYMBOL_NAME(old_mmap) /* used by libc4 */
-        .long   SYMBOL_NAME(sys_munmap)
+        .long   SYMBOL_NAME(sys_arc_munmap)
         .long   SYMBOL_NAME(sys_truncate)
         .long   SYMBOL_NAME(sys_ftruncate)
         .long   SYMBOL_NAME(sys_fchmod)
