@@ -10,7 +10,7 @@
 #ifndef __ASM_ARC_SWAB_H
 #define __ASM_ARC_SWAB_H
 
-#include <asm/types.h>
+#include <linux/types.h>
 
 /* Byte Swap Implementation Toggle for ARC
  * 0: kernel generic
@@ -45,7 +45,7 @@
  */
 
 #define __arch_swab32(x) __extension__										\
-({ 	unsigned __swab32_in = (x), __swab32_tmp; 								\
+({ 	unsigned long __swab32_in = (x), __swab32_tmp; 								\
 	__swab32_tmp = __swab32_in << 8 | __swab32_in >> 24; /* ror tmp,in,24 */\
 	__swab32_in = __swab32_in << 24 | __swab32_in >> 8; /* ror in,in,8 */	\
 	__swab32_tmp ^= __swab32_in; 											\
