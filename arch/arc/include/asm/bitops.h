@@ -38,7 +38,7 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 #endif
 
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
 static inline void
 set_bit(unsigned long nr, volatile void * addr)
@@ -301,9 +301,10 @@ static inline int __test_bit(int nr, const volatile void * addr)
  __test_bit((nr),(addr)))
 
 /*
- * ffz = Find First Zero in word. Undefined if no zero exists,
+ * ffz = Find First Zero in word.
+ * @return:[0-31], 32 if all 1's
  */
-static __pure inline unsigned long ffz(unsigned long word)
+static  inline unsigned long ffz(unsigned long word)
 {
     int result = 0;
 
@@ -331,8 +332,83 @@ static __pure inline unsigned long ffz(unsigned long word)
     result -=1 ;
 
     return result;
-
 }
+
+/*
+ * ffs = Find First Set in word (LSB to MSB)
+ * @result: [1-32], 0 if all 0's
+ */
+static  inline unsigned long ffs(unsigned long word)
+{
+    int result = 0;
+
+    if ((int)word == 0) return 0;
+
+    __asm__ __volatile__(
+        "1:                     \t\n"
+        "bbit0.d  %1, %0, 1b    \t\n"
+        "add      %0, %0, 1     \t\n"
+    :"+r"(result)
+    :"r" (word)
+    );
+
+    /* Since it is 1 based, we need not worry abt result -= 1 as in ffz */
+
+    return result;
+}
+
+/*
+ * __ffs: Similar to ffs, but zero based (0-31)
+ */
+static  inline unsigned long __ffs(unsigned long word)
+{
+    if (!word) return word;
+    return ffs(word) -1;
+}
+
+/*
+ * Count the number of zeros, starting from MSB
+ * Helper for fls( ) routines
+ * This is a pure count, so (1-32) or (0-31) doesn't apply
+ * It could be 0 to 32, based on num of 0's in there
+ * clz(0x8000_0000) = 0, clz(0xFFFF_FFFF)=0, clz(0) = 32, clz(1) = 31
+ */
+static inline int  clz(unsigned int x)
+{
+    unsigned int res;
+
+    __asm__ __volatile__(
+        "norm.f  %0, %1     \t\n"
+        "mov.n   %0, 0      \t\n"
+        "add.p   %0, %0, 1  \t\n"
+        :"=r" (res)
+        :"r" (x)
+        :"cc"
+    );
+
+    return res;
+}
+
+/*
+ * fls = Find Last Set in word
+ * @result: [1-32]
+ * fls(1) = 1, fls(0x80000000) = 32, fls(0) = 0
+ * Loopless: based on ARC norm insn
+ */
+static inline int  fls(unsigned long x)
+{
+    return 32 - clz(x);
+}
+
+/*
+ * __fls: Similar to fls, but zero based (0-31)
+ */
+static inline int  __fls(unsigned long x)
+{
+    if (!x) return 0;
+    else return fls(x) - 1;
+}
+
 
 
 #define find_first_zero_bit(addr, size) \
@@ -370,10 +446,6 @@ static __pure inline unsigned long ffz(unsigned long word)
  * The Hamming Weight of a number is the total number of bits set in it.
  */
 
-#include <asm-generic/bitops/fls.h>
-#include <asm-generic/bitops/ffs.h>
-#include <asm-generic/bitops/__fls.h>
-#include <asm-generic/bitops/__ffs.h>
 #include <asm-generic/bitops/hweight.h>
 #include <asm-generic/bitops/fls64.h>
 #include <asm-generic/bitops/find.h>
