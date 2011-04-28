@@ -6,12 +6,16 @@
  *****************************************************************************/
 #include <linux/ptrace.h>
 #include <linux/module.h>
+#include <linux/mm.h>
+#include <linux/fs.h>
+#include <linux/kdev_t.h>
 #include <asm/arcregs.h>
 #include <asm/traps.h>      /* defines for Reg values */
 #include <linux/kallsyms.h>
 
 static void show_ecr_verbose(struct pt_regs *regs);
 void show_callee_regs(struct callee_regs *cregs);
+static void show_faulting_vma(unsigned long address);
 
 /* For dumping register file (r0-r12) or (r13-r25), instead of 13 printks,
  * we simply loop otherwise gcc generates 13 calls to printk each with it's
@@ -30,16 +34,25 @@ void noinline print_reg_file(unsigned long *last_reg, int num)
 
 void show_regs(struct pt_regs *regs)
 {
+    struct task_struct *tsk = current;
     struct callee_regs *cregs;
+
+    printk("Current task = '%s', PID = %u, ASID = %lu\n", tsk->comm,
+               tsk->pid, tsk->active_mm->context.asid);
 
     if (current->thread.cause_code)
         show_ecr_verbose(regs);
 
+    printk("[EFA]: 0x%08lx\n", current->thread.fault_address);
+    printk("[ERET]: 0x%08lx (Faulting instruction)\n",regs->ret);
+
+    show_faulting_vma(regs->ret);   // VMA of faulting code, not data
+
     /* print special regs */
     printk("status32: 0x%08lx\n", regs->status32);
-    printk("sp: 0x%08lx\tfp: 0x%08lx\n", regs->sp, regs->fp);
-    printk("ret: 0x%08lx\tblink: 0x%08lx\tbta: 0x%08lx\n",
-            regs->ret, regs->blink, regs->bta);
+    printk("SP: 0x%08lx\tFP: 0x%08lx\n", regs->sp, regs->fp);
+    printk("BLINK: 0x%08lx\tBTA: 0x%08lx\n",
+            regs->blink, regs->bta);
     printk("LPS: 0x%08lx\tLPE: 0x%08lx\tLPC: 0x%08lx \n",
             regs->lp_start, regs->lp_end, regs->lp_count);
 
@@ -59,6 +72,35 @@ void show_callee_regs(struct callee_regs *cregs)
     printk("\n");
 }
 
+static void show_faulting_vma(unsigned long address)
+{
+    struct vm_area_struct *vma;
+    struct inode *inode;
+    unsigned long ino = 0;
+    dev_t dev = 0;
+    char buf[256]={'\0'};
+    char *nm = buf;
+
+    vma = find_vma(current->active_mm, address);
+
+    /* check against the find_vma( ) behaviour which returns the next VMA
+     * if the container VMA is not found
+     */
+    if (vma && (vma->vm_start <= address)) {
+        struct file *file = vma->vm_file;
+        if (file) {
+                struct path *path = &file->f_path;
+                nm = d_path(path, buf, 255);
+                inode = vma->vm_file->f_path.dentry->d_inode;
+                dev = inode->i_sb->s_dev;
+                ino = inode->i_ino;
+        }
+        printk("@offset 0x%lx in [%s] \nVMA: start 0x%08lx end 0x%08lx\n\n",
+               address - vma->vm_start, nm, vma->vm_start, vma->vm_end);
+    }
+    else printk("@No matching VMA found\n");
+}
+
 /************************************************************************
  *  Verbose Display of Exception
  ***********************************************************************/
@@ -67,12 +109,9 @@ static void show_ecr_verbose(struct pt_regs *regs)
 {
     unsigned int cause_vec, cause_code, cause_reg;
     unsigned long address;
-    struct task_struct *tsk = current;
-
-    printk("Current task = '%s', PID = %u, ASID = %lu\n", tsk->comm,
-               tsk->pid, tsk->active_mm->context.asid);
 
     cause_reg = current->thread.cause_code;
+    printk("\n[ECR]: 0x%08x\n", cause_reg);
 
      /* For Data fault, this is data address not instruction addr */
     address = current->thread.fault_address;
@@ -108,16 +147,15 @@ static void show_ecr_verbose(struct pt_regs *regs)
             printk("Misaligned access\n");
 
     }
-
-
-    printk("\n[ECR]: 0x%08x\n", cause_reg);
-    printk("[EFA]: 0x%08lx\n", address);
 }
 
 
 void show_kernel_fault_diag(const char *str, struct pt_regs *regs,
     unsigned long address, unsigned long cause_reg)
 {
+
+    current->thread.fault_address = address;
+    current->thread.cause_code = cause_reg;
 
     // Caller and Callee regs
     show_regs(regs);
