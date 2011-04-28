@@ -32,7 +32,6 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 #else
 
-
 #define bitops_lock(flags)   local_irq_save(flags)
 #define bitops_unlock(flags) local_irq_restore(flags)
 
@@ -303,17 +302,36 @@ static inline int __test_bit(int nr, const volatile void * addr)
 
 /*
  * ffz = Find First Zero in word. Undefined if no zero exists,
- * so code should check against ~0UL first..
  */
-static inline unsigned long ffz(unsigned long word)
+static __pure inline unsigned long ffz(unsigned long word)
 {
-    unsigned long result = 0;
+    int result = 0;
 
-    while(word & 1) {
-        result++;
-        word >>= 1;
-    }
+     /* Given the way inline asm is written, it would infinite loop for
+        @word = 0xFFFF_FFFF. So we need to test it anyways.
+        The question is what to return ?
+        I wanted to return 0, but old while loop used to return 32, so keeping
+        that way. Also since this routine is Zero based, it makes sense to
+        return 32 as indicative error value.
+      */
+
+    if ((int)word == -1) return 32;
+
+    __asm__ __volatile__(
+        "1:                     \t\n"
+        "bbit1.d  %1, %0, 1b    \t\n"
+        "add      %0, %0, 1     \t\n"
+    :"+r"(result)
+    :"r" (word)
+    );
+
+    /* On ARC700, delay slot insn is always executed for XX.d branch.
+       Thus need to account for 1 extra add insn being executed
+    */
+    result -=1 ;
+
     return result;
+
 }
 
 
