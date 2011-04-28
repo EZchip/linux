@@ -1,6 +1,10 @@
 /******************************************************************************
  * ARC International 2009-2011
  *
+ * vineetg: June 2010
+ *    -__clear_user( ) called multiple times during elf load was byte loop
+ *    converted to do as much word clear as possible.
+ *
  * vineetg: Dec 2009
  *    -Hand crafted constant propagation for "constant" copy sizes
  *    -stock kernel shrunk by 33K at -O3
@@ -1006,26 +1010,49 @@ unsigned long __copy_to_user(void *to, const void *from, unsigned long n);
 static inline unsigned long
 __clear_user(void *to, unsigned long n)
 {
-    long    res;
+    long res = n;
+    unsigned char *d_char = to;
 
-    __asm__ __volatile__ (
-        "   mov %0, %3                  \n"
-        "1: stb %4, [%1]                \n"
-        "   add %1, %1, 1               \n"
-        "   sub.f   %0, %0, 1           \n"
-        "   bnz 1b                      \n"
-        "2: nop                         \n"
+        __asm__ __volatile__ (
+        "   bbit0   %0, 0, 1f \n"
+        "75:   stb.ab  %2, [%0,1]\n"
+        "   sub %1, %1, 1     \n"
+        "1: \n"
+        "   bbit0   %0, 1, 2f \n"
+        "76:   stw.ab  %2, [%0,2]\n"
+        "   sub %1, %1, 2     \n"
+        "2: \n"
+        "   asr.f   lp_count, %1, 2\n"
+        "   lpnz    3f\n"
+        "77:   st.ab   %2, [%0,4]\n"
+        "   sub %1, %1, 4     \n"
+        "3:\n"
+        "   bbit0   %1, 1, 4f \n"
+        "78:   stw.ab  %2, [%0,2]\n"
+        "   sub %1, %1, 2     \n"
+        "4: \n"
+        "   bbit0   %1, 0, 5f \n"
+        "79:   stb.ab  %2, [%0,1]\n"
+        "   sub %1, %1, 1     \n"
+        "5: \n"
+
         "   .section .fixup, \"ax\"     \n"
         "   .align 4                    \n"
-        "3: j   2b                      \n"
+        "3: j   5b                      \n"
         "   .previous                   \n"
+
         "   .section __ex_table, \"a\"  \n"
         "   .align 4                    \n"
-        "   .word   1b, 3b              \n"
+        "   .word   75b, 3b              \n"
+        "   .word   76b, 3b              \n"
+        "   .word   77b, 3b              \n"
+        "   .word   78b, 3b              \n"
+        "   .word   79b, 3b              \n"
         "   .previous                   \n"
-        :"=r" (res), "=r"(to)
-        :"1"(to), "r"(n), "i"(0)
-    );
+
+        :"+r" (d_char), "+r" (res)
+        :"i" (0)
+        :"lp_count","lp_start","lp_end");
 
     return (res);
 }
