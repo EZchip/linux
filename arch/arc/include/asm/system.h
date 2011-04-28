@@ -195,7 +195,28 @@ static inline void sched_cacheflush(void)
 {
 }
 
-extern unsigned long arch_align_stack(unsigned long sp);
+static inline unsigned long arch_align_stack(unsigned long sp)
+{
+    //unsigned long orig_sp = sp;
+
+#ifdef CONFIG_ARCH_ARC_SPACE_RND
+    /* ELF loader sets this flag way early.
+     * So no need to check for multiple things like
+     *   !(current->personality & ADDR_NO_RANDOMIZE)
+     *   randomize_va_space
+     */
+    if (current->flags & PF_RANDOMIZE) {
+
+        /* Stack grows down for ARC */
+		sp -= get_random_int() & ~PAGE_MASK;
+    }
+#endif
+
+    sp &= ~0xF;  // always align stack to 16 bytes
+
+    //printk("RAND: SP orig %x rnd %x\n", orig_sp, sp);
+    return sp;
+}
 
 /******************************************************************
  * Piggyback stuff

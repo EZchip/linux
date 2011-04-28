@@ -509,27 +509,6 @@ unsigned long thread_saved_pc(struct task_struct *t)
     return blink;
 }
 
-unsigned long arch_align_stack(unsigned long sp)
-{
-    //unsigned long orig_sp = sp;
-
-#ifdef CONFIG_ARCH_ARC_SPACE_RND
-    /* ELF loader sets this flag way early.
-     * So no need to check for multiple things like
-     *   !(current->personality & ADDR_NO_RANDOMIZE)
-     *   randomize_va_space
-     */
-    if (current->flags & PF_RANDOMIZE) {
-
-        /* Stack grows down for ARC */
-		sp -= get_random_int() & ~PAGE_MASK;
-        sp &= ~0xF;
-    }
-#endif
-    //printk("RAND: SP orig %x rnd %x\n", orig_sp, sp);
-    return sp;
-}
-
 /* Independent of kernel CONFIG option, we keep the syscall in
  * unistd.h and in sys-call jump table.
  * But return failure here if not supported
