@@ -27,21 +27,18 @@
 #include <asm/mmu.h>
 #include <asm-generic/pgtable-nopmd.h>
 
-/* PGDIR_SHIFT determines the size of the area mapped by a third level page
- * table entry. Since we fold into a 2 level structure this is the same as
- * PMD_SHIFT.
- */
-#define PGDIR_SHIFT	24
-#define PGDIR_SIZE	(1UL << PGDIR_SHIFT)
+/* Page Table Lookup split */
+#define BITS_IN_PAGE  PAGE_SHIFT
+#define BITS_FOR_PTE  11
+#define BITS_FOR_PGD  (32 - BITS_FOR_PTE - BITS_IN_PAGE)
+
+#define PGDIR_SHIFT	(BITS_FOR_PTE + BITS_IN_PAGE)
+#define PGDIR_SIZE	(1UL << PGDIR_SHIFT)    // Not TBL-sz, rather addr-space mapped
 #define PGDIR_MASK	(~(PGDIR_SIZE-1))
 
-/* Entries per directory level. We use a 2 level page table structure so we
- * dont have a physical PMD. On A700 pointers are 4 bytes wide so divide
- * page size by 4
- */
-#define	PTRS_PER_PTE	2048
-#define	PTRS_PER_PMD	1
-#define	PTRS_PER_PGD	256
+/* These come automatically from the split above */
+#define	PTRS_PER_PTE	(1 << BITS_FOR_PTE)
+#define	PTRS_PER_PGD	(1 << BITS_FOR_PGD)
 
 /* Number of entries a user land program use .
  * TASK_SIZE is the maximum Virtual address that can be used by a userland

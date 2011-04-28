@@ -174,9 +174,15 @@ ex_saved_reg1:
     and.f   r1, r1, PAGE_MASK       ; Ignoring protection and other flags
                                     ;   contains Ptr to Page Table
     bz.d    do_slow_path_pf         ; if no Page Table, do page fault
-    lsr     r0, r2, (PAGE_SHIFT -2) ; Bits for indexing into Page tbl:
-    and     r0, r0, ( 0x7FF  << 2)  ;    11 bits
-                                    ; No need to multiply by 4
+
+    ; Get the PTE entry: The idea is
+    ; (1) x = addr >> PAGE_SHIFT  => to mask out page offset bits from @fault-addr
+    ; (2) y = x & (PTRS_IN_PGD - 1) = > to get index
+    ; (3) z = pgtbl[y]
+    ; To avoid the multiply by in end, we do the -2, <<2 below
+
+    lsr     r0, r2, (PAGE_SHIFT - 2)
+    and     r0, r0, ( (PTRS_PER_PTE-1) << 2)
     ld.aw   r0, [r1, r0]            ; get the pte entry and pte ptr corresp to
                                     ;    faulted addr
 .endm
