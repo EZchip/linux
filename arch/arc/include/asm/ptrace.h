@@ -137,6 +137,13 @@ struct callee_regs {
     (((regs->orig_r8) >= 0 && (regs->orig_r8 <= NR_syscalls)) ? 1 : 0 )
 
 #define regs_return_value(regs) ((regs)->r0)
+#define user_stack_pointer(regs)\
+({  unsigned int sp;            \
+    if (user_mode(regs))        \
+        sp = (regs)->sp;        \
+    else sp = -1;               \
+    sp;                         \
+})
 
 #endif /* __ASSEMBLY__ */
 
