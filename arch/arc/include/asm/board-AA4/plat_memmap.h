@@ -24,4 +24,5 @@
 #define DCCM_COMPILE_SZ         (64 * 1024)
 #define ICCM_COMPILE_SZ         (64 * 1024)
 
+#define BVCI_LAT_UNIT_BASE      0xC0FED000
 #endif

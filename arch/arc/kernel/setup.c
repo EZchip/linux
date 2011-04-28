@@ -329,6 +329,33 @@ void arc_chk_ccms(void)
 #endif
 }
 
+/* BVCI Bus Profiler: Latency Unit */
+
+//#define CONFIG_ARC_BVCI_LAT_UNIT
+
+#ifdef CONFIG_ARC_BVCI_LAT_UNIT
+
+int mem_lat = 20;
+
+static volatile int *ID = (volatile int *) BVCI_LAT_UNIT_BASE;
+static volatile int *LAT_CTRL1 = (volatile int *) BVCI_LAT_UNIT_BASE + 21;
+static volatile int *LAT_CTRL2 = (volatile int *) BVCI_LAT_UNIT_BASE + 22;
+
+#endif
+
+void __init probe_lat_unit(void)
+{
+#ifdef CONFIG_ARC_BVCI_LAT_UNIT
+    unsigned int id = *ID;
+
+    printk("BVCI Profiler Ver %x\n",id);
+
+    *LAT_CTRL1 = 0; // Unit #0 : Adds latency to all mem accesses
+
+    *LAT_CTRL2 = mem_lat;
+#endif
+}
+
 /*
  * Initialize and setup the processor core
  * This is called by all the CPUs thus should not do special case stuff
@@ -352,6 +379,8 @@ void __init setup_processor(void)
     arc_chk_ccms();
 
     printk(arc_extn_mumbojumbo(cpu_id, str));
+
+    probe_lat_unit();
 }
 
 static int __init parse_tag_core(struct tag *tag)
