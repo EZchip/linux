@@ -36,7 +36,6 @@
 #include <linux/regset.h>
 #include <asm/unistd.h>
 #include <asm/uaccess.h>
-#include <asm/arcdefs.h>
 
 #define DBG(fmt, args...) pr_debug(fmt , ## args)
 
@@ -230,7 +229,11 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     }
 
     switch (request) {
-    case PTRACE_PEEKTEXT: /* read word at location addr. */
+
+    /* Memory Read
+     * From location @addr in @child into location @data
+     */
+    case PTRACE_PEEKTEXT:
     case PTRACE_PEEKDATA:
             ret = generic_ptrace_peekdata(child, addr, data);
             DBG("    Peek @ 0x%lx = 0x%lx \n",addr, data);
@@ -241,23 +244,23 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
             ret = generic_ptrace_pokedata(child, addr, data);
             break;
 
-
-    case PTRACE_SYSCALL:
-    case PTRACE_CONT:  /* restart after signal. */
+    case PTRACE_SYSCALL:   /* Stop at ret of sys call and next sys call */
+    case PTRACE_CONT:       /* restart simply or say after a signal. */
         ret = -EIO;
-        if ((unsigned long) data > _NSIG)
+        if (!valid_signal(data))
             break;
         if (request == PTRACE_SYSCALL)
-            child->ptrace |= PT_TRACESYS;
+            set_tsk_thread_flag(child, TIF_SYSCALL_TRACE);
         else
-            child->ptrace &= ~PT_TRACESYS;
+            clear_tsk_thread_flag(child, TIF_SYSCALL_TRACE);
+
         child->exit_code = data;
         wake_up_process(child);
         ret = 0;
         break;
 
     case PTRACE_GETREGS: {
-        for(i=0; i< sizeof(struct user_regs_struct);i++)
+        for(i=0; i< sizeof(struct user_regs_struct)/4;i++)
         {
             /* getreg wants a byte offset */
             tmp = getreg(i << 2,child);
@@ -301,15 +304,9 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         ret = ptrace_detach(child, data);
         break;
 
-
-    case PTRACE_SETOPTIONS:
-        if (data & PTRACE_O_TRACESYSGOOD)
-            child->ptrace |= PT_TRACESYSGOOD;
-        else
-            child->ptrace &= ~PT_TRACESYSGOOD;
-        ret = 0;
-        break;
-
+    /* U-AREA Read (Registers, signal etc)
+     * From offset @addr in @child's struct user into location @data
+     */
     case PTRACE_PEEKUSR: {
         /* user regs */
         if(addr > (unsigned)offsetof(struct user,regs) &&
@@ -376,7 +373,7 @@ asmlinkage void syscall_trace(void)
         return;
 
     /* The 0x80 provides a way for the tracing parent to distinguish
-       between a syscall stop and SIGTRAP delivery */
+       between a syscall entry/exit stop and SIGTRAP delivery */
     ptrace_notify(SIGTRAP | ((current->ptrace & PT_TRACESYSGOOD) ?
                              0x80 : 0));
 

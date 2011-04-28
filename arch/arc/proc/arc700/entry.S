@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ * vineetg Feb 2011 (ptrace low level code fixes)
+ *  -traced syscall return code (r0) was not saved into pt_regs for restoring
+ *   into user reg-file when traded task rets to user space.
+ *
  * vineetg: Nov 2010:
  *  -Vector table jumps (@8 bytes) converted into branches (@4 bytes)
  *  -To maintain the slot size of 8 bytes/vector, added nop, which is
@@ -192,7 +196,6 @@ VECTOR   reserved                ; Reserved Exceptions
 #include <asm/entry.h>       /* For the SAVE_* macros */
 #include <asm/errno.h>
 #include <asm/arcregs.h>
-#include <asm/arcdefs.h>    /* PT_TRACESYS */
 
 #include <asm/event-log-asm.h>
 
@@ -481,14 +484,15 @@ tracesys:
 
     ; Do the Sys Call as we normally would.
     ; Validate the Sys Call number
-    mov r0, -ENOSYS
     ld  r8, [sp, PT_r8]
     cmp     r8,  NR_syscalls
-    jhi     tracesys_exit
+    mov.hi  r0, -ENOSYS
+    bhi     tracesys_exit
 
-    ; The pre-sys call hook could have clobbered the CALLER SAVE REGS some of
-    ;   which need to be setup again as Sys Call expects them to be
-    ;   r8 - Sys Call Num, r0-r7 - Sys Calls Args
+    ; Restore the sys-call args. Mere invocation of the hook abv could have
+    ; clobbered them (since they are in scratch regs). The tracer could also
+    ; have deliberately changed the args:  r0-r7 - Sys Calls Args
+    ; Note that r8 - Sys Call Num has already been restored above
     ld  r0, [sp, PT_r0]
     ld  r1, [sp, PT_r1]
     ld  r2, [sp, PT_r2]
@@ -501,10 +505,12 @@ tracesys:
     jl      [r9]        ; Entry into Sys Call Handler
 
 tracesys_exit:
+    st  r0, [sp, PT_r0]     ; sys call return value in pt_regs
 
     ;POST Sys Call Ptrace Hook
     bl  SYMBOL_NAME(syscall_trace)
-    j   ret_from_system_call
+    b   ret_from_exception ; NOT ret_from_system_call at is saves r0 which
+                           ; we'd done before calling post hook above
 
 ;################### Break Point TRAP ##########################
 
@@ -573,18 +579,12 @@ ARC_ENTRY EV_Trap
     ; Before doing anything, return from CPU Exception Mode
     FAKE_RET_FROM_EXCPN r11
 
-    ; Is this task being TRACED and
+    ; Is this task being TRACED and Is Tracer interested in System Call tracing
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
 
-#ifdef CONFIG_ARCH_ARC_CURR_IN_REG
-    ld  r10, [r25, TASK_PTRACE]
-#else
-    GET_CURR_TASK_ON_CPU  r9
-    ld  r10, [r9, TASK_PTRACE]
-#endif
-
-    ; Is Tracer interested in System Call tracing
     ; If yes, call the system call with the pre and post tracing hooks
-    and.f   0, r10, PT_TRACESYS
     jnz tracesys  ; this never comes back
 
     ;============ This is normal System Call case ==========
