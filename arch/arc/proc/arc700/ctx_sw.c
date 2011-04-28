@@ -13,8 +13,9 @@
 
 #include <asm/system.h>
 #include <asm/asm-offsets.h>
+#include <linux/sched.h>    //__sched
 
-struct task_struct *
+struct task_struct * __sched
 __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
 {
     unsigned int tmp;

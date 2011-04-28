@@ -13,15 +13,15 @@
 
 ;################### Low Level Context Switch ##########################
 
-.macro ARC_FUNC x
-	.section .text
+.macro ARC_SCHED_FUNC x
+	.section .sched.text
 	.align 4
 	.global	SYMBOL_NAME(\x)
 	.type   SYMBOL_NAME(\x), @function
 SYMBOL_NAME_LABEL(\x)
 .endm
 
-ARC_FUNC __switch_to
+ARC_SCHED_FUNC __switch_to
 
     /* Save regs on kernel mode stack of task */
     st.a    blink, [sp, -4]
