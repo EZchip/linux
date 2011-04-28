@@ -1,4 +1,12 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2009-2010
+ *
+ *
+ * vineetg: May 2010
+ *  -Rewrote ip_fast_cscum( ) and csum_fold( ) with fast inline asm
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -52,79 +60,69 @@ extern unsigned int csum_partial_copy_from_user(const char *src, char *dst,
 #define csum_partial_copy_nocheck(src, dst, len, sum)	\
 	csum_partial_copy((src), (dst), (len), (sum))
 
-unsigned short ip_fast_csum(unsigned char *iph, unsigned int ihl);
+/*
+ *	Fold a partial checksum
+ */
+static inline __sum16 csum_fold(__wsum sum)
+{
+    unsigned int lower, upper;
+    __sum16 folded;
 
-#if 0
-/* AmitS - This is done in arch/arcnommu/lib/checksum.c */
+    /* The 32 bit sum is broken into two 16 bit halves which are then added
+     * We test if this results in a carry (bit 16 set), in which case it is
+     * added back. This is slightly optimal than unconditionally adding the
+     * upper bits of 16 bit sum (in anticipation of carry) back to sum
+     *
+     * Also as per the csum algorithm, after adding the carry back to sum,
+     * the carry portion needs to be discarded before doing the invert.
+     * However we leave the discard to end, when gcc for the purpose of
+     * returning a sword, anyways downconverts the word to s-word, discarding
+     * that portion
+     */
+    __asm__ __volatile__(
+        "bmsk   %0, %3, 15  \n"  // break 32 bit @sum into two 16 bit words
+        "lsr    %1, %3, 16  \n"
+        "add    %0, %0, %1  \n"  // add them together
+        "btst   %0, 16      \n"  // was there a carry in 16 bit sum
+        "add.nz %0, %0, 1   \n"  // if yes, add it back to sum
+                                 // ideally extw needed, but we can optim it
+        "not    %2, %0      \n"  // cscum req a final invert of sum
+        :"=&r"(lower), "=&r" (upper), "=r" (folded)
+        :"r" (sum)
+        :"cc"
+    );
+
+   /* This implies extw insn, which down-conv 32-bit word to 16 bit word,
+    * for the 16 bit return semantics. It also takes care of discarding
+    * the carry portion of 16 bit sum, which we avoided purposefully
+    * in the inline asm above
+    */
+    return folded;
+}
 
 /*
  *	This is a version of ip_compute_csum() optimized for IP headers,
  *	which always checksum on 4 octet boundaries.
  */
-static inline unsigned short ip_fast_csum(unsigned char * iph,
-					  unsigned int ihl)
+static inline __sum16 ip_fast_csum(void *iph, unsigned int ihl)
 {
-	unsigned int sum;
-	unsigned char *tmp_iph = iph;
+    void *ptr = iph;
+    unsigned int sum, tmp;
 
-	__asm__ __volatile__ (
-		/* Optimization: eliminate one nop by doing the sub
-		 * before the load
-		 */
-		"sub.f  %2, %2, 4 \n"
-		"ld     %0, [%1]  \n"
-		"jle    2f \n"
+    __asm__ __volatile__(
+        "ld.ab   %0, [%2, 4]        \n\t"
+        "sub.f   lp_count, %3, 1    \n\t"
+        "lpnz  1f                   \n\t"
+        "ld.ab   %1, [%2, 4]        \n\t"
+        "adc.f   %0, %0, %1         \n\t"
+        "1:                         \n\t"
+        "adc     %0, %0, 0          \n\t"
+        :"=&r"(sum), "=r"(tmp), "+r"(ptr)
+        :"r"(ihl)
+        :"cc"
+    );
 
-		"mov    lp_count, 0x03 \n"
-		"lp     1f           \n"
-		"add    %3, %3, 4    \n"
-		"add.f  %0, %0, [%3] \n"
-		"1:                  \n"
-
-                /* re-initialize tmp_iph to iph, so that we can use a
-		 * loop construct
-		 */
-		"mov     %3, %1      \n"
-
-		"1: \n"
-		"add    %3, %3, 16   \n"
-		"adc.f  %0, %0, [%3] \n"
-		//"sub.f  \n"
-		"sub    %3, %3, 12   \n"
-
-
-		"2: \n"
-
-		: "=r" (sum), "=r" (iph), "=r" (ihl), "=r" (tmp_iph)
-		: "1" (iph), "2" (ihl), "3" (tmp_iph)
-	);
-
-	return 0;
-}
-#endif
-
-/*
- *	Fold a partial checksum
- */
-
-static inline __sum16 csum_fold(__wsum sum)
-{
-
-#if 0
-	__asm__ (
-		"add.f   %0, %0, %1     \n"
-		"nop                    \n"
-		"adc     %0, %0, 0xffff \n"
-		: "=r" (sum)
-		: "r"  (sum << 16), "0" (sum & 0xffff0000)
-	);
-
-	return (~sum) >> 16;
-#endif
-	sum = (sum & 0xffff) + (sum >> 16);
-	sum = (sum & 0xffff) + (sum >> 16);
-
-	return ~sum;
+    return csum_fold(sum);
 }
 
 static inline unsigned long csum_tcpudp_nofold(unsigned long saddr,
