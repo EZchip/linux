@@ -34,6 +34,8 @@
 #define ARC_REG_EXTARITH_BCR 0x65
 #define ARC_REG_VECBASE_BCR  0x68
 #define ARC_REG_PERIBASE_BCR 0x69
+#define ARC_REG_FP_BCR       0x6B   // Single-Precision FPU
+#define ARC_REG_DPFP_BCR     0x6C   // Dbl Precision FPU
 #define ARC_REG_MMU_BCR      0x6f
 #define ARC_REG_DCCM_BCR     0x74   // DCCM Present + SZ
 #define ARC_REG_TIMERS_BCR   0x75
@@ -153,6 +155,15 @@
 #define PR_CTRL_EN              (1<<0)
 #define ARC_PR_ID                   0xc0fcb000
 
+/* Floating Pt Registers
+ * Status regs are read-only (build-time) so need not be saved/restored
+ */
+#define ARC_AUX_FP_STAT         0x300
+#define ARC_AUX_DPFP_1L         0x301
+#define ARC_AUX_DPFP_1H         0x302
+#define ARC_AUX_DPFP_2L         0x303
+#define ARC_AUX_DPFP_2H         0x304
+#define ARC_AUX_DPFP_STAT       0x305
 
 #ifndef __ASSEMBLY__
 
@@ -285,6 +296,12 @@ struct bcr_dccm {
     unsigned long ver:8, sz: 3, res:21;
 };
 
+// Both SP and DP FPU BCRs have same format
+struct bcr_fp {
+    unsigned int ver:8,
+                 fast:1;
+};
+
 struct cpuinfo_arc_ccm {
     unsigned int base_addr;
     unsigned int sz;
@@ -299,6 +316,7 @@ struct cpuinfo_arc800 {
 struct cpuinfo_arc_cache {
     unsigned int has_aliasing, sz, line_len, assoc;
 };
+
 
 /*************************************************************
  * Top level structure which exports the CPU info such as
@@ -319,7 +337,19 @@ struct cpuinfo_arc {
 #ifdef CONFIG_ARCH_ARC800
     struct cpuinfo_arc800  mp;
 #endif
+    struct bcr_fp  fp, dpfp;
 };
+
+#ifdef CONFIG_ARCH_ARC_FPU
+/* These DPFP regs need to be saved/restored across ctx-sw */
+struct arc_fpu {
+    struct {
+        unsigned int l, h;
+    }
+    aux_dpfp[2];
+};
+#endif
+
 
 /* Helpers */
 #define TO_KB(x) (x >> 10)

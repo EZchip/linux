@@ -85,6 +85,9 @@ struct thread_struct {
 #ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     unsigned long   user_r25;
 #endif
+#ifdef CONFIG_ARCH_ARC_FPU
+    struct arc_fpu  fpu;
+#endif
 };
 
 #define INIT_THREAD  {                          \

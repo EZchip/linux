@@ -187,6 +187,10 @@ int __init read_arc_build_cfg_regs(void)
 
     read_decode_cache_bcr();
 
+    READ_BCR(ARC_REG_FP_BCR, p_cpu->fp);
+    READ_BCR(ARC_REG_DPFP_BCR, p_cpu->dpfp);
+
+
 #ifdef CONFIG_ARCH_ARC800
     READ_BCR(ARC_REG_MP_BCR, p_cpu->mp);
 #endif
@@ -308,6 +312,20 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
                     IS_AVAIL1(p_cpu->mp.idu), IS_AVAIL1(p_cpu->mp.sdu));
 #endif
 
+    if (p_cpu->fp.ver || p_cpu->dpfp.ver) {
+        num += sprintf(buf+num, "Floating Point Extension:\n");
+
+        if (p_cpu->fp.ver) {
+            num += sprintf(buf+num, "   Single Prec v[%d] %s\n",
+                            (p_cpu->fp.ver), p_cpu->fp.fast ? "(fast)":"");
+        }
+
+        if (p_cpu->dpfp.ver) {
+            num += sprintf(buf+num, "   Dbl Prec v[%d] %s\n",
+                            (p_cpu->fp.ver), p_cpu->fp.fast ? "(fast)":"");
+        }
+    }
+
     return buf;
 }
 
@@ -350,6 +368,33 @@ static volatile int *LAT_CTRL2 = (volatile int *) BVCI_LAT_UNIT_BASE + 22;
 
 #endif
 
+
+/* Ensure that FP hardware and kernel config match
+ * -If hardware contains DPFP, kernel needs to save/restore FPU state
+ *  across context switches
+ * -If hardware lacks DPFP, but kernel configured to save FPU state then
+ *  kernel trying to access non-existant DPFP regs will crash
+ *
+ * We only check for Dbl precision Floating Point, because only DPFP
+ * hardware has dedicated regs which need to be saved/restored on ctx-sw
+ * (Single Precision uses core regs), thus kernel is kind of oblivious to it
+ */
+void __init probe_fpu(void)
+{
+    struct cpuinfo_arc *p_cpu = &cpuinfo_arc700[smp_processor_id()];
+
+    if (p_cpu->dpfp.ver) {
+#ifndef CONFIG_ARCH_ARC_FPU
+        printk("DPFP support broken in this kernel...\n");
+#endif
+    }
+    else {
+#ifdef CONFIG_ARCH_ARC_FPU
+        panic("H/w lacks DPFP support, kernel won't work\n");
+#endif
+    }
+}
+
 void __init probe_lat_unit(void)
 {
 #ifdef CONFIG_ARC_BVCI_LAT_UNIT
@@ -386,6 +431,8 @@ void __init setup_processor(void)
     arc_chk_ccms();
 
     printk(arc_extn_mumbojumbo(cpu_id, str));
+
+    probe_fpu();
 
     probe_lat_unit();
 }

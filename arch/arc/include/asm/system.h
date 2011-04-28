@@ -128,10 +128,40 @@ struct task_struct; // to prevent cyclic dependencies
 extern struct task_struct *__switch_to(struct task_struct *prev,
                                     struct task_struct *next);
 
+#ifdef CONFIG_ARCH_ARC_FPU
+
+#define HW_BUG_101581
+
+#ifdef HW_BUG_101581
+
+extern void fpu_save_restore(struct task_struct *prev, struct task_struct *next);
+
+#define ARC_FPU_PREV(p,n)   fpu_save_restore(p,n)
+#define ARC_FPU_NEXT(t)
+
+#else  /* !HW_BUG_101581 */
+
+extern void inline fpu_save(struct task_struct *tsk);
+extern void inline fpu_restore(struct task_struct *tsk);
+
+#define ARC_FPU_PREV(p,n)   fpu_save(p)
+#define ARC_FPU_NEXT(t)     fpu_restore(t)
+
+#endif  /* !HW_BUG_101581 */
+
+#else  /* !CONFIG_ARCH_ARC_FPU */
+
+#define ARC_FPU_PREV(p,n)
+#define ARC_FPU_NEXT(t)
+
+#endif   /* !CONFIG_ARCH_ARC_FPU */
+
 #define switch_to(prev, next, last)         \
 {                                           \
     do {                                    \
+        ARC_FPU_PREV(prev, next);           \
         last = __switch_to( prev, next);    \
+        ARC_FPU_NEXT(next);                 \
         mb();                               \
                                             \
     }while (0);                             \

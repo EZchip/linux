@@ -43,4 +43,7 @@ ifdef CONFIG_KPROBES
 obj-y       += kprobes.o
 endif
 
+CFLAGS_fpu.o   += -mdpfp
+obj-$(CONFIG_ARCH_ARC_FPU) += fpu.o
+
 extra-y := init_task.o vmlinux.lds

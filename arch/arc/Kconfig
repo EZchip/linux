@@ -226,6 +226,17 @@ config ARC_TLS_REG_EMUL
             pointer to TLS Data area.
             So we emulate the TLS register using a TLS Virtual addr
 
+config ARCH_ARC_FPU
+        bool "Enable FPU state persistence across context switch"
+        default N
+        help
+        Double Precision Floating Point unit had dedictaed regs which
+        need to be saved/restored across context-switch.
+        Note that ARC FPU is overly simplistic, unlike say x86, which has
+        hardware pieces to allow software to conditionally save/restore,
+        based on actual usage of FPU by a task. Thus our implemn does
+        this for all tasks in system.
+
 endmenu   #CPU Core config
 
 menu "Board Configuration"
