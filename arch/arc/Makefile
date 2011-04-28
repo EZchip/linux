@@ -27,7 +27,8 @@ export PLATFORM
 #LDFLAGS_vmlinux :=-X -T arch/$(ARCH)/kernel/vmlinux.lds
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
-KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin -D__linux__ -O3
+KBUILD_CFLAGS		+= -mA7 -mlong-calls -fno-common -pipe -fno-builtin \
+						-D__linux__ -O3 -fcall-used-gp
 
 # vineetg, Oct 2009
 # Low level event tracing is sort of crude, as it relies on visualisation
