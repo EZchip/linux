@@ -58,7 +58,6 @@ struct mm_struct;
 struct vm_area_struct;
 struct page;
 
-extern void clear_page(void *page);
 extern void copy_page(void *to, void *from);
 extern void clear_user_page(void *addr, unsigned long vaddr, struct page *page);
 extern void copy_user_page(void *vto, void *vfrom, unsigned long vaddr, struct page *to);
@@ -66,6 +65,9 @@ extern void copy_user_page(void *vto, void *vfrom, unsigned long vaddr, struct p
 #define get_user_page(vaddr)        __get_free_page(GFP_KERNEL)
 #define free_user_page(page, addr)  free_page(addr)
 
+#undef STRICT_MM_TYPECHECKS
+
+#ifdef STRICT_MM_TYPECHECKS
 /*
  * These are used to make use of C type-checking..
  */
@@ -82,19 +84,22 @@ typedef unsigned long pgtable_t;
 #define __pgd(x)        ((pgd_t) { (x) } )
 #define __pgprot(x)     ((pgprot_t) { (x) } )
 
-/* Pure 2^n version of get_order */
-extern __inline__ int get_order(unsigned long size)
-{
-    int order;
+#else
 
-    size = (size-1) >> (PAGE_SHIFT-1);
-    order = -1;
-    do {
-    size >>= 1;
-        order++;
-    } while (size);
-    return order;
-}
+typedef unsigned long pte_t;
+typedef unsigned long pgd_t;
+typedef unsigned long pgprot_t;
+typedef unsigned long pgtable_t;
+
+#define pte_val(x)      (x)
+#define pgd_val(x)	    (x)
+#define pgprot_val(x)   (x)
+
+#define __pte(x)        (x)
+#define __pgprot(x)     (x)
+
+#endif
+
 
 /* __pa, __va, virt_to_page
  * ALERT: These macros are deprecated, dont use them
@@ -159,5 +164,7 @@ extern __inline__ int get_order(unsigned long size)
 }
 
 #endif  /* __KERNEL__ */
+
+#include <asm-generic/page.h>
 
 #endif /* __ASM_ARC_PAGE_H */
