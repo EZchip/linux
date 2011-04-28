@@ -26,7 +26,6 @@
 /* Arch specific mmu context. We store the allocated ASID in here.
  */
 #ifndef __ASSEMBLY__
-#include <asm/unaligned.h>
 typedef struct {
     unsigned long asid;
 #ifdef CONFIG_ARC_TLB_DBG
@@ -108,12 +107,6 @@ typedef struct {
 				| _KERNEL_PAGE_PERMS )
 /* Kernel only page (vmalloc) : global page with all user mode perms
  * denied. kernel mode perms are set for all pages */
-
-/* Disabling cacheable bit so vmalloc'ed pages will not be cached.
- * This is done to work around a problem in loading modules vmalloc area.
- * FIXME : Need to see how we can support caching of module pages by looking
- * at the module loading code. It does not seem to be flushing the Dcache */
-
 
 #define _PAGE_KERNEL	(_PAGE_PRESENT | _PAGE_GLOBAL \
 			| _PAGE_DEFAULT_CACHEABLE | _KERNEL_PAGE_PERMS)

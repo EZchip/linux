@@ -211,21 +211,6 @@ config ARCH_ARC_LV2_INTR
         bool "Enable two levels of Interrupts high(2)low(1)"
         default n
 
-config ARCH_ARC_CURR_IN_REG
-        bool "Dedicate Register r25 for current_task pointer"
-        default N
-        help
-          This reserved Register R25 to point to Current Task in
-          kernel mode. This saves memory access for each such access
-
-config ARC_TLS_REG_EMUL
-        bool "Emulate a TLS register using a dedicated user vaddr"
-        default N
-        help
-            ARC ABI lacks defining a dedicated TLS register to hold
-            pointer to TLS Data area.
-            So we emulate the TLS register using a TLS Virtual addr
-
 config ARCH_ARC_FPU
         bool "Enable FPU state persistence across context switch"
         default N
@@ -493,6 +478,21 @@ endmenu     # Bus options
 endmenu     # Peripherals
 
 
+config ARCH_ARC_CURR_IN_REG
+        bool "Dedicate Register r25 for current_task pointer"
+        default N
+        help
+          This reserved Register R25 to point to Current Task in
+          kernel mode. This saves memory access for each such access
+
+config ARC_TLS_REG_EMUL
+        bool "Emulate a TLS register using a dedicated user vaddr"
+        default N
+        help
+            ARC ABI lacks defining a dedicated TLS register to hold
+            pointer to TLS Data area.
+            So we emulate the TLS register using a TLS Virtual addr
+
 config ARCH_ARC_SPACE_RND
         bool "Address Space Randomisation (mmap/SP)"
         default N
@@ -526,7 +526,7 @@ config ARCH_ARC_HLINK
         This options allows a Linux userland apps to directly access
         host file system (open/creat/read/write etc) with help from
         Metaware Debugger. This can come in handy for Linux-host communication
-        when there is no real usable peripherla such as EMAC.
+        when there is no real usable peripheral such as EMAC.
 
 
 menuconfig ARC_DBG
