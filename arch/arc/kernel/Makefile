@@ -11,6 +11,11 @@
 obj-$(CONFIG_MODULES)   += arcksyms.o module.o
 # Object file lists.
 
+#
+# Pass UTS_MACHINE for user_regset definition
+#
+CFLAGS_ptrace.o		+= -DUTS_MACHINE='"$(UTS_MACHINE)"'
+
 obj-y		+= arcksyms.o ptrace.o sys_arc.o setup.o irq.o
 obj-y		+= troubleshoot.o stacktrace.o event-log.o
 obj-$(CONFIG_ARCH_ARC_HLINK)		+= arc_hostlink.o

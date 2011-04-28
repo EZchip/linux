@@ -50,7 +50,7 @@ typedef unsigned long elf_fpregset_t;
 #ifdef __KERNEL__
 
 #define USE_ELF_CORE_DUMP
-
+#define CORE_DUMP_USE_REGSET
 #define ELF_EXEC_PAGESIZE  8192
 
 /* This is the location that an ET_DYN program is loaded if exec'ed.  Typical
@@ -65,18 +65,18 @@ typedef unsigned long elf_fpregset_t;
    have no such handler.  */
 #define ELF_PLAT_INIT(_r, load_addr)	(_r)->r0 = 0
 
-/* The additional layer below is because the stack pointer is missing in
-   the pt_regs struct, but needed in a core dump. pr_reg is a elf_gregset_t,
-   and should be filled in according to the layout of the user_regs_struct
-   struct; regs is a pt_regs struct. We dump all registers, though several are
-   obviously unnecessary. That way there's less need for intelligence at
-   the receiving end (i.e. gdb). */
 extern void arc_elf_core_copy_regs(elf_gregset_t *,struct pt_regs *);
-#define ELF_CORE_COPY_REGS(pr_reg, regs)   arc_elf_core_copy_regs(pr_reg,regs);
 
+#define ELF_CORE_COPY_REGS(elf_reg, regs)       \
+                arc_elf_core_copy_regs(&(elf_reg),regs);
 
+/* This is needed to dump the non-fatal threads in case of multi-threaded
+ * program
+ */
+extern int arc_elf_core_copy_tsk_regs(struct task_struct *, elf_gregset_t *);
 
-
+#define ELF_CORE_COPY_TASK_REGS(tsk, elf_regs)  \
+                arc_elf_core_copy_tsk_regs(tsk, elf_regs)
 
 /* This yields a mask that user programs can use to figure out what
    instruction set this cpu supports. */

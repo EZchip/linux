@@ -20,6 +20,8 @@
 #include <linux/sched.h>
 #include <linux/user.h>
 #include <linux/mm.h>
+#include <linux/elf.h>
+#include <linux/regset.h>
 #include <asm/unistd.h>
 #include <asm/uaccess.h>
 #include <asm/arcdefs.h>
@@ -43,8 +45,12 @@ void ptrace_disable(struct task_struct *child)
 
 
 unsigned long
-getreg(struct pt_regs *ptregs, struct callee_regs *calleeregs, unsigned int offset,struct task_struct *child)
+getreg(unsigned int offset,struct task_struct *child)
 {
+    struct callee_regs *calleeregs = (struct callee_regs *)child->thread.callee_reg;
+    struct pt_regs *ptregs = (struct pt_regs *)(calleeregs + 1);
+    BUG_ON(ptregs != task_pt_regs(child));
+
     DBG("    %s( 0x%x, 0x%x, 0x%x, 0x%x) \n", __FUNCTION__, ptregs, calleeregs, offset, child);
 
     if(offset < sizeof(*ptregs))
@@ -80,8 +86,12 @@ getreg(struct pt_regs *ptregs, struct callee_regs *calleeregs, unsigned int offs
 
 
 void
-setreg(struct pt_regs *ptregs, struct callee_regs *calleeregs, int offset, int data)
+setreg(int offset, int data, struct task_struct *child)
 {
+    struct callee_regs *calleeregs = (struct callee_regs *)child->thread.callee_reg;
+    struct pt_regs *ptregs = (struct pt_regs *)(calleeregs + 1);
+    BUG_ON(ptregs != task_pt_regs(child));
+
     if(offset ==(int) OFFSET(struct user_regs_struct, reserved1) ||
         offset == (int) OFFSET(struct user_regs_struct, reserved2) ||
         offset == (int) OFFSET(struct user_regs_struct,efa))
@@ -155,18 +165,13 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     }
 
     case PTRACE_GETREGS: {
-        struct pt_regs *ptregs;
-        struct callee_regs *calleeregs;
         int i;
         unsigned long tmp;
-        calleeregs = (struct callee_regs *)child->thread.callee_reg;
-        ptregs = (struct pt_regs *)(calleeregs + 1);
-        BUG_ON(ptregs != task_pt_regs(child));
 
         for(i=0; i< sizeof(struct user_regs_struct);i++)
         {
             /* getreg wants a byte offset */
-            tmp = getreg(ptregs,calleeregs, i << 2,child);
+            tmp = getreg(i << 2,child);
             ret = put_user(tmp,((unsigned long *)data) + i);
             if(ret < 0)
                 goto out;
@@ -175,13 +180,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     }
 
     case PTRACE_SETREGS: {
-        struct callee_regs *calleeregs;
-        struct pt_regs *ptregs;
         int i;
-
-        calleeregs = (struct callee_regs *)child->thread.callee_reg;
-        ptregs = (struct pt_regs *)(calleeregs + 1);
-        BUG_ON(ptregs != task_pt_regs(child));
 
         for(i=0; i< sizeof(struct user_regs_struct)/4; i++)
         {
@@ -189,7 +188,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
             ret = get_user(tmp, (((unsigned long *)data) + i));
             if(ret < 0)
                 goto out;
-            setreg(ptregs, calleeregs, i << 2, tmp);
+            setreg(i << 2, tmp, child);
         }
 
         ret = 0;
@@ -225,19 +224,13 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         break;
 
     case PTRACE_PEEKUSR: {
-        struct pt_regs *ptregs;
-        struct callee_regs *calleeregs;
         int tmp;
-
-        calleeregs = (struct callee_regs *)child->thread.callee_reg;
-        ptregs = (struct pt_regs *)(calleeregs + 1);
-        BUG_ON(ptregs != task_pt_regs(child));
 
         /* user regs */
         if(addr > (unsigned)OFFSET(struct user,regs) &&
            addr < (unsigned)OFFSET(struct user,regs) + sizeof(struct user_regs_struct))
         {
-            tmp = getreg(ptregs, calleeregs, addr,child);
+            tmp = getreg(addr,child);
             ret = put_user(tmp, ((unsigned long *)data));
         }
         /* signal */
@@ -258,13 +251,6 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     }
 
     case PTRACE_POKEUSR: {
-        struct pt_regs *ptregs;
-        struct callee_regs *calleeregs;
-
-        calleeregs = (struct callee_regs *)child->thread.callee_reg;
-        ptregs = (struct pt_regs *)(calleeregs + 1);
-        BUG_ON(ptregs != task_pt_regs(child));
-
         ret = 0;
         if(addr ==(int) OFFSET(struct user_regs_struct,efa))
             return -EIO;
@@ -272,7 +258,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         if(addr > (unsigned)OFFSET(struct user,regs) &&
            addr < (unsigned)OFFSET(struct user,regs) + sizeof(struct user_regs_struct))
         {
-            setreg(ptregs, calleeregs, addr, data);
+            setreg(addr, data, child);
         }
         else
             return -EIO;
@@ -293,7 +279,6 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     }
 
 out:
-    /*unlock_kernel();*/      /* for SMP */
     return ret;
 
 }
@@ -319,4 +304,88 @@ asmlinkage void syscall_trace(void)
         send_sig(current->exit_code, current, 1);
         current->exit_code = 0;
     }
+}
+
+static int arc_regs_get(struct task_struct *target,
+			 const struct user_regset *regset,
+			 unsigned int pos, unsigned int count,
+			 void *kbuf, void __user *ubuf)
+{
+    DBG("arc_regs_get %x %d %d\n", target, pos, count);
+
+    if (kbuf) {
+        unsigned long *k = kbuf;
+        while (count > 0) {
+            *k++ = getreg(pos, target);
+            count -= sizeof(*k);
+            pos += sizeof(*k);
+        }
+    }
+    else {
+		unsigned long __user *u = ubuf;
+		while (count > 0) {
+            if (__put_user(getreg(pos, target), u++))
+                return -EFAULT;
+            count -= sizeof(*u);
+            pos += sizeof(*u);
+        }
+    }
+
+    return 0;
+}
+
+static int arc_regs_set(struct task_struct *target,
+			 const struct user_regset *regset,
+			 unsigned int pos, unsigned int count,
+			 const void *kbuf, const void __user *ubuf)
+{
+    int ret = 0;
+
+    DBG("arc_regs_set %x %d %d\n", target, pos, count);
+
+    if (kbuf) {
+        const unsigned long *k = kbuf;
+        while (count > 0) {
+            setreg(pos, *k++, target);
+            count -= sizeof(*k);
+            pos += sizeof(*k);
+        }
+    }
+    else {
+		const unsigned long __user *u = ubuf;
+        unsigned long word;
+		while (count > 0) {
+            ret = __get_user(word,u++);
+            if (ret)
+                return ret;
+            setreg(pos, word, target);
+            count -= sizeof(*u);
+            pos += sizeof(*u);
+        }
+    }
+
+    return 0;
+}
+
+static const struct user_regset arc_regsets[] = {
+    [0] = {
+        .core_note_type = NT_PRSTATUS,
+	    .n = ELF_NGREG,
+	    .size = sizeof(long),
+	    .align = sizeof(long),
+	    .get = arc_regs_get,
+	    .set = arc_regs_set
+    }
+};
+
+static const struct user_regset_view user_arc_view = {
+	.name = UTS_MACHINE,
+	.e_machine = EM_ARCTANGENT,
+	.regsets = arc_regsets,
+	.n = ARRAY_SIZE(arc_regsets)
+};
+
+const struct user_regset_view *task_user_regset_view(struct task_struct *task)
+{
+	return &user_arc_view;
 }

@@ -72,9 +72,9 @@ struct user_regs_struct
 	long 	orig_r8;
 	long	sp;	/* user sp or kernel sp, depending on where we came from  */
 
-	long	reserved2;
 
 	/* -------- from struct callee_regs --------- */
+	long	reserved2;
 	long	r25;
 	long	r24;
 	long	r23;

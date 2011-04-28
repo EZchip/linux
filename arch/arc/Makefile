@@ -14,6 +14,8 @@
 
 # Its a rewrite from old arcch/arc/proc/arc700/Rules.make
 
+UTS_MACHINE := arc
+
 ifdef CONFIG_ARCH_ARC700
 PROCESSOR  := arc700
 endif
