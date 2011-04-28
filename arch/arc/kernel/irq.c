@@ -123,43 +123,30 @@ void __init init_IRQ(void)
 int setup_irq(unsigned int irq, struct irqaction *node)
 {
     unsigned long flags;
-    struct irqaction *curr;
+    struct irqaction **curr;
 
-    printk("---IRQ Request (%d) ISR", irq);
+    printk("---IRQ Request (%d) ISR ", irq);
     __print_symbol("%s\n",(unsigned long) node->handler);
-
-    if (!(irq_list[irq])) {
-        irq_list[irq] = node;
-
-        /* Enable Ihis IRQ in CPU AUX_IENABLE Reg */
-        unmask_interrupt((1<<irq));
-
-        return 0;
-    }
-
-    if (!(irq_list[irq]->flags & IRQ_FLG_STD)) {
-        if (irq_list[irq]->flags & IRQ_FLG_LOCK) {
-            printk("%s: IRQ %d from %s is not replaceable\n",
-                   __FUNCTION__, irq, irq_list[irq]->name);
-            return -EBUSY;
-        }
-        if (node->flags & IRQ_FLG_REPLACE) {
-            printk("%s: %s can't replace IRQ %d from %s\n",
-                   __FUNCTION__, node->name, irq,
-                   irq_list[irq]->name);
-            return -EBUSY;
-        }
-    }
-
-    /* Add the ISR to link-list of ISRs per IRQ */
 
     spin_lock_irqsave(&irq_controller_lock, flags); /* insert atomically */
 
-    curr = irq_list[irq];
-    while (curr->next)
-        curr = curr->next;
+    /* IRQ might be shared, thus we need a link list per IRQ for all ISRs
+     * Adds to tail of list
+     */
+    curr = &irq_list[irq];
 
-    curr->next = node;
+    while (*curr) {
+        curr = &((*curr)->next);
+    }
+
+    *curr = node;
+
+    /* If this IRQ slot is enabled for first time (shared IRQ),
+     * enable vector on CPU side
+     */
+    if (irq_list[irq] == node) {
+        unmask_interrupt((1<<irq)); // AUX_IEMABLE
+    }
 
     spin_unlock_irqrestore(&irq_controller_lock, flags);
     return 0;
