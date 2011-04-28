@@ -361,7 +361,7 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 /*
  * Routine to create a TLB entry
  */
-void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
+void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 {
     unsigned long flags;
     pgd_t *pgdp;
@@ -393,15 +393,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
     }
 #endif
 
-    /* Traverse Page Tables to get PTE */
-    // TODO-vineetg: investigate if really need to do this
     address &= PAGE_MASK;
-    pgdp = pgd_offset_fast(vma->vm_mm, address);
-    pudp = pud_offset(pgdp, address);
-    pmdp = pmd_offset(pudp, address);
-    ptep = pte_offset(pmdp, address);
-
-    //BUG_ON(pte_val(pte) != pte_val(*ptep));
 
     /* update this PTE credentials */
     pte_val(*ptep) |= (_PAGE_PRESENT | _PAGE_ACCESSED);
@@ -457,10 +449,10 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
  *   save one TLB Miss exception
  */
 
-void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t pte)
+void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t *ptep)
 {
     /* XXX: This definitely seems useless */
-    // BUG_ON(!pfn_valid(pte_pfn(pte)));
+    // BUG_ON(!pfn_valid(pte_pfn(*ptep)));
 
     /* XXX: This is useful - but only once during execve - check why?
      *  handle_mm_fault()
@@ -471,7 +463,7 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t 
     if (current->active_mm != vma->vm_mm)
         return;
 
-    create_tlb(vma, vaddress, pte);
+    create_tlb(vma, vaddress, ptep);
 
     flush_cache_page(vma, vaddress, pfn);
 }

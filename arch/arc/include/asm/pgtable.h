@@ -232,7 +232,7 @@ extern char empty_zero_page[PAGE_SIZE];
 extern pgd_t swapper_pg_dir[]__attribute__((aligned(PAGE_SIZE)));
 
 void update_mmu_cache(struct vm_area_struct *vma,
-				 unsigned long address, pte_t pte);
+				 unsigned long address, pte_t *ptep);
 
 /* Linux reserves _PAGE_PRESENT of the pte for swap implementation.
  * Our _PAGE_PRESENT is in bit 0 so we can use 5 bits 1-6 for swap type

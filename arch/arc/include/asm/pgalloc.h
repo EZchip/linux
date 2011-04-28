@@ -142,7 +142,7 @@ static inline void pte_free(struct mm_struct *mm, pgtable_t ptep)
 }
 
 
-#define __pte_free_tlb(tlb, pte)    tlb_remove_page(tlb, virt_to_page(pte))
+#define __pte_free_tlb(tlb, pte, addr)  tlb_remove_page(tlb, virt_to_page(pte))
 
 extern void pgd_init(unsigned long page);
 
