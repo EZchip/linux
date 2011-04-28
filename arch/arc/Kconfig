@@ -69,10 +69,15 @@ config BINFMT_ELF
 
 config STACKTRACE_SUPPORT
 	def_bool y
+    select STACKTRACE
 
 config SCHED_OMIT_FRAME_POINTER
         bool
         default y
+
+config HAVE_LATENCYTOP_SUPPORT
+	bool
+	default y
 
 # CONFIG common to all ARC cores (700+800) under this
 #    config option instead of existing ARCH_ARC700

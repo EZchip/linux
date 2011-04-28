@@ -160,6 +160,25 @@ int fill_backtrace(unsigned int address, void *arg)
 
     return 0;
 }
+
+int fill_backtrace_nosched(unsigned int address, void *arg)
+{
+    struct stack_trace *trace = arg;
+
+    if (in_sched_functions(address))
+        return 0;
+
+    if (trace->skip > 0)
+        trace->skip--;
+    else
+        trace->entries[trace->nr_entries++] = address;
+
+    if (trace->nr_entries >= trace->max_entries)
+        return -1;
+
+    return 0;
+}
+
 #endif
 
 int get_first_nonsched_frame(unsigned int address, void *unused)
@@ -207,16 +226,17 @@ unsigned int get_wchan(struct task_struct *tsk)
 
 #ifdef CONFIG_STACKTRACE
 
-/* API required by CONFIG_STACKTRACE.
+/* API required by CONFIG_STACKTRACE, CONFIG_LATENCYTOP.
  * A typical use is when /proc/<pid>/stack is queried by userland
+ * and also by LatencyTop
  */
 void save_stack_trace_tsk(struct task_struct *tsk, struct stack_trace *trace)
 {
-    arc_unwind_core(tsk, NULL, fill_backtrace, trace);
+    arc_unwind_core(tsk, NULL, fill_backtrace_nosched, trace);
 }
 
 void save_stack_trace(struct stack_trace *trace)
 {
-    arc_unwind_core_wrap(current, NULL, fill_backtrace, trace);
+    arc_unwind_core(current, NULL, fill_backtrace, trace);
 }
 #endif
