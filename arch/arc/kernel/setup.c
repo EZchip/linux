@@ -72,7 +72,7 @@ struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
  * passes atag list
  */
 
-unsigned long end_mem = CONFIG_SRAM_BASE + CONFIG_SRAM_SIZE + PHYS_SRAM_OFFSET;
+unsigned long end_mem = CONFIG_SDRAM_SIZE + CONFIG_LINUX_LINK_BASE;
 unsigned long clk_speed = CONFIG_ARC700_CLK;
 unsigned long serial_baudrate = BASE_BAUD;
 int arc_console_baud = (CONFIG_ARC700_CLK/(BASE_BAUD * 4)) - 1;
@@ -395,7 +395,7 @@ static int __init parse_tag_mem32(struct tag *tag)
 {
     printk_init("ATAG_MEM: size = 0x%x\n", tag->u.mem.size);
 
-    end_mem = CONFIG_SRAM_BASE + CONFIG_SRAM_SIZE + PHYS_SRAM_OFFSET;
+    end_mem = CONFIG_SDRAM_SIZE + CONFIG_LINUX_LINK_BASE;
 
     return 0;
 }

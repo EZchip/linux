@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.30
-# Wed Mar 31 13:08:13 2010
+# Wed Aug 11 12:35:10 2010
 #
 CONFIG_ARCH_ARC=y
 CONFIG_RWSEM_GENERIC_SPINLOCK=y
@@ -144,8 +144,8 @@ CONFIG_ARCH_ARC_CURR_IN_REG=y
 # Board Configuration
 #
 CONFIG_ARC700_CLK=80000000
-CONFIG_SRAM_BASE=0x00000000
-CONFIG_SRAM_SIZE=0x10000000
+CONFIG_LINUX_LINK_BASE=0x80000000
+CONFIG_SDRAM_SIZE=0x10000000
 
 #
 # ARC Pheripheral Support

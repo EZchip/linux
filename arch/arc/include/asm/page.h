@@ -39,8 +39,6 @@
 
 #include <asm/bug.h>
 
-#define PHYS_SRAM_OFFSET 0x80000000
-
 #define ARCH_PFN_OFFSET     (PAGE_OFFSET >> PAGE_SHIFT)
 #define pfn_valid(pfn)      (((pfn) - (PAGE_OFFSET >> PAGE_SHIFT)) < max_mapnr)
 
@@ -98,11 +96,18 @@ extern __inline__ int get_order(unsigned long size)
     return order;
 }
 
-#define __pa(vaddr)  (((unsigned long)vaddr - PAGE_OFFSET) + PHYS_SRAM_OFFSET)
-#define __va(paddr)  ((void *)(((unsigned long)(paddr) - PHYS_SRAM_OFFSET) + PAGE_OFFSET))
+#define __pa(vaddr)  (((unsigned long)vaddr - PAGE_OFFSET) + CONFIG_LINUX_LINK_BASE)
+#define __va(paddr)  ((void *)(((unsigned long)(paddr) - CONFIG_LINUX_LINK_BASE) + PAGE_OFFSET))
 
+/* These macros have historically been misnamed
+ * virt here means link-address/program-address as embedded in object code.
+ * So if kernel img is linked at 0x8000_0000 onwards, 0x8010_0000 will be
+ * 128th page, and virt_to_page( ) will return the struct page corresp to it.
+ * Note that mem_map[ ] is an array of struct page for each page frame in
+ * the system.
+ */
 #define virt_to_page(kaddr) (mem_map + (__pa(kaddr) >> PAGE_SHIFT) - \
-                                (PHYS_SRAM_OFFSET >> PAGE_SHIFT))
+                                (CONFIG_LINUX_LINK_BASE >> PAGE_SHIFT))
 
 #define virt_addr_valid(kaddr)  pfn_valid(__pa(kaddr) >> PAGE_SHIFT)
 

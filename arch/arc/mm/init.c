@@ -55,7 +55,7 @@ void __init paging_init(void)
 	free_area_init(zones_size);
 #else
 	zones_size[ZONE_NORMAL] =
-	    ((unsigned long)(end_mem) - PHYS_SRAM_OFFSET) >> PAGE_SHIFT;
+	    ((unsigned long)(end_mem) - CONFIG_LINUX_LINK_BASE) >> PAGE_SHIFT;
 
 #ifdef  CONFIG_FLATMEM
 

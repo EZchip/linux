@@ -23,7 +23,8 @@ SECTIONS
      * Essentially vector is also in ICCM.
      */
 
-    . = 0x80000000;
+    . = CONFIG_LINUX_LINK_BASE;
+
     _int_vec_base_lds = .;
     .vector : {
         *(.vector)

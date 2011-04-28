@@ -222,13 +222,26 @@ config ARC700_CLK
         int "Clock speed"
         default "12000000"
 
-config SRAM_BASE
-        hex "SRAM Base Address"
-        default "0x00000000"
+config LINUX_LINK_BASE
+        hex "Linux Link Address"
+        default "0x80000000"
+        help
+            ARC700 divides the 32 bit phy address space into two equal halves
+            -Lower 2G (0 - 0x7FFF_FFFF ) is user virtual, translated by MMU
+            -Upper 2G (0x8000_0000 onwards) is untranslated, for kernel
+            Typically Linux kernel is linked at the start of untransalted addr,
+            hence the default value of 0x8zs.
+            However some customers have peripherals mapped at this addr, so
+            Linux needs to be scooted a bit.
+            If you don't know what the above means, leave this setting alone.
 
-config SRAM_SIZE
-        hex "SRAM Size"
+config SDRAM_SIZE
+        hex "SD RAM Size"
         default "0x10000000"
+        help
+            Implies the amount of SDRAM/DRAM Linux is going to claim/own.
+            The actual memory itself could be larger than this number. But for
+            all software purposes, this is the amt of memory.
 
 endmenu   #Board config
 
