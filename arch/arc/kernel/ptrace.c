@@ -4,8 +4,10 @@
  *  vineetg: Jan 2010
  *      -Enabling dynamic printk for fun
  *      -str to id conversion for ptrace requests and reg names
- *
- *
+ *      -Consistently use offsets wrt "struct user" for all ptrace req
+ *      -callee_reg accessed using accessor to implement alternate ways of
+ *       fetcing it (say using dwarf unwinder)
+ *      -Using generic_ptrace_(peek|poke)data
  *
  *****************************************************************************/
 /******************************************************************************
@@ -129,6 +131,12 @@ static id_to_str_tbl_t  reg_names = {
     }
 };
 
+static struct callee_regs *task_callee_regs(struct task_struct *tsk, struct callee_regs *calleereg)
+{
+    struct callee_regs *tmp = (struct callee_regs *)tsk->thread.callee_reg;
+    return tmp;
+}
+
 void ptrace_disable(struct task_struct *child)
 {
   /* DUMMY: dummy function to resolve undefined references */
@@ -138,19 +146,20 @@ void ptrace_disable(struct task_struct *child)
 unsigned long
 getreg(unsigned int offset,struct task_struct *child)
 {
-    struct callee_regs *calleeregs = (struct callee_regs *)child->thread.callee_reg;
-    struct pt_regs *ptregs = (struct pt_regs *)(calleeregs + 1);
-    BUG_ON(ptregs != task_pt_regs(child));
+    unsigned int *reg_file;
+    struct pt_regs *ptregs = task_pt_regs(child);
     unsigned int data = 0;
 
-    if(offset < sizeof(*ptregs))
-        data = *(unsigned long *)(((char *)ptregs) + offset);
-
-    else if((offset-sizeof(*ptregs)) < sizeof(*calleeregs) )
-        data = *(unsigned long *)(((char *)calleeregs) + offset - sizeof(*ptregs));
-
-    else if(offset ==offsetof(struct user_regs_struct,efa))
-    {
+    if(offset < offsetof(struct user_regs_struct, reserved2)) {
+        reg_file = (unsigned int *)ptregs;
+        data = reg_file[offset/4];
+    }
+    else if (offset <  offsetof(struct user_regs_struct, efa)) {
+        struct callee_regs calleeregs;
+        reg_file = (unsigned int *)task_callee_regs(child, &calleeregs);
+        data = reg_file[(offset - offsetof(struct user_regs_struct, reserved2))/4];
+    }
+    else if(offset == offsetof(struct user_regs_struct,efa)) {
         data = child->thread.fault_address;
     }
     else if(offset == offsetof(struct user_regs_struct,stop_pc))
@@ -176,9 +185,8 @@ getreg(unsigned int offset,struct task_struct *child)
 void
 setreg(unsigned int offset, unsigned int data, struct task_struct *child)
 {
-    struct callee_regs *calleeregs = (struct callee_regs *)child->thread.callee_reg;
-    struct pt_regs *ptregs = (struct pt_regs *)(calleeregs + 1);
-    BUG_ON(ptregs != task_pt_regs(child));
+    unsigned int *reg_file;
+    struct pt_regs *ptregs = task_pt_regs(child);
 
     DBG("  %s:0x%2x (%s) = 0x%x\n", __FUNCTION__,offset, get_str_from_id(offset, &reg_names),data);
 
@@ -193,28 +201,27 @@ setreg(unsigned int offset, unsigned int data, struct task_struct *child)
     {
         DBG("   ******** @@@@ ********  \n");
         ptregs->ret = data;
-        return;
     }
-
-    if(offset < sizeof(*ptregs))
-    {
-        *(unsigned long *)(((char *)ptregs) + offset) = data;
-        return;
+    else if(offset < offsetof(struct user_regs_struct, reserved2)) {
+        reg_file = (unsigned int *)ptregs;
+        reg_file[offset/4] = data;
     }
-
-    offset -= sizeof(*ptregs);
-
-    if(offset < sizeof(*calleeregs))
-        *(unsigned long *)(((char *)calleeregs) + offset) = data;
-
-    return;
-
-    /* cant happen */
+    else if (offset < offsetof(struct user_regs_struct, efa)) {
+        struct callee_regs calleeregs;
+        reg_file = (unsigned int *)task_callee_regs(child, &calleeregs);
+        offset -= offsetof(struct user_regs_struct, reserved2);
+        reg_file[offset/4] = data;
+    }
+    else {
+        printk("Bogus ptrace setreg request\n");
+    }
 }
 
 long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 {
     int ret;
+    int i;
+    unsigned long tmp;
 
     if (! (request == PTRACE_PEEKUSR || request == PTRACE_POKEUSR)) {
         DBG("Tsk 0x%p, ptregs 0x%p: REQ=%ld (%s), ADDR =%lx, DATA=%lx)\n",
@@ -224,29 +231,19 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 
     switch (request) {
     case PTRACE_PEEKTEXT: /* read word at location addr. */
-    case PTRACE_PEEKDATA: {
-        unsigned long tmp;
-        int copied;
-
-        copied = access_process_vm(child, addr, &tmp, sizeof(tmp), 0);
-        ret = -EIO;
-        if (copied != sizeof(tmp))
+    case PTRACE_PEEKDATA:
+            ret = generic_ptrace_peekdata(child, addr, data);
+            DBG("    Peek @ 0x%lx = 0x%lx \n",addr, data);
             break;
-        ret = put_user(tmp,(unsigned long *) data);
-        DBG("    Peek @ 0x%lx = 0x%lx \n",addr, tmp);
-        break;
-    }
 
     case PTRACE_POKETEXT: /* write the word at location addr. */
     case PTRACE_POKEDATA:
-        ret = 0;
-        if (access_process_vm(child, addr, &data, sizeof(data), 1) == sizeof(data))
+            ret = generic_ptrace_pokedata(child, addr, data);
             break;
-        ret = -EIO;
-        break;
+
 
     case PTRACE_SYSCALL:
-    case PTRACE_CONT: { /* restart after signal. */
+    case PTRACE_CONT:  /* restart after signal. */
         ret = -EIO;
         if ((unsigned long) data > _NSIG)
             break;
@@ -258,12 +255,8 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         wake_up_process(child);
         ret = 0;
         break;
-    }
 
     case PTRACE_GETREGS: {
-        int i;
-        unsigned long tmp;
-
         for(i=0; i< sizeof(struct user_regs_struct);i++)
         {
             /* getreg wants a byte offset */
@@ -276,8 +269,6 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
     }
 
     case PTRACE_SETREGS: {
-        int i;
-
         for(i=0; i< sizeof(struct user_regs_struct)/4; i++)
         {
             unsigned long tmp;
@@ -320,8 +311,6 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         break;
 
     case PTRACE_PEEKUSR: {
-        int tmp;
-
         /* user regs */
         if(addr > (unsigned)offsetof(struct user,regs) &&
            addr < (unsigned)offsetof(struct user,regs) + sizeof(struct user_regs_struct))
@@ -403,9 +392,9 @@ asmlinkage void syscall_trace(void)
 }
 
 static int arc_regs_get(struct task_struct *target,
-			 const struct user_regset *regset,
-			 unsigned int pos, unsigned int count,
-			 void *kbuf, void __user *ubuf)
+             const struct user_regset *regset,
+             unsigned int pos, unsigned int count,
+             void *kbuf, void __user *ubuf)
 {
     DBG("arc_regs_get %p %d %d\n", target, pos, count);
 
@@ -418,8 +407,8 @@ static int arc_regs_get(struct task_struct *target,
         }
     }
     else {
-		unsigned long __user *u = ubuf;
-		while (count > 0) {
+        unsigned long __user *u = ubuf;
+        while (count > 0) {
             if (__put_user(getreg(pos, target), u++))
                 return -EFAULT;
             count -= sizeof(*u);
@@ -431,9 +420,9 @@ static int arc_regs_get(struct task_struct *target,
 }
 
 static int arc_regs_set(struct task_struct *target,
-			 const struct user_regset *regset,
-			 unsigned int pos, unsigned int count,
-			 const void *kbuf, const void __user *ubuf)
+             const struct user_regset *regset,
+             unsigned int pos, unsigned int count,
+             const void *kbuf, const void __user *ubuf)
 {
     int ret = 0;
 
@@ -448,9 +437,9 @@ static int arc_regs_set(struct task_struct *target,
         }
     }
     else {
-		const unsigned long __user *u = ubuf;
+        const unsigned long __user *u = ubuf;
         unsigned long word;
-		while (count > 0) {
+        while (count > 0) {
             ret = __get_user(word,u++);
             if (ret)
                 return ret;
@@ -466,22 +455,22 @@ static int arc_regs_set(struct task_struct *target,
 static const struct user_regset arc_regsets[] = {
     [0] = {
         .core_note_type = NT_PRSTATUS,
-	    .n = ELF_NGREG,
-	    .size = sizeof(long),
-	    .align = sizeof(long),
-	    .get = arc_regs_get,
-	    .set = arc_regs_set
+        .n = ELF_NGREG,
+        .size = sizeof(long),
+        .align = sizeof(long),
+        .get = arc_regs_get,
+        .set = arc_regs_set
     }
 };
 
 static const struct user_regset_view user_arc_view = {
-	.name = UTS_MACHINE,
-	.e_machine = EM_ARCTANGENT,
-	.regsets = arc_regsets,
-	.n = ARRAY_SIZE(arc_regsets)
+    .name = UTS_MACHINE,
+    .e_machine = EM_ARCTANGENT,
+    .regsets = arc_regsets,
+    .n = ARRAY_SIZE(arc_regsets)
 };
 
 const struct user_regset_view *task_user_regset_view(struct task_struct *task)
 {
-	return &user_arc_view;
+    return &user_arc_view;
 }
