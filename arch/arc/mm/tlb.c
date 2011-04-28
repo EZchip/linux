@@ -404,17 +404,17 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
     pmdp = pmd_offset(pudp, address);
     ptep = pte_offset(pmdp, address);
 
-    BUG_ON(pte_val(pte) != pte_val(*ptep));
+    //BUG_ON(pte_val(pte) != pte_val(*ptep));
 
     /* update this PTE credentials */
     pte_val(*ptep) |= (_PAGE_VALID | _PAGE_ACCESSED);
 
     /* Create HW TLB entry Flags (in PD0) from PTE Flags */
-    glv_bits = ((pte_val(pte) & PTE_BITS_IN_PD0) >> 1);
+    glv_bits = ((pte_val(*ptep) & PTE_BITS_IN_PD0) >> 1);
     write_new_aux_reg(ARC_REG_TLBPD0, (address | glv_bits | pid));
 
     /* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags etc) */
-    write_new_aux_reg(ARC_REG_TLBPD1, (pte_val(pte) & PTE_BITS_IN_PD1));
+    write_new_aux_reg(ARC_REG_TLBPD1, (pte_val(*ptep) & PTE_BITS_IN_PD1));
 
     /* First verify if entry for this vaddr+ASID already exists */
     write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBProbe);

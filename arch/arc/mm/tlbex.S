@@ -185,12 +185,24 @@ ex_saved_reg1:
     and     r0, r0, ( (PTRS_PER_PTE-1) << 2)
     ld.aw   r0, [r1, r0]            ; get the pte entry and pte ptr corresp to
                                     ;    faulted addr
+#ifdef CONFIG_ARC_TLB_PROFILE
+    bbit1 r0, 0, 1f
+    ld   r2, [num_pte_not_present]
+    add r2, r2, 1
+    st   r2, [num_pte_not_present]
+1:
+#endif
+
 .endm
 
 
 ; Based on access type, check if PTE is valid
 ; IN: r0 = PTE
 .macro VERIFY_PTE
+
+    ; if PTE not present, bail out early
+    bbit0 r0, 0, do_slow_path_pf
+
     mov_s   r2, 0
     lr      r3, [ecr]
     btst_s  r3,  DTLB_LD_MISS_BIT
