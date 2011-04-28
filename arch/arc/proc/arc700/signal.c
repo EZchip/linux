@@ -9,6 +9,8 @@
  *      -setup_rt_frame, create_sigret_stub, set_frame_exec forced noinline
  *       as they are never called in practise
  *
+ * vineetg: Jan 2010 (Restarting of timer related syscalls)
+ *
  * vineetg: Nov 2009 (Everything needed for TIF_RESTORE_SIGMASK)
  *  -do_signal() supports TIF_RESTORE_SIGMASK
  *  -do_signal() no loner needs oldset, required by OLD sys_sigsuspend
@@ -517,14 +519,22 @@ handle_signal(unsigned long sig, struct k_sigaction *ka,
     unsigned long usig = sig;
     int ret;
 
-    /* If it needs restarting, tweak the user space regs to do so */
+    /* Syscall restarting based on the ret code and other criteria */
     if (in_syscall) {
         switch (regs->r0) {
+        case -ERESTART_RESTARTBLOCK:
         case -ERESTARTNOHAND:
-            regs->r0 = -EINTR;
+            /* ERESTARTNOHAND means that the syscall should
+             * only be restarted if there was no handler for
+             * the signal, and since we only get here if there
+             * is a handler, we don't restart */
+            regs->r0 = -EINTR;  // ERESTART_xxx is kernel internal so chg it
             break;
 
         case -ERESTARTSYS:
+            /* ERESTARTSYS means to restart the syscall if
+             * there is no handler or the handler was
+             * registered with SA_RESTART */
             if (!(ka->sa.sa_flags & SA_RESTART)) {
                 regs->r0 = -EINTR;
                 break;
@@ -532,8 +542,19 @@ handle_signal(unsigned long sig, struct k_sigaction *ka,
             /* fallthrough */
 
         case -ERESTARTNOINTR:
-            /* No need to restore r8, as its value will be restored anyways */
-            regs->r0 = regs->orig_r0;
+            /* ERESTARTNOINTR means that the syscall should
+             * be called again after the signal handler returns. */
+            /* Setup reg state just as it was before doing the trap
+             * r0 has been clobbered with sys call ret code thus it needs to
+             * be reloaded with orig value. Rest of relevant reg-file
+             * r8 (syscall num) and
+             * (r1 - r7) will be reset to their orig user space value when
+             * we ret from kernel
+             */
+            regs->r0 = regs->orig_r0;   // No need to worry abt ERESTART_xxx conv
+                                        // as nobody is looking at it
+                                        // Since swi is re-executed, setup r0
+                                        // with the first sys call arg in orig_r0
             regs->ret -= 4;
             break;
         }
@@ -609,13 +630,16 @@ void do_signal(struct pt_regs *regs)
 
 no_signal:
     if (insyscall) {
-        switch(regs->r0) {
-        case -ERESTARTNOHAND:
-        case -ERESTARTSYS:
-        case-ERESTARTNOINTR:
+        /* No handler for syscall: restart it */
+        if (regs->r0 == -ERESTARTNOHAND ||
+            regs->r0 == -ERESTARTSYS ||
+            regs->r0 == -ERESTARTNOINTR) {
             regs->r0 = regs->orig_r0;
             regs->ret -= 4;
-            break;
+        }
+        else if (regs->r0 == -ERESTART_RESTARTBLOCK) {
+            regs->r8 = __NR_restart_syscall;
+            regs->ret -= 4;
         }
     }
 
