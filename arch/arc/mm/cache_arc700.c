@@ -641,4 +641,50 @@ void flush_cache_page(struct vm_area_struct *vma, unsigned long page,
 
 }
 
+/* Explicit Cache flush request from user space via syscall
+ * Needed for JITs which generate code on the fly
+ * XXX: this code is a bit of overkill for the purpose it serves,
+ * lean it down
+ */
+int sys_cacheflush(uint32_t start, uint32_t end, uint32_t flags)
+{
+	struct vm_area_struct *vma;
+
+	vma = find_vma(current->mm, start);
+	while ((vma) && (vma->vm_start < end)) {
+		uint32_t lstart, lend, laddr;
+		lstart = (vma->vm_start < start) ? start : vma->vm_start;
+		lend   = (vma->vm_end   > end  ) ? end   : vma->vm_end;
+		lstart &= PAGE_MASK;
+
+		for (laddr = lstart; laddr <= lend; laddr += PAGE_SIZE) {
+			uint32_t pfn, sz, phy;
+			unsigned long flags;
+
+			pgd_t *pgd = pgd_offset(current->mm, laddr);
+			pud_t *pud = pud_offset(pgd, laddr);
+			pmd_t *pmd = pmd_offset(pud, laddr);
+			pte_t *page_table = pte_offset_kernel(pmd, laddr);
+			pte_t pte = *page_table;
+			pfn = pte_pfn(pte);
+			phy = pfn << PAGE_SHIFT;
+			sz = (lend < (laddr + PAGE_SIZE)) ?
+                             (lend - laddr) : PAGE_SIZE;
+			if (start > laddr) {
+				phy += start - laddr;
+				sz -= start - laddr;
+			}
+
+			local_irq_save(flags);
+			__arc_dcache_flush_lines(phy, sz);
+			__arc_icache_inv_lines(phy, sz);
+			local_irq_restore(flags);
+		}
+		start = vma->vm_end;
+		vma = find_vma(current->mm, start);
+	}
+
+	return 0;
+}
+
 #endif

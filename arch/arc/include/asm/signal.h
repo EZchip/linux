@@ -43,9 +43,10 @@ typedef struct {
 } sigset_t;
 
 #else
-/* DON'T cater to libcs that poke about in kernel headers.  */
+/* cater to libcs that poke about in kernel headers.  */
 
-#error "uClibc headers need to define NSIG and sigset_t"
+#define NSIG		32
+typedef unsigned long sigset_t;
 
 #endif /* __KERNEL__ */
 

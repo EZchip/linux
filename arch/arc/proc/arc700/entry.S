@@ -1045,7 +1045,7 @@ __syscall_start:
 /* 120 */   .long   SYMBOL_NAME(sys_clone_wrapper)
         .long   SYMBOL_NAME(sys_setdomainname)
         .long   SYMBOL_NAME(sys_newuname)
-        .long   SYMBOL_NAME(sys_ni_syscall)
+        .long   SYMBOL_NAME(sys_cacheflush)
         .long   SYMBOL_NAME(sys_adjtimex)
  /* 125 */  .long   SYMBOL_NAME(sys_mprotect)
         .long   SYMBOL_NAME(sys_sigprocmask)
