@@ -64,19 +64,14 @@ typedef unsigned long mm_segment_t;     /* domain register  */
  *   must also be changed
  */
 struct thread_info {
-    struct task_struct  *task;      /* main task structure */
-    struct exec_domain  *exec_domain;   /* execution domain */
-    unsigned long       flags;      /* low level flags */
+    unsigned long           flags;      /* low level flags */
+    int                     preempt_count;  /* 0 => preemptable, <0 => BUG */
+    struct task_struct      *task;      /* main task structure */
+    mm_segment_t            addr_limit; /* thread address space */
+    struct exec_domain      *exec_domain;   /* execution domain */
+    __u32                   cpu;        /* current CPU */
     unsigned long           thr_ptr;    /* TLS ptr */
-    __u32           cpu;        /* current CPU */
-    int         preempt_count;  /* 0 => preemptable, <0 => BUG */
-
-    mm_segment_t        addr_limit; /* thread address space:
-                           0-0xBFFFFFFF for user-thead
-                           0-0xFFFFFFFF for kernel-thread
-                        */
     struct restart_block    restart_block;
-    /* struct pt_regs       *regs; */
 };
 
 /*
