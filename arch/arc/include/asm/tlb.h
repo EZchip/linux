@@ -63,7 +63,7 @@
 
 #endif
 
-#define PTE_BITS_IN_PD0    (_PAGE_GLOBAL | _PAGE_LOCKED | _PAGE_VALID)
+#define PTE_BITS_IN_PD0    (_PAGE_GLOBAL | _PAGE_VALID)
 #define PTE_BITS_IN_PD1    (PAGE_MASK | \
                              _PAGE_CACHEABLE | \
                              _PAGE_EXECUTE | _PAGE_WRITE | _PAGE_READ | \

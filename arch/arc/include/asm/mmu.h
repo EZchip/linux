@@ -61,14 +61,11 @@ typedef struct {
 #define _PAGE_CACHEABLE     (1<<2)  /* Page is cached (H) */
 #define _PAGE_EXECUTE       (1<<3)  /* Page has user execute perm (H) */
 #define _PAGE_WRITE         (1<<4)  /* Page has user write perm (H) */
-#define _PAGE_SILENT_WRITE  (1<<4)  /* synonym of above */
 #define _PAGE_READ          (1<<5)  /* Page has user read perm (H) */
-#define _PAGE_SILENT_READ   (1<<5)  /* synonym of above */
 #define _PAGE_K_EXECUTE     (1<<6)  /* Page has kernel execute perm (H) */
 #define _PAGE_K_WRITE       (1<<7)  /* Page has kernel write perm (H) */
 #define _PAGE_K_READ        (1<<8)  /* Page has kernel perm (H) */
 #define _PAGE_GLOBAL        (1<<9)  /* Page is global (H) */
-#define _PAGE_LOCKED        (1<<10) /* Page is locked in TLB (H) */
 #define _PAGE_VALID         (1<<11) /* Page is valid (H) */
 #define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
 /* Sameer: Temporary definition */
