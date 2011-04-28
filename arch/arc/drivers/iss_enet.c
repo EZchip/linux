@@ -114,13 +114,18 @@ iss_intr(int irq, void *dev_instance)
     struct iss_priv  *priv = netdev_priv(dev_instance);
     struct sk_buff  *skb;
     unsigned int rxlen;
-//printk("ISS Interrupt\n");
+
     if(ewsim->STATUS & EMWSIM_STATUS_RX_RECEIVED)
     {
-//        printk("Packet Recieved\n");
         rxlen = ewsim->RX_SIZE;
-//        printk("RXLEN %x\n", rxlen);
+	if (rxlen > 64000) {
+		 printk (KERN_ALERT "Received packet to large! (rxlen = %d)\n",
+			 rxlen);
+	}
         skb = alloc_skb(rxlen + 32, GFP_ATOMIC);
+	if (!skb) {
+		printk ("COULDN'T ALLOCATE SKB!!\n");
+	}
         skb_reserve(skb,NET_IP_ALIGN); // Align header
         memcpy(skb->data, priv->rx_buff, rxlen);
         skb_put(skb,rxlen);
@@ -167,7 +172,7 @@ iss_open(struct net_device * dev)
     if(!(ewsim->STATUS & EMWSIM_STATUS_INITIALIZED))
     {
         printk("Device Failed to Init\n");
-        return(ENODEV);
+        return(-ENODEV);
     }
 
 // Enable interrupts
@@ -308,7 +313,7 @@ static int __devinit iss_probe(struct platform_device *dev)
     struct iss_priv *priv;
     unsigned int rc;
 
-printk("Probing...\n");
+    printk("ARC VMAC (simulated) Probing...\n");
 
 // Setup a new netdevice
 
@@ -332,10 +337,9 @@ printk("Probing...\n");
     ndev->flags &= ~IFF_MULTICAST;
 
 
-// Setup RX buffer
-
-    priv->rx_buff = kmalloc(4096,GFP_ATOMIC | GFP_DMA);
-    priv->tx_buff = kmalloc(4096,GFP_ATOMIC | GFP_DMA);
+    // Setup RX buffer
+    priv->rx_buff = kmalloc(65536,GFP_ATOMIC | GFP_DMA);
+    priv->tx_buff = kmalloc(65536,GFP_ATOMIC | GFP_DMA);
 
     printk("RX Buffer @ %x , TX Buffer @ %x\n", (unsigned int)priv->rx_buff,(unsigned int) priv->tx_buff);
 
@@ -439,15 +443,18 @@ static struct platform_driver iss_driver = {
      .remove = iss_remove
 };
 
-
+extern int running_on_hw;
 
 int __init
 iss_module_init(void)
 {
-
-    return platform_driver_register(&iss_driver);
-
-
+    // So that when running on hardware, it doesn't register
+    if (!running_on_hw)
+        return platform_driver_register(&iss_driver);
+    else {
+        printk_init("***ARC VMAC [NOT] detected, skipping init...\n");
+        return -1;
+    }
 }
 
 void __exit
