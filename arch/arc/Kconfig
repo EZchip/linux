@@ -216,11 +216,6 @@ config ARC_AHB_PCI_BRIDGE
     To Enable a PCI device to work on AA4 Ref Board a AHB to PCI Host Bridge
     is needed.
 
-config ARC700_ISS
-	bool "Run on ARC700 Simulator"
-    select NO_DMA
-	default n
-
 config NO_DMA
     bool
     default n

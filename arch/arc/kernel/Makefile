@@ -33,10 +33,6 @@ obj-m		:=
 obj-n		:=
 obj-		:=
 
-ifdef CONFIG_ARC700_ISS
-obj-y		+= simulator.o
-endif
-
 ifdef CONFIG_ARC_STACK_UNWIND
 obj-y		+= unwind.o
 endif

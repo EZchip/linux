@@ -133,18 +133,4 @@ struct tagtable {
 #define __tagtable(tag, fn) \
 static struct tagtable __tagtable_##fn __tag = { tag, fn }
 
-
-#ifdef CONFIG_ARC700_ISS
-
-/* vineetg, Dec 12th 2007:
-   Over-rides for expediting Linux on Simulator
-   These are ugly, back-door kind of way to call arc specific functions
-   but we can't change the actual calls as they are in main-line kernel
- */
-#define calibrate_delay() calibrate_delay_arc()
-
-#endif
-
-extern void __devinit calibrate_delay_arc(void);
-
 #endif /* __ASMARC_SETUP_H */
