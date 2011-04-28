@@ -1,6 +1,10 @@
 /************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ * vineetg: Jan 1011
+ *  -sched_clock( ) no longer jiffies based. Uses the same clocksource
+ *   as gtod
+ *
  * Rajeshwarr/Vineetg: Mar 2008
  *  -Implemented CONFIG_GENERIC_TIME (rather deleted arch specific code)
  *   for arch independent gettimeofday()
@@ -231,13 +235,37 @@ void __init time_init(void)
     arc_clockevent_init();
 }
 
-// TODO-vineetg: Need to have a cycle based version of this too.
-// See ARM and blackfin
+static int arc_finished_booting;
+
 /*
  * Scheduler clock - returns current time in nanosec units.
- * It's return value must NOT wrap around
+ * It's return value must NOT wrap around.
+ *
+ * Although the return value is nanosec units based, what's more important
+ * is whats the "source" of this value. The orig jiffies based computation
+ * was only as granular as jiffies itself (10ms on ARC).
+ * We need something that is more granular, so use the same mechanism as
+ * gettimeofday(), which uses ARC Timer T1 wrapped as a clocksource.
+ * Unfortunately the first call to sched_clock( ) is way before that subsys
+ * is initialiased, thus use the jiffies based value in the interim.
  */
 unsigned long long sched_clock(void)
 {
-    return (unsigned long long)jiffies *(NSEC_PER_SEC / HZ);
+    if (!arc_finished_booting) {
+        return (unsigned long long)(jiffies - INITIAL_JIFFIES)
+                    * (NSEC_PER_SEC / HZ);
+    }
+    else {
+        struct timespec ts;
+        getrawmonotonic(&ts);
+        return (unsigned long long)timespec_to_ns(&ts);
+    }
 }
+
+static int __init arc_clocksource_done_booting(void)
+{
+	arc_finished_booting = 1;
+	return 0;
+}
+
+fs_initcall(arc_clocksource_done_booting);
