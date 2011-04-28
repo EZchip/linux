@@ -1,4 +1,14 @@
 /******************************************************************************
+ * Copyright Synopsys 2011-2012
+ *
+ * vineetg: MMU TLB Page Descriptor Flags mods
+ *  -TLB Locking never really existed, except for initial specs
+ *  -SILENT_xxx not needed for our port
+ *  -Per my request, MMU V3 changes the layout of some of the bits
+ *     to avoid a few shifts in TLB Miss handlers.
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -37,25 +47,19 @@ typedef struct {
 } mm_context_t;
 
 #endif
-/*  In memory ARC700 linux PTE's are 4 bytes wide as follows :
- *
- *  31            13|12      8        5      3      0
- *   -------------------------------------------------
- *  |       PFN     |M|V|L|G|Rk|Wk|Ek|Ru|Wu|Eu|Fc|A|P |
- *   -------------------------------------------------
- *
- *  Rk, Ek and Wk are not used by linux. The kernel has all permissions
- *  hence they are each set to 1.
- *  M -> Modified(dirty) , A -> Accessed , P -> Present are implemented
- *  in software.
- *  V->Valid, L->Locked, G->Global are kept here and copied into TLBPD0
- *  when updating the TLB.
+
+/* Page Table flags: some implemented by MMU (H), others emulated (S)
+ * Since these are for Linux vm, they need to be unique: thus some of
+ * the h/w provided bits have value difft from what's captured here.
+ * e.g. MMU v2: K_READ bit is 8 and so is GLOBAL (possible becoz they live in
+ *      seperate PD0 and PD1, which combined forms a translation entry)
+ *      while for PTE perspective, they are 8 and 9 respectively
+ * with MMU v3: all the PTE bits provided by hardware represent the exact
+ *      values implemented in MMU (saves some bit shift ops in TLB Miss hdlrs)
  */
 
-/* In memory PTE bits (shown above).
- * (S) -> Bits implemented in software
- * (H) -> Bits provided by hardware
- */
+#if (CONFIG_ARC_MMU_VER <= 2)
+
 #define _PAGE_PRESENT       (1<<0)  /* Page present in memory (S)*/
 #define _PAGE_ACCESSED      (1<<1)  /* Page is accesses (S) */
 #define _PAGE_CACHEABLE     (1<<2)  /* Page is cached (H) */
@@ -68,6 +72,27 @@ typedef struct {
 #define _PAGE_GLOBAL        (1<<9)  /* Page is global (H) */
 #define _PAGE_VALID         (1<<11) /* Page is valid (H) */
 #define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
+
+#else
+
+/* PD1 */
+#define _PAGE_CACHEABLE     (1<<0)  /* Page is cached (H) */
+#define _PAGE_EXECUTE       (1<<1)  /* Page has user execute perm (H) */
+#define _PAGE_WRITE         (1<<2)  /* Page has user write perm (H) */
+#define _PAGE_READ          (1<<3)  /* Page has user read perm (H) */
+#define _PAGE_K_EXECUTE     (1<<4)  /* Page has kernel execute perm (H) */
+#define _PAGE_K_WRITE       (1<<5)  /* Page has kernel write perm (H) */
+#define _PAGE_K_READ        (1<<6)  /* Page has kernel perm (H) */
+#define _PAGE_ACCESSED      (1<<7)  /* Page is accesses (S) */
+
+/* PD0 */
+#define _PAGE_GLOBAL        (1<<8)  /* Page is global (H) */
+#define _PAGE_VALID         (1<<9)  /* Page is valid (H) */
+#define _PAGE_PRESENT       (1<<10) /* Page present in memory (S)*/
+#define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
+
+#endif
+
 /* Sameer: Temporary definition */
 #define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 

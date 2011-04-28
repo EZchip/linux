@@ -1,6 +1,9 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: April 2011 :
+ *  -MMU v3: PD bits slightly different
+ *
  * Vineetg: July 2009
  *  - For MMU V2, we need not do heuristics at the time of commiting a D-TLB
  *      entry, so that it doesn't knock out it's I-TLB entry
@@ -239,12 +242,14 @@ ex_saved_reg1:
 ; Setup PTE bits in TLB entry
 ; IN: r0 = PTE
 .macro TLB_RELOAD
-    and r1, r0, PTE_BITS_IN_PD0
+    and r1, r0, PTE_BITS_IN_PD0 ; Valid, Global
+#if (CONFIG_ARC_MMU_VER <= 2)   // Neednot be done with v3 onwards
+    lsr r1, r1                  ; shift PTE flags to match layout in PD0
+#endif
     and r0, r0, PTE_BITS_IN_PD1 ; from PTE, mask out above flags
     sr  r0, [ARC_REG_TLBPD1]    ; Phy addr and access permission flags in PD1
 
     lr  r0,[ARC_REG_TLBPD0]     ; MMU prepares PD0 with vaddr and ASID
-    lsr r1, r1                  ; shift PTE flags to match layout in PD0
     or  r1, r1, r0              ; Stuff the above flags there
     sr  r1,[ARC_REG_TLBPD0]     ; rewrite PD0
 .endm
@@ -359,7 +364,7 @@ ex_saved_reg1:
 .endm
 
 .macro COMMIT_WRITE_CMD
-#if (CONFIG_ARC_MMU_VER >= 2)
+#if (CONFIG_ARC_MMU_VER >= 2)   // introduced in v2
     sr TLBWriteNI, [ARC_REG_TLBCOMMAND]
 #else
     sr TLBWrite, [ARC_REG_TLBCOMMAND]

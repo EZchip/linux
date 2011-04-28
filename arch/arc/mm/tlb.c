@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: April 2011 :
+ *  -MMU v3: PD bits slightly different ensuring that their define in PTE
+ *   matches the exact placement in hardware. Helps avoid some shifts
+ *
  * vineetg: April 2011 : Preparing for MMU V3
  *  -MMU v2/v3 BCRs decoded differently
  *  -Remove TLB_SIZE hardcoding as it's variable now: 256 or 512
@@ -403,8 +407,13 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
     /* update this PTE credentials */
     pte_val(*ptep) |= (_PAGE_VALID | _PAGE_ACCESSED);
 
+#if (CONFIG_ARC_MMU_VER <= 2)
     /* Create HW TLB entry Flags (in PD0) from PTE Flags */
     glv_bits = ((pte_val(*ptep) & PTE_BITS_IN_PD0) >> 1);
+#else
+    glv_bits = ((pte_val(*ptep) & PTE_BITS_IN_PD0));
+#endif
+
     write_new_aux_reg(ARC_REG_TLBPD0, (address | glv_bits | pid));
 
     /* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags etc) */
