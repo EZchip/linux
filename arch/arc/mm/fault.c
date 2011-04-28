@@ -75,7 +75,7 @@ asmlinkage int do_page_fault(struct pt_regs *regs, int write,
      * only copy the information from the master page table,
      * nothing more.
      */
-    if (address >= VMALLOC_START)
+    if (address >= VMALLOC_START && address <= VMALLOC_END)
         goto vmalloc_fault;
 
     info.si_code = SEGV_MAPERR;

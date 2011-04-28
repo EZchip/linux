@@ -124,7 +124,7 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
     if (flags & MAP_SHARED_CODE) {
 
         if (mmapcode_alloc_vaddr(file, pgoff, PAGE_ALIGN(len), &addr_hint)
-                            == -1) {
+                            < 0) {
             goto out;
         }
 
@@ -395,8 +395,11 @@ int mmapcode_enab_vaddr(struct file *filp, unsigned long pgoff,
     int i;
     unsigned long ino;
 
-    db = &mmap_tracker[MMAP_CODE_SPC_MAX_IDX];
+    if (!filp)
+        return -2;
+
     ino = filp->f_path.dentry->d_inode->i_ino;
+    db = &mmap_tracker[MMAP_CODE_SPC_MAX_IDX];
 
     for (i = MMAP_CODE_SPC_MAX_IDX; i >= 0 ; i--,db--) {
 
