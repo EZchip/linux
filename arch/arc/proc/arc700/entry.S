@@ -1,6 +1,11 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ * vineetg: Nov 2010:
+ *  -Vector table jumps (@8 bytes) converted into branches (@4 bytes)
+ *  -To maintain the slot size of 8 bytes/vector, added nop, which is
+ *   not executed at runtime.
+ *
  * vineetg: Nov 2009 (Everything needed for TIF_RESTORE_SIGMASK)
  *  -do_signal()invoked upon TIF_RESTORE_SIGMASK as well
  *  -Wrappers for sys_{,rt_}sigsuspend() nolonger needed as they don't
@@ -118,6 +123,15 @@
 
 ;############################ Vector Table #################################
 
+.macro VECTOR  lbl
+#if 0   // Just in case, build breaks
+    j   \lbl
+#else
+    b   \lbl
+    nop
+#endif
+.endm
+
     .section .vector, "ax",@progbits
     .align 4
 
@@ -128,45 +142,49 @@
  */
 
 ; ********* Critical System Events **********************
-j   res_service             ; 0x0, Restart Vector	(0x0)
-j   mem_service             ; 0x8, Mem exception	(0x1)
-j   instr_service           ; 0x10, Instrn Error	(0x2)
+VECTOR   res_service             ; 0x0, Restart Vector  (0x0)
+VECTOR   mem_service             ; 0x8, Mem exception   (0x1)
+VECTOR   instr_service           ; 0x10, Instrn Error   (0x2)
 
 ; ******************** Device ISRs **********************
 #ifdef  CONFIG_TIMER_LV2
-j   handle_interrupt_level2 ; Timer0 level2			(0x3)
+VECTOR   handle_interrupt_level2 ; Timer0 level2        (0x3)
 #else
-j   handle_interrupt_level1 ; Timer0 level1			(0x3)
+VECTOR   handle_interrupt_level1 ; Timer0 level1        (0x3)
 #endif
-j   handle_interrupt_level1
+
+VECTOR   handle_interrupt_level1 ;                      (0x4)
 
 #ifdef  CONFIG_SERIAL_LV2
-j   handle_interrupt_level2 ; UART level2			(0x4)
+VECTOR   handle_interrupt_level2 ; UART level2          (0x5)
 #else
-j   handle_interrupt_level1 ; UART level1			(0x4)
+VECTOR   handle_interrupt_level1 ; UART level1          (0x5)
 #endif
 
 #ifdef  CONFIG_EMAC_LV2
-j   handle_interrupt_level2 ; EMAC level2			(0x5)
+VECTOR   handle_interrupt_level2 ; EMAC level2          (0x6)
 #else
-j   handle_interrupt_level1 ; EMAC level1			(0x5)
+VECTOR   handle_interrupt_level1 ; EMAC level1          (0x6)
 #endif
 
 .rept   25
-j   handle_interrupt_level1 ; Other devices
+VECTOR   handle_interrupt_level1 ; Other devices
 .endr
 
+/* FOR ARC600: timer = 0x3, uart = 0x8, emac = 0x10 */
+
 ; ******************** Exceptions **********************
-j   EV_MachineCheck         ; 0x100, Fatal Machine check 	(0x20)
-j   EV_TLBMissI             ; 0x108, Intruction TLB miss 	(0x21)
-j   EV_TLBMissD             ; 0x110, Data TLB miss		 	(0x22)
-j   EV_TLBProtV             ; 0x118, Protection Violation 	(0x23)
-							;         or Misaligned Access
-j   EV_PrivilegeV           ; 0x120, Privilege Violation	(0x24)
-j   EV_Trap                 ; 0x128, Trap exception			(0x25)
-j   EV_Extension            ; 0x130, Extn Intruction Excp	(0x26)
+VECTOR   EV_MachineCheck         ; 0x100, Fatal Machine check   (0x20)
+VECTOR   EV_TLBMissI             ; 0x108, Intruction TLB miss   (0x21)
+VECTOR   EV_TLBMissD             ; 0x110, Data TLB miss         (0x22)
+VECTOR   EV_TLBProtV             ; 0x118, Protection Violation  (0x23)
+                            ;         or Misaligned Access
+VECTOR   EV_PrivilegeV           ; 0x120, Privilege Violation   (0x24)
+VECTOR   EV_Trap                 ; 0x128, Trap exception        (0x25)
+VECTOR   EV_Extension            ; 0x130, Extn Intruction Excp  (0x26)
+
 .rept   24
-j   reserved                ; Reserved Exceptions
+VECTOR   reserved                ; Reserved Exceptions
 .endr
 
 
@@ -174,7 +192,7 @@ j   reserved                ; Reserved Exceptions
 #include <asm/entry.h>       /* For the SAVE_* macros */
 #include <asm/errno.h>
 #include <asm/arcregs.h>
-#include <asm/arcdefs.h>	/* PT_TRACESYS */
+#include <asm/arcdefs.h>    /* PT_TRACESYS */
 
 #include <asm/event-log-asm.h>
 
@@ -188,42 +206,6 @@ SYMBOL_NAME_LABEL(res_service)  ; processor restart
 
 SYMBOL_NAME_LABEL(reserved) ; processor restart
         rtie        ; jump to processor initializations
-
-;############################# DEBUG ###################################
-; Monitoring a Variable every IRQ entry/exit
-;
-; Low Level macro called from ISR to dump the contents of a variable
-; This can for e.g. be used to figure out the whether the @var
-; got clobbered during ISR or between ISRs (pure kernel mode)
-;
-; The macro itself can be switched on/off at runtime using a toggle
-; @irq_inspect_on from e.g. driver code
-;
-; Caveats: Requires SP to be bottom most kernel stack frame
-
-.macro DBG_INSPECT_ON_IRQ  in_or_out, var
-
-    ld   r10, [SYMBOL_NAME(irq_inspect_on)]
-    breq r10, 0, 1f
-
-    lr   r0, [icause1]
-    ;brne r0, 13, 1f	; if we want to do this only on IRQ 13
-    mov  r1, \in_or_out
-    ld   r2, [SYMBOL_NAME(\var)]
-    breq r2, 0, 1f  ; this is to skip if var is zero
-    ld   r3, [r2]   ; if R2 had ptr, this is value
-    jl   print_var_on_irq
-
-1:
-.endm
-
-.macro DBG_INSPECT_ON_IRQ_IN  var
-    DBG_INSPECT_ON_IRQ  0, \var
-.endm
-
-.macro DBG_INSPECT_ON_IRQ_OUT  var
-    DBG_INSPECT_ON_IRQ  1, \var
-.endm
 
 ;##################### Interrupt Handling ##############################
 
@@ -296,9 +278,6 @@ ARC_ENTRY handle_interrupt_level1
 
     ; snapshot routine takes care of disabling nested intr
     TAKE_SNAP_C_FROM_ASM  SNAP_INTR_IN
-
-    ; Inspect a var every IRQ Entry
-    ;DBG_INSPECT_ON_IRQ_IN  my_var
 
     lr  r0, [icause1]
     and r0, r0, 0x1f
@@ -726,7 +705,7 @@ restore_regs :
 
     ; Disable Interrupts first
     lr  r10, [status32]
-    mov r9, r10	;make a copy. Didn't they teach u to "save" things ?
+    mov r9, r10 ;make a copy. Didn't they teach u to "save" things ?
     and r9, r9, ~(STATUS_E1_MASK | STATUS_E2_MASK)
     flag r9
 
@@ -799,9 +778,6 @@ not_level2_interrupt:
 #endif
 
     bbit0  r10, STATUS_A1_BIT, not_level1_interrupt
-
-    ; Inspect a var every IRQ Exit
-    ;DBG_INSPECT_ON_IRQ_OUT  my_var
 
     ;return from level 1
     TAKE_SNAP_C_FROM_ASM SNAP_INTR_OUT
