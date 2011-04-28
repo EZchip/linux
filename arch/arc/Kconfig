@@ -322,7 +322,7 @@ config ARC_SERIAL_CONSOLE
 config SERIAL_LV2
         bool "Configure serial interrupt on level 2"
         default n
-        depends on ARC_SERIAL && ARCH_ARC_LV2_INTR
+        depends on ARC_SERIAL && TIMER_LV2
 
 config TIMER_LV2
         bool "Configure Timer0 interrupt on level 2"
@@ -356,7 +356,7 @@ config ARCTANGENT_EMAC
 config EMAC_LV2
         bool "Configure EMAC interrupt on level 2"
         default n
-        depends on ARCTANGENT_EMAC && ARCH_ARC_LV2_INTR
+        depends on ARCTANGENT_EMAC && TIMER_LV2
 
 config EMAC_NAPI
         bool "Use NAPI ?"
