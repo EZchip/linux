@@ -836,7 +836,6 @@ aa3_emac_stats(struct net_device * dev)
 	unsigned long flags;
 	struct aa3_emac_priv *ap = netdev_priv(dev);
 
-	dbg_printk("get stats called\n");
 	spin_lock_irqsave(&ap->lock, flags);
 	aa3_emac_update_stats(ap);
 	spin_unlock_irqrestore(&ap->lock, flags);

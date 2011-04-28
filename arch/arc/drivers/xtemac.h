@@ -24,6 +24,9 @@
 #define RESET_TX_RX_FIFO                        (0x3)
 #define ENABLE_RX                               (0x10000000)
 #define ENABLE_TX                               (0x10000000)
+#define RESET_FIFO                              (0x80000000)
+#define HALF_DUPLEX                             (0x04000000)
+
 
 #define MDIO_ENABLE                             (0x50)
 
