@@ -32,8 +32,6 @@
 #ifndef _ASM_CACHEFLUSH_H
 #define _ASM_CACHEFLUSH_H
 
-#include <linux/mm.h>
-
 /* Sameer: Getting these definitions from MIPS as
            seemed simpler for a while */
 #define flush_dcache_mmap_lock(mapping)     do { } while (0)

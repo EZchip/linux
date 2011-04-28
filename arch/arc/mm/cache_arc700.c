@@ -72,7 +72,6 @@
  * Ashwin Chaugule <ashwin.chaugule@codito.com>
  */
 
-#include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/bootmem.h>
 #include <linux/interrupt.h>
@@ -82,13 +81,15 @@
 #include <asm/cacheflush.h>
 #include <asm/mmu_context.h>
 
-extern struct cpuinfo_arc cpuinfo_arc700[];
+#ifdef CONFIG_ARC700_USE_ICACHE
 static void __arc_icache_inv_lines_no_alias(unsigned long, int);
 static void __arc_icache_inv_lines_32k(unsigned long, int);
 static void __arc_icache_inv_lines_64k(unsigned long, int);
 
 /* Holds the ptr to flush routine, dependign on size due to aliasing issues */
 static void (* ___flush_icache_rtn)(unsigned long, int);
+#endif
+
 
 char * arc_cache_mumbojumbo(int cpu_id, char *buf)
 {
@@ -125,10 +126,11 @@ char * arc_cache_mumbojumbo(int cpu_id, char *buf)
  */
 void __init read_decode_cache_bcr(void)
 {
-    struct bcr_cache ibcr, dbcr;
 
 #ifdef CONFIG_ARC700_USE_ICACHE
     {
+        struct bcr_cache ibcr;
+
         struct cpuinfo_arc_cache *p_ic = &cpuinfo_arc700[0].icache;
         READ_BCR(ARC_REG_I_CACHE_BUILD_REG, ibcr);
 
@@ -142,6 +144,8 @@ void __init read_decode_cache_bcr(void)
 
 #ifdef CONFIG_ARC700_USE_DCACHE
     {
+        struct bcr_cache dbcr;
+
         struct cpuinfo_arc_cache *p_dc = &cpuinfo_arc700[0].dcache;
         READ_BCR(ARC_REG_D_CACHE_BUILD_REG, dbcr);
 
@@ -171,13 +175,13 @@ void __init arc_cache_init(void)
      * I-Cache related init
      **********************************************/
 
-#ifdef CONFIG_ARC700_USE_ICACHE
     ic = &cpuinfo_arc700[0].icache;
 
+#ifdef CONFIG_ARC700_USE_ICACHE
     /* 1. Confirm some of I-cache params which Linux assumes */
     if ( ( ic->assoc != ICACHE_COMPILE_WAY_NUM) ||
          ( ic->line_len != ICACHE_COMPILE_LINE_LEN ) ) {
-        goto sw_hw_mismatch;
+        panic("Cache H/W doesn't match kernel Config");
     }
 
     switch(ic->sz) {
@@ -219,12 +223,12 @@ void __init arc_cache_init(void)
      * D-Cache related init
      **********************************************/
 
-#ifdef CONFIG_ARC700_USE_DCACHE
     dc = &cpuinfo_arc700[0].dcache;
 
+#ifdef CONFIG_ARC700_USE_DCACHE
     if ( ( dc->assoc != DCACHE_COMPILE_WAY_NUM) ||
          ( dc->line_len != DCACHE_COMPILE_LINE_LEN ) ) {
-        goto sw_hw_mismatch;
+        panic("Cache H/W doesn't match kernel Config");
     }
 
     /* check for D-Cache aliasing */
@@ -256,9 +260,6 @@ void __init arc_cache_init(void)
         printk(arc_cache_mumbojumbo(0, str));
     }
     return;
-
-sw_hw_mismatch:
-    panic("Cache H/W doesn't match kernel Config");
 }
 
 #ifdef CONFIG_ARC700_USE_DCACHE
@@ -428,7 +429,8 @@ EXPORT_SYMBOL(inv_dcache_range);
 EXPORT_SYMBOL(flush_dcache_all);
 EXPORT_SYMBOL(flush_and_inv_dcache_all);
 EXPORT_SYMBOL(flush_dcache_page);
-
+#else
+#define __arc_dcache_flush_lines(a,b)
 #endif
 
 #ifdef CONFIG_ARC700_USE_ICACHE
@@ -622,6 +624,10 @@ void flush_cache_page(struct vm_area_struct *vma, unsigned long page,
         __arc_icache_inv_lines(start, PAGE_SIZE);
 
 }
+#else
+#define __arc_icache_inv_lines(a,b)
+#endif
+
 
 /* Explicit Cache flush request from user space via syscall
  * Needed for JITs which generate code on the fly
@@ -630,6 +636,7 @@ void flush_cache_page(struct vm_area_struct *vma, unsigned long page,
  */
 int sys_cacheflush(uint32_t start, uint32_t end, uint32_t flags)
 {
+#ifdef CONFIG_ARC700_CACHE
 	struct vm_area_struct *vma;
 
 	vma = find_vma(current->mm, start);
@@ -667,6 +674,9 @@ int sys_cacheflush(uint32_t start, uint32_t end, uint32_t flags)
 	}
 
 	return 0;
+#else
+    return -EINVAL;
+#endif
+
 }
 
-#endif
