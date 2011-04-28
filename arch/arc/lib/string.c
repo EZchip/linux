@@ -82,11 +82,6 @@ EXPORT_SYMBOL(slowpath_copy_to_user);
 
 #undef memset
 
-#define OPTIMIZED
-
-//#define STOCK
-
-
 // somewhat optized version of memset.
 // Note : the code got larger in order to get faster.
 // The original can be accessed by unsetting OPTIMIZED and setting STOCK
@@ -99,8 +94,6 @@ void * memset (void * dest, int c, size_t count)
     unsigned char *d_char;  // dest as a char
     unsigned int remainder; // what's left.
     unsigned int word;      // word to write.
-
-#ifdef OPTIMIZED
 
 // See if there are enough words to copy to make the extra code
 // introduced on the optimized version worth while.
@@ -150,14 +143,6 @@ void * memset (void * dest, int c, size_t count)
         }
     }
 
-#endif
-
-#ifdef STOCK
-    d_char = dest;
-    while(count--)
-        *d_char++ = c;
-#endif
-
     return(dest);
 }
 
@@ -180,111 +165,6 @@ void * memcpy (void * to, const void * from, size_t count)
     __generic_copy_from_user(to, from, count);
     return(to);
 }
-
-
-
-#if 0
-
-void * memcpy ( void * to, const void * from, size_t count)
-{
-
-    unsigned int counter;   // words left.
-    unsigned int *d;        // dest as int
-    unsigned int *s;        // source as int
-    unsigned char *s_char;  // source as a char
-    unsigned char *d_char;  // dest as a char
-    unsigned int remainder; // what's left.
-    unsigned int word1,word2,word3,word4;
-
-
-#ifdef OPTIMIZED
-
-    if(count > 256)
-    {
-    if( (((unsigned int) from) & 0x03) || (((unsigned int) to) & 0x03))
-    {           // unaligned - slow
-        d_char = (unsigned char *) to;
-        s_char = (unsigned char *) from;
-
-        while(count--)
-            *d_char++ = *s_char++;
-    }
-    else
-    {   // it's aligned
-        counter = count / 4;    // whole words to write.
-        remainder = count % 4;
-
-        d = (unsigned int *) to;
-        s = (unsigned int *) from;
-
-
-// Are there more than 4 words to copy ?  If so, do back to back reads/writes
-
-        while(counter >= 4)
-        {
-            word1= *s++;
-            word2= *s++;
-            word3= *s++;
-            word4= *s++;
-
-            *d++ = word1;
-            *d++ = word2;
-            *d++ = word3;
-            *d++ = word4;
-            counter -=4;
-        }
-
-        while(counter--)  // do any remaining stragglers
-        {
-            *d++ = *s++;
-        }
-
-        d_char = (unsigned char *) d;
-        s_char = (unsigned char *) s;
-
-
-// Do remaining bytes
-
-        while(remainder--)
-        {
-            *d_char++ = *s_char++;
-        }
-
-
-    }
-
-    }
-    else
-
-
-    {
-
-    d_char = to;
-    s_char = from;
-    while(count--)
-        *d_char++ = *s_char++;
-
-    }
-
-#endif
-
-#ifdef STOCK
-    d_char = to;
-    s_char = from;
-    while(count--)
-        *d_char++ = *s_char++;
-
-#endif
-
-
-    return(to);
-
-}
-
-#endif
-
-
-
 EXPORT_SYMBOL(memcpy);
 
 #endif
