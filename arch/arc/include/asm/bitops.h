@@ -304,7 +304,7 @@ static inline int __test_bit(int nr, const volatile void * addr)
  * ffz = Find First Zero in word.
  * @return:[0-31], 32 if all 1's
  */
-static  inline unsigned long ffz(unsigned long word)
+static __attribute__((const)) inline unsigned long ffz(unsigned long word)
 {
     int result = 0;
 
@@ -338,7 +338,7 @@ static  inline unsigned long ffz(unsigned long word)
  * ffs = Find First Set in word (LSB to MSB)
  * @result: [1-32], 0 if all 0's
  */
-static  inline unsigned long ffs(unsigned long word)
+static __attribute__((const)) inline unsigned long ffs(unsigned long word)
 {
     int result = 0;
 
@@ -360,7 +360,7 @@ static  inline unsigned long ffs(unsigned long word)
 /*
  * __ffs: Similar to ffs, but zero based (0-31)
  */
-static  inline unsigned long __ffs(unsigned long word)
+static __attribute__((const)) inline unsigned long __ffs(unsigned long word)
 {
     if (!word) return word;
     return ffs(word) -1;
@@ -373,7 +373,7 @@ static  inline unsigned long __ffs(unsigned long word)
  * It could be 0 to 32, based on num of 0's in there
  * clz(0x8000_0000) = 0, clz(0xFFFF_FFFF)=0, clz(0) = 32, clz(1) = 31
  */
-static inline int  clz(unsigned int x)
+static inline int __attribute__((const)) clz(unsigned int x)
 {
     unsigned int res;
 
@@ -395,7 +395,7 @@ static inline int  clz(unsigned int x)
  * fls(1) = 1, fls(0x80000000) = 32, fls(0) = 0
  * Loopless: based on ARC norm insn
  */
-static inline int  fls(unsigned long x)
+static inline int __attribute__((const)) fls(unsigned long x)
 {
     return 32 - clz(x);
 }
@@ -403,7 +403,7 @@ static inline int  fls(unsigned long x)
 /*
  * __fls: Similar to fls, but zero based (0-31)
  */
-static inline int  __fls(unsigned long x)
+static inline int __attribute__((const)) __fls(unsigned long x)
 {
     if (!x) return 0;
     else return fls(x) - 1;
