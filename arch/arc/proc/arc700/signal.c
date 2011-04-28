@@ -417,6 +417,7 @@ setup_ret_from_usr_sighdlr(struct k_sigaction *ka, struct pt_regs *regs,
      * starts to run, it doesn't use BTA
      */
     regs->status32 &= ~STATUS_DE_MASK;
+    regs->status32 |= STATUS_L_MASK;
 
     take_snap(SNAP_BEFORE_SIG, 0, 0);
 

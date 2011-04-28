@@ -139,13 +139,10 @@ extern int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags);
 /*
  * Do necessary setup to start up a newly executed thread.
  *
- * The ilink reg where we have to store the pc... ret_from_syscall
- * will finally pass control to us in this way.
- * the status32 register has User mode, E1, E2 bits set
- *
- * pass the data segment into user programs if it exists,
- * it can't hurt anything as far as I can tell
- *
+ * E1,E2 so that Interrupts are enabled in user mode
+ * L set, so Loop inhibited to begin with
+ * lp_start and lp_end seeded with bogus non-zero values so to easily catch
+ * the ARC700 sr to lp_start hardware bug
  */
 #define start_thread(_regs, _pc, _usp)          \
 do {                            \
@@ -153,9 +150,12 @@ do {                            \
     (_regs)->ret = (_pc);               \
     /* User mode, E1 and E2 enabled */      \
     (_regs)->status32 = STATUS_U_MASK       \
+                 | STATUS_L_MASK  \
                  | STATUS_E1_MASK   \
                  | STATUS_E2_MASK;  \
     (_regs)->sp = (_usp);                   \
+    (_regs)->lp_start = 0x10;                   \
+    (_regs)->lp_end = 0x80;                   \
 } while(0)
 
 extern unsigned int get_wchan(struct task_struct *p);
