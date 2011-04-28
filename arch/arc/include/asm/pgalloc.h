@@ -1,4 +1,16 @@
 /******************************************************************************
+ * Copyright ARC International (www.arc.com) 2010-2011
+ *
+ * vineetg: April 2010
+ *  -Switched pgtable_t from being struct page * to unsigned long
+ *      =Needed so that Page Table allocator (pte_alloc_one) is not forced to
+ *       to deal with struct page. Thay way in future we can make it allocate
+ *       multiple PG Tbls in one Page Frame
+ *      =sweet side effect is avoiding calls to ugly page_address( ) from the
+ *       pg-tlb allocator sub-sys (pte_alloc_one, ptr_free, pmd_populate
+ *
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -29,13 +41,13 @@
 static inline void
 pmd_populate_kernel(struct mm_struct *mm, pmd_t *pmd, pte_t *pte)
 {
-	pmd_set(pmd, (pte_t *)pte);
+    pmd_set(pmd, pte);
 }
 
 static inline void
 pmd_populate(struct mm_struct *mm, pmd_t *pmd, pgtable_t ptep)
 {
-    pmd_set(pmd, (pte_t *)(unsigned long)page_address(ptep));
+    pmd_set(pmd, (pte_t *)ptep);
 }
 
 #define PTE_ORDER 0
@@ -64,6 +76,10 @@ extern __inline__ void free_pgd_slow(pgd_t *pgd)
         free_page((unsigned long)pgd);
 }
 
+#define pgd_free(mm, pgd)      free_pgd_slow(pgd)
+#define pgd_alloc(mm)          get_pgd_slow()
+
+
 static inline pte_t *
 pte_alloc_one_kernel(struct mm_struct *mm, unsigned long address)
 {
@@ -79,10 +95,13 @@ pte_alloc_one(struct mm_struct *mm, unsigned long address)
 {
     pgtable_t pte_pg;
 
-    pte_pg = alloc_pages(GFP_KERNEL | __GFP_REPEAT, PTE_ORDER);
+    pte_pg = __get_free_pages(GFP_KERNEL | __GFP_REPEAT, PTE_ORDER);
     if (pte_pg)
     {
-        void *pte_phy = page_address(pte_pg);
+		/* Note: "C" @tmp needed to avoid post-incremnted pte_pg
+		 *       from being returned to caller
+		 */
+		void *tmp = pte_pg;
 
          __asm__ __volatile__(
                   "mov     lp_count,%1\n"
@@ -90,7 +109,7 @@ pte_alloc_one(struct mm_struct *mm, unsigned long address)
                   "st.ab     0, [%0, 4]\n"
                   "st.ab     0, [%0, 4]\n"
                   "1:\n"
-                  :"+r"(pte_phy)
+                  :"+r"(tmp)
                   :"r"(PTRS_PER_PTE/2) // 2 for 2 insn above
                   :"lp_count");
     }
@@ -105,19 +124,16 @@ static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 
 static inline void pte_free(struct mm_struct *mm, pgtable_t ptep)
 {
-    __free_page(ptep);  //  takes struct page*
+    free_pages(ptep, PTE_ORDER);
 }
 
 
-#define pgd_free(mm, pgd)      free_pgd_slow(pgd)
-#define pgd_alloc(mm)          get_pgd_slow()
-
-#define __pte_free_tlb(tlb,pte)     tlb_remove_page((tlb),(pte))
+#define __pte_free_tlb(tlb, pte)    tlb_remove_page(tlb, virt_to_page(pte))
 
 extern void pgd_init(unsigned long page);
 
 #define check_pgt_cache()   do { } while (0)
 
-#define pmd_pgtable(pmd) pmd_page(pmd)
+#define pmd_pgtable(pmd) pmd_page_vaddr(pmd)
 
 #endif  /* _ASM_ARC_PGALLOC_H */
