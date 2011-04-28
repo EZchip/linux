@@ -276,6 +276,14 @@ config EMAC_NAPI
         default n
         depends on ARCTANGENT_EMAC
 
+config XILINX_TEMAC
+        tristate "Use AA5 Xilinx TEMAC ?"
+        default n
+        select NET
+        select INET
+        select NETDEVICES
+        select NET_ETHERNET
+
 
 config ARCH_ARC_LV2_INTR
         bool

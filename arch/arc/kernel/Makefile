@@ -14,7 +14,7 @@ obj-$(CONFIG_MODULES)   += arcksyms.o module.o
 obj-y		+= arcksyms.o ptrace.o sys_arc.o setup.o irq.o
 obj-y		+= troubleshoot.o stacktrace.o event-log.o
 obj-$(CONFIG_ARCH_ARC_HLINK)		+= arc_hostlink.o
-
+obj-$(CONFIG_XILINX_TEMAC) += platform.o
 ifdef CONFIG_SMP
 obj-y		+= atomic_lock.o bitops_lock.o
 endif
