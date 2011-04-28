@@ -139,10 +139,12 @@ void __init a7_probe_cache(void)
     temp = read_new_aux_reg(ARC_REG_I_CACHE_BUILD_REG);
     p_i_bcr = (struct bcr_cache *)&temp;
 
+#ifdef CONFIG_ARC700_USE_ICACHE
     /* Confirm some of I-cache params which Linux assumes */
     if ( ( p_i_bcr->type != 0x3 ) ||      /* 2 way set assoc */
          ( p_i_bcr->line_len != 0x2 ) )   /* 32 byte line length */
         goto sw_hw_mismatch;
+#endif
 
     /* Convert encoded size to real value */
     sz = arc_cache_meta.i_sz = CALC_CACHE_SZ(p_i_bcr->sz);
@@ -167,6 +169,7 @@ void __init a7_probe_cache(void)
     /****************** D-cache Probing *******************/
 
     /* load the dcache build register */
+#ifdef CONFIG_ARC700_USE_DCACHE
     temp = read_new_aux_reg(ARC_REG_D_CACHE_BUILD_REG);
     p_d_bcr = (struct bcr_cache *)&temp;
 
@@ -192,6 +195,7 @@ void __init a7_probe_cache(void)
      * Ofcourse we toggle this default behviour when desired
      */
     temp &= ~INV_MODE_FLUSH;
+#endif
 
 #ifdef  CONFIG_ARC700_USE_DCACHE
     /* Enable D-Cache: Clear Bit 0 */

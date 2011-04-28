@@ -73,10 +73,14 @@ unsigned long end_mem = CONFIG_SRAM_BASE + CONFIG_SRAM_SIZE + PHYS_SRAM_OFFSET;
 unsigned long clk_speed = CONFIG_ARC700_CLK;
 unsigned long serial_baudrate = BASE_BAUD;
 int arc_console_baud = (CONFIG_ARC700_CLK/(BASE_BAUD * 4)) - 1;
-struct sockaddr mac_addr;
+struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
+
+#ifdef CONFIG_ROOT_NFS
 
 // Example of NFS root booting.
-//char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=172.16.18.73:/local/vineetg/arc_initramfs_nfs,nolock ip=172.16.18.96:172.16.18.73::255.255.0.0" };
+char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=172.16.0.196:/shared,nolock ip=dhcp" };
+
+#else
 
 // Clean, no kernel command line.
 
@@ -84,6 +88,8 @@ char __initdata command_line[COMMAND_LINE_SIZE];
 
 // Use this next line to temporarily switch on "earlyprintk"
 //char __initdata command_line[COMMAND_LINE_SIZE] = {"earlyprintk=1"};
+
+#endif
 
 struct task_struct *_current_task[NR_CPUS];  /* currently active task */
 

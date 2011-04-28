@@ -67,18 +67,22 @@ void show_fault_diagnostics(const char *str, struct pt_regs *regs,
     printk("Faulting Instn : 0x%08lx\n", regs->ret);
 
     cause_vec = cause_reg >> 16;
-    cause_code = ( cause_reg >> 8 ) && 0xFF;
+    cause_code = ( cause_reg >> 8 ) & 0xFF;
 
     /* For DTLB Miss or ProtV, display the memory involved too */
     if ( (cause_vec == 0x22) ||  // DTLB Miss
          (cause_vec == 0x23) )   // ProtV
     {
-		printk("While (%s): 0x%08lx\n",((cause_code == 0x01)?"Read From":
-                                        ((cause_code == 0x020)?"Write to":"Exchg")),
-                                         address);
+		if (cause_code != 0x04 ) {	// Mislaigned access doesn't tell R/W/X
+			printk("While (%s): 0x%08lx\n",
+				((cause_code == 0x01)?"Read From":
+				((cause_code == 0x02)?"Write to":"Exchg")),
+				address);
+		}
     }
     else if (cause_vec == 0x20) {  /* Machine Check */
-        printk("Reason: (%s)\n", (cause_code == 0x0)?"Double Fault":"Other Fatal Err");
+        printk("Reason: (%s)\n",
+			(cause_code == 0x0)?"Double Fault":"Other Fatal Err");
     }
 
     printk("Current task = '%s', PID = %u, ASID = %lu\n\n", tsk->comm,
