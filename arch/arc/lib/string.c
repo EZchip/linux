@@ -10,6 +10,74 @@
 #include <linux/module.h>
 #include <asm/uaccess.h>
 
+
+unsigned long
+slowpath_copy_from_user(void *to, const void *from, unsigned long n)
+{
+    long res;
+    char val;
+    const void *tfrom = from;
+
+    __asm__ __volatile__ (
+        "   mov     %0,%3               \n"
+        "   mov.f   lp_count, %3        \n"
+        "   lp 2f                       \n"
+        "1: ldb.ab  %4, [%2, 1]         \n"
+        "   stb.ab  %4, [%1, 1]         \n"
+        "   sub     %0,%0,1             \n"
+        "2: nop                         \n"
+        "   .section .fixup, \"ax\"     \n"
+        "   .align 4                    \n"
+        "3: j   2b                      \n"
+        "   .previous                   \n"
+        "   .section __ex_table, \"a\"  \n"
+        "   .align 4                    \n"
+        "   .word   1b, 3b              \n"
+        "   .previous                   \n"
+
+        :"=r"(res), "=r"(to), "=r"(tfrom), "=r"(n), "=r"(val)
+        :"3"(n), "1"(to), "2"(tfrom)
+        :"lp_count"
+    );
+
+    return res;
+}
+
+EXPORT_SYMBOL(slowpath_copy_from_user);
+
+unsigned long
+slowpath_copy_to_user(void *to, const void *from, unsigned long n)
+{
+    long res;
+    char val;
+    const void *tfrom = from;
+
+    __asm__ __volatile__ (
+        "   mov %0,%3                   \n"
+        "   mov.f   lp_count, %3        \n"
+        "   lp  3f                      \n"
+        "   ldb.ab  %4, [%2, 1]         \n"
+        "1: stb.ab  %4, [%1, 1]         \n"
+        "   sub %0, %0, 1               \n"
+        "3: nop                         \n"
+        "   .section .fixup, \"ax\"     \n"
+        "   .align 4                    \n"
+        "4: j   3b                      \n"
+        "   .previous                   \n"
+        "   .section __ex_table, \"a\"  \n"
+        "   .align 4                    \n"
+        "   .word   1b, 4b              \n"
+        "   .previous                   \n"
+
+        :"=r"(res), "=r"(to), "=r"(tfrom), "=r"(n), "=r"(val)
+        :"3"(n), "1"(to), "2"(tfrom)
+        : "lp_count"
+    );
+
+    return res;
+}
+
+EXPORT_SYMBOL(slowpath_copy_to_user);
 #ifdef __HAVE_ARCH_MEMSET
 
 #undef memset

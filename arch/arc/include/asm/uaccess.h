@@ -1,4 +1,16 @@
 /******************************************************************************
+ * ARC International 2009-2011
+ *
+ * vineetg: Dec 2009
+ *    -Hand crafted constant propagation for "constant" copy sizes
+ *    -stock kernel shrunk by 33K at -O3
+ *
+ * vineetg: Sept 2009
+ *    -Added option to (UN)inline copy_(to|from)_user to reduce code sz
+ *    -kernel shrunk by 200K even at -O3
+ *    -Enabled when doing -Os
+ *****************************************************************************/
+/******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
  *
@@ -257,44 +269,28 @@ do {                                                    \
     : "r" (x), "r" (addr),"i" (-EFAULT), "0" (err))
 
 
+extern unsigned long slowpath_copy_from_user(
+     void *to, const void *from, unsigned long n);
+
 static inline unsigned long
 __generic_copy_from_user(void *to, const void *from, unsigned long n)
 {
-    long res;
+    long res=0;
     char val;
-        const void *tfrom = from;
-        unsigned long tmp1,tmp2,tmp3,tmp4;
+    unsigned long tmp1,tmp2,tmp3,tmp4;
+    unsigned long orig_n = n;
 
 
     if (n == 0)
         return 0;
-if( ((unsigned long) to & 0x3) || ((unsigned long) from & 0x3))  // unaligned
-        {
-    __asm__ __volatile__ (
-        "   mov     %0,%3               \n"
-        "   mov.f   lp_count, %3        \n"
-        "   lp 2f                       \n"
-        "1: ldb.ab  %4, [%2, 1]         \n"
-        "   stb.ab  %4, [%1, 1]         \n"
-        "   sub     %0,%0,1             \n"
-        "2: nop                         \n"
-        "   .section .fixup, \"ax\"     \n"
-        "   .align 4                    \n"
-        "3: j   2b                      \n"
-        "   .previous                   \n"
-        "   .section __ex_table, \"a\"  \n"
-        "   .align 4                    \n"
-        "   .word   1b, 3b              \n"
-        "   .previous                   \n"
 
-        :"=r"(res), "=r"(to), "=r"(tfrom), "=r"(n), "=r"(val)
-        :"3"(n), "1"(to), "2"(tfrom)
-        :"lp_count"
-    );
-        }
-
-        else
-        {
+    if( ((unsigned long) to & 0x3) || ((unsigned long) from & 0x3))
+    {
+        // unaligned
+        res = slowpath_copy_from_user(to, from, n);
+    }
+    else
+    {
 #ifdef ARC_HIGH_LATENCY_MEMORY
     __asm__ __volatile__ (
         "       pf      [%1,32]         \n"
@@ -400,6 +396,140 @@ if( ((unsigned long) to & 0x3) || ((unsigned long) from & 0x3))  // unaligned
         : "lp_count"
     );
 #else
+        if (__builtin_constant_p(orig_n))
+        {
+            /* Hand-crafted constant propagation to reduce code sz
+             * of the laddred copy 16x,8,4,2,1
+             */
+            res = orig_n;
+
+            if (orig_n / 16)
+            {
+                orig_n = orig_n % 16;
+
+                __asm__ __volatile__ (
+                "       lsr   lp_count, %3,4            \n"  // 16byte iters
+                "       lp    3f                        \n"
+                "1:     ld.ab   %5, [%2, 4]             \n"
+                "11:    ld.ab   %6, [%2, 4]             \n"
+                "12:    ld.ab   %7, [%2, 4]             \n"
+                "13:    ld.ab   %8, [%2, 4]             \n"
+                "       st.ab   %5, [%1, 4]             \n"
+                "       st.ab   %6, [%1, 4]             \n"
+                "       st.ab   %7, [%1, 4]             \n"
+                "       st.ab   %8, [%1, 4]             \n"
+                "       sub     %0,%0,16                \n"
+                "3:     nop                             \n"
+                "   .section .fixup, \"ax\"             \n"
+                "   .align 4                            \n"
+                "4:     j   3b                          \n"
+                "   .previous                           \n"
+                "   .section __ex_table, \"a\"          \n"
+                "   .align 4                            \n"
+                "   .word   1b, 4b                      \n"
+                "   .word   11b,4b                      \n"
+                "   .word   12b,4b                      \n"
+                "   .word   13b,4b                      \n"
+                "   .previous                           \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res)
+                :"lp_count");
+            }
+            if (orig_n / 8)
+            {
+                orig_n = orig_n % 8;
+
+                __asm__ __volatile__ (
+                "14:    ld.ab   %5, [%2,4]              \n"
+                "15:    ld.ab   %6, [%2,4]              \n"
+                "       st.ab   %5, [%1,4]              \n"
+                "       st.ab   %6, [%1,4]              \n"
+                "       sub.f   %0,%0,8                 \n"
+                "31:     nop                            \n"
+                "   .section .fixup, \"ax\"             \n"
+                "   .align 4                            \n"
+                "4:     j   31b                         \n"
+                "   .previous                           \n"
+                "   .section __ex_table, \"a\"          \n"
+                "   .align 4                            \n"
+                "   .word   14b,4b                      \n"
+                "   .word   15b,4b                      \n"
+                "   .previous                           \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+            if (orig_n / 4)
+            {
+                orig_n = orig_n % 4;
+
+                __asm__ __volatile__ (
+                "16:    ld.ab   %5, [%2,4]              \n"
+                "       st.ab   %5, [%1,4]              \n"
+                "       sub.f   %0,%0,4                 \n"
+                "32:     nop                            \n"
+                "   .section .fixup, \"ax\"             \n"
+                "   .align 4                            \n"
+                "4:     j   32b                         \n"
+                "   .previous                           \n"
+                "   .section __ex_table, \"a\"          \n"
+                "   .align 4                            \n"
+                "   .word   16b,4b                      \n"
+                "   .previous                           \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+            if (orig_n / 2)
+            {
+                orig_n = orig_n % 2;
+
+                __asm__ __volatile__ (
+                "17:    ldw.ab   %5, [%2,2]              \n"
+                "       stw.ab   %5, [%1,2]              \n"
+                "       sub.f   %0,%0,2                 \n"
+                "33:     nop                            \n"
+                "   .section .fixup, \"ax\"             \n"
+                "   .align 4                            \n"
+                "4:     j   33b                         \n"
+                "   .previous                           \n"
+                "   .section __ex_table, \"a\"          \n"
+                "   .align 4                            \n"
+                "   .word   17b,4b                      \n"
+                "   .previous                           \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+            if (orig_n & 1)
+            {
+                __asm__ __volatile__ (
+                "18:    ldb.ab   %5, [%2,2]             \n"
+                "       stb.ab   %5, [%1,2]             \n"
+                "       sub.f   %0,%0,1                 \n"
+                "34:     nop                            \n"
+                "   .section .fixup, \"ax\"             \n"
+                "   .align 4                            \n"
+                "4:     j   34b                         \n"
+                "   .previous                           \n"
+                "   .section __ex_table, \"a\"          \n"
+                "   .align 4                            \n"
+                "   .word   18b,4b                      \n"
+                "   .previous                           \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+        }
+        else       /* n is NOT constant, so laddered copy of 16x,8,4,2,1  */
+        {
+
     __asm__ __volatile__ (
         "       mov %0,%3                       \n"
         "       lsr.f   lp_count, %3,4          \n"  // number of words
@@ -455,6 +585,7 @@ if( ((unsigned long) to & 0x3) || ((unsigned long) from & 0x3))  // unaligned
         :"3"(n), "1"(to), "2"(from)
         :"lp_count"
     );
+       }
 #endif
 
     }
@@ -501,45 +632,27 @@ unsigned long __copy_from_user(void *to, const void *from, unsigned long n);
 
 #endif
 
+extern unsigned long slowpath_copy_to_user(
+     void *to, const void *from, unsigned long n);
+
 static inline unsigned long
 __generic_copy_to_user(void *to, const void *from, unsigned long n)
 {
-    long res;
+    long res=0;
     char val;
-        const void *tfrom = from;
-        unsigned long tmp1,tmp2,tmp3,tmp4;
+    unsigned long tmp1,tmp2,tmp3,tmp4;
+    unsigned long orig_n = n;
 
     if (n == 0)
         return 0;
-        if( ((unsigned long) to & 0x3) || ((unsigned long) from & 0x3))  // unaligned
-        {
-    __asm__ __volatile__ (
-        "   mov %0,%3                   \n"
-        "   mov.f   lp_count, %3        \n"
-        "   lp  3f                      \n"
-        "   ldb.ab  %4, [%2, 1]         \n"
-        "1: stb.ab  %4, [%1, 1]         \n"
-        "   sub %0, %0, 1               \n"
-        "3: nop                         \n"
-        "   .section .fixup, \"ax\"     \n"
-        "   .align 4                    \n"
-        "4: j   3b                      \n"
-        "   .previous                   \n"
-        "   .section __ex_table, \"a\"  \n"
-        "   .align 4                    \n"
-        "   .word   1b, 4b              \n"
-        "   .previous                   \n"
 
-        :"=r"(res), "=r"(to), "=r"(tfrom), "=r"(n), "=r"(val)
-        :"3"(n), "1"(to), "2"(tfrom)
-        : "lp_count"
-    );
-
-        }
-
-
-        else   // 32 bit aligned.
-        {
+    if( ((unsigned long) to & 0x3) || ((unsigned long) from & 0x3))
+    {
+        // unaligned
+        res = slowpath_copy_to_user(to, from, n);
+    }
+    else   // 32 bit aligned.
+    {
 
 #ifdef ARC_HIGH_LATENCY_MEMORY
     __asm__ __volatile__ (
@@ -647,6 +760,140 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
     );
 
 #else
+        if (__builtin_constant_p(orig_n))
+        {
+            /* Hand-crafted constant propagation to reduce code sz
+             * of the laddred copy 16x,8,4,2,1
+             */
+            res = orig_n;
+
+            if (orig_n / 16)
+            {
+                orig_n = orig_n % 16;
+
+                __asm__ __volatile__ (
+                "     lsr lp_count, %3,4        \n"  // 16byte iters
+                "     lp  3f                    \n"
+                "     ld.ab %5, [%2, 4]         \n"
+                "     ld.ab %6, [%2, 4]         \n"
+                "     ld.ab %7, [%2, 4]         \n"
+                "     ld.ab %8, [%2, 4]         \n"
+                "1:   st.ab %5, [%1, 4]         \n"
+                "11:  st.ab %6, [%1, 4]         \n"
+                "12:  st.ab %7, [%1, 4]         \n"
+                "13:  st.ab %8, [%1, 4]         \n"
+                "     sub   %0, %0, 16          \n"
+                "3:   nop                       \n"
+                "   .section .fixup, \"ax\"     \n"
+                "   .align 4                    \n"
+                "4: j   3b                      \n"
+                "   .previous                   \n"
+                "   .section __ex_table, \"a\"  \n"
+                "   .align 4                    \n"
+                "   .word   1b, 4b              \n"
+                "   .word   11b,4b              \n"
+                "   .word   12b,4b              \n"
+                "   .word   13b,4b              \n"
+                "   .previous                   \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val),
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res)
+                :"lp_count");
+
+            }
+            if (orig_n / 8)
+            {
+                orig_n = orig_n % 8;
+
+                __asm__ __volatile__ (
+                "     ld.ab   %5, [%2,4]        \n"
+                "     ld.ab   %6, [%2,4]        \n"
+                "14:  st.ab   %5, [%1,4]        \n"
+                "15:  st.ab   %6, [%1,4]        \n"
+                "     sub.f   %0, %0, 8         \n"
+                "31:  nop                       \n"
+                "   .section .fixup, \"ax\"     \n"
+                "   .align 4                    \n"
+                "4: j   31b                     \n"
+                "   .previous                   \n"
+                "   .section __ex_table, \"a\"  \n"
+                "   .align 4                    \n"
+                "   .word   14b,4b              \n"
+                "   .word   15b,4b              \n"
+                "   .previous                   \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+            if (orig_n / 4)
+            {
+                orig_n = orig_n % 4;
+
+                __asm__ __volatile__ (
+                "     ld.ab   %5, [%2,4]        \n"
+                "16:  st.ab   %5, [%1,4]        \n"
+                "     sub.f   %0, %0, 4         \n"
+                "32:  nop                       \n"
+                "   .section .fixup, \"ax\"     \n"
+                "   .align 4                    \n"
+                "4: j   32b                     \n"
+                "   .previous                   \n"
+                "   .section __ex_table, \"a\"  \n"
+                "   .align 4                    \n"
+                "   .word   16b,4b              \n"
+                "   .previous                   \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+            if (orig_n / 2)
+            {
+                orig_n = orig_n % 2;
+
+                __asm__ __volatile__ (
+                "     ldw.ab    %5, [%2,2]      \n"
+                "17:  stw.ab    %5, [%1,2]      \n"
+                "     sub.f %0, %0, 2           \n"
+                "33:  nop                       \n"
+                "   .section .fixup, \"ax\"     \n"
+                "   .align 4                    \n"
+                "4: j   33b                     \n"
+                "   .previous                   \n"
+                "   .section __ex_table, \"a\"  \n"
+                "   .align 4                    \n"
+                "   .word   17b,4b              \n"
+                "   .previous                   \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+            if (orig_n & 1)
+            {
+                __asm__ __volatile__ (
+                "     ldb.ab    %5, [%2,1]      \n" // just one byte left
+                "18:  stb.ab  %5, [%1,1]        \n"
+                "     sub.f %0, %0, 1           \n"
+                "34:  nop                       \n"
+                "   .section .fixup, \"ax\"     \n"
+                "   .align 4                    \n"
+                "4: j   34b                     \n"
+                "   .previous                   \n"
+                "   .section __ex_table, \"a\"  \n"
+                "   .align 4                    \n"
+                "   .word   18b,4b              \n"
+                "   .previous                   \n"
+
+                :"=r"(res), "=r"(to), "=r"(from), "=r"(n), "=r"(val) ,
+                 "=r"(tmp1),"=r"(tmp2),"=r"(tmp3),"=r"(tmp4)
+                :"3"(n), "1"(to), "2"(from),"0"(res));
+            }
+        }
+        else       /* n is NOT constant, so laddered copy of 16x,8,4,2,1  */
+        {
     __asm__ __volatile__ (
         "     mov   %0,%3               \n"
         "     lsr.f lp_count, %3,4      \n"  // number of words
@@ -702,9 +949,9 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
         :"3"(n), "1"(to), "2"(from)
         :"lp_count"
     );
+       }
 #endif
-        }
-
+    }
 
     return (res);
 }
