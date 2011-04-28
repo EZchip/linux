@@ -27,6 +27,8 @@
 #define IDE_IRQ         13
 #define PCI_IRQ         14
 
+#define PS2_IRQ		(15)
+
 #ifdef CONFIG_SMP
 #define IDU_INTERRUPT_0 16
 #endif

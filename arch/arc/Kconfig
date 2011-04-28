@@ -290,6 +290,21 @@ config TIMER_LV2
         default n
         depends on ARCH_ARC_LV2_INTR
 
+config ARC_PS2
+        bool "ARC PS/2 support"
+        default n
+        help
+        ARC FPGA Peripherals PS/2 support. Driver currently works only
+        on AA4 board.
+
+config ARC_PS2_DEBUG
+        bool "ARC PS/2 driver debugging"
+        default n
+	depends on ARC_PS2
+        help
+	Turn on statistic collection and various debug messages to
+	simplify debugging.
+
 config ARCTANGENT_EMAC
         tristate "ARCTangent EMAC support"
         select NET

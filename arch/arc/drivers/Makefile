@@ -7,6 +7,7 @@
 #O_TARGET	:= peripherals.o
 
 obj-$(CONFIG_ARC700_SERIAL) += arc700_serial.o
+obj-$(CONFIG_ARC_PS2) += arc_ps2.o
 obj-$(CONFIG_ARCTANGENT_EMAC) += arctangent_emac.o
 obj-$(CONFIG_ARC_IDE) += arc_ide.o
 obj-$(CONFIG_ARCPGU) += arc_pgufb.o arc_vsync.o
