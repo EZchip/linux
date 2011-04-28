@@ -82,7 +82,7 @@ struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
 // Example of NFS root booting.
 char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=172.16.0.196:/shared,nolock ip=dhcp,console=ttyS0" };
 
-#elif CONFIG_ARC_UART_CONSOLE
+#elif defined(CONFIG_ARC_UART_CONSOLE)
 
 /* with console=tty0, arc uart console will be prefered console and
  * registrations will be successful, otherwise dummy console will be
@@ -586,7 +586,7 @@ void __init setup_arch(char **cmdline_p)
 #ifdef CONFIG_VT
 #if defined(CONFIG_ARC_PGU_CONSOLE)
     /* Arc PGU Console */
-    #error "FIXME: enable PGU Console"
+#error "FIXME: enable PGU Console"
 #elif defined(CONFIG_DUMMY_CONSOLE)
     conswitchp = &dummy_con;
 #endif

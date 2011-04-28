@@ -445,12 +445,6 @@ config ARC_PGU_CONSOLE
     select LOGO_LINUX_CLUT224
     select BACKLIGHT_LCD_SUPPORT
 
-
-config FB_ARCPGU
-    bool
-    depends on ARC_PGU_CONSOLE
-    default y
-
 config ARCVSYNC
     bool
     depends on ARC_PGU_CONSOLE

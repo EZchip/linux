@@ -51,19 +51,13 @@
 #include <linux/inetdevice.h>
 #include <linux/inet.h>
 #include <linux/proc_fs.h>
-
+#include <linux/platform_device.h>
 #include <asm/cacheflush.h>
 #include <asm/irq.h>
 
 
 /* clock speed is set while parsing parameters in setup.c */
 extern unsigned long clk_speed;
-
-/*
- * This points to the last detected device. All aa3 vmac devices are linked
- * using the prev_dev pointer in aa3_emac_priv structure
- */
-static struct net_device *aa3_root_dev;
 
 /* Timeout time for tranmission */
 #define TX_TIMEOUT (400*HZ/1000)
@@ -77,45 +71,26 @@ static struct net_device *aa3_root_dev;
 #define NAPI_WEIGHT 40      /* workload for NAPI */
 
 
-static int arc_thread(void *unused);
-
-#ifdef CONFIG_EMAC_NAPI
-static int aa3_poll (struct napi_struct *napi, int budget);
-#endif
-
-static int aa3_clean(struct net_device *dev
-#ifdef CONFIG_EMAC_NAPI
-    ,unsigned int work_to_do
-#endif
-);
-static int aa3_tx_clean(struct net_device *dev);
-static irqreturn_t aa3_emac_intr (int irq, void *dev_instance);
-
-//Stats proc file system
-
-static int read_proc(char *sysbuf, char **start,
-			    off_t off, int count, int *eof, void *data);
-struct proc_dir_entry *myproc;
-//debug interface.
-
 // Pre - allocated(cached) SKB 's.  Improve driver performance by allocating SKB' s
 // in advance of when they are needed.
+volatile struct sk_buff *skb_prealloc[SKB_PREALLOC];
 
-	volatile struct sk_buff *skb_prealloc[SKB_PREALLOC];
 //pre - allocated SKB 's
-	volatile unsigned int skb_count = 0;
+volatile unsigned int skb_count = 0;
 
+//#define EMAC_STATS 1
+#ifdef EMAC_STATS
 //EMAC stats.Turn these on to get more information from the EMAC
 // Turn them off to get better performance.
 // note:If you see UCLO it 's bad.
 
-#define EMAC_STATS 1
 	unsigned int    emac_drop = 0;
 	unsigned int    emac_defr = 0;
 	unsigned int    emac_ltcl = 0;
 	unsigned int    emac_uflo = 0;
 	unsigned int    emac_rtry = 0;
 	unsigned int    skb_not_preallocated = 0;
+#endif
 
 
 /*
@@ -246,7 +221,6 @@ static inline arc_emac_reg *const EMAC_REG(void * ap)   \
 #define LXT971A_STATUS2_100         0x4000
 
 
-// #define ARCTANGENT_EMAC_SETUP
 // #define ARCTANGENT_EMAC_DEBUG
 
 #ifdef ARCTANGENT_EMAC_DEBUG
@@ -274,27 +248,26 @@ static inline arc_emac_reg *const EMAC_REG(void * ap)   \
 	val &= 0xffff;              \
 }
 
-struct aa3_buffer_desc
+struct arc_emac_buffer_desc
 {
 		unsigned int    info;
 		void           *data;
 };
 
-struct aa3_emac_priv
+struct arc_emac_priv
 {
 		struct net_device_stats stats;
 		/* base address of the register set for this device */
 		arc_emac_reg  *reg_base_addr;
-		struct net_device *prev_dev;
 		spinlock_t      lock;
 		/*
 		 * rx buffer descriptor. We align descriptors to 32 so info
 		 * and data lie on the same cache line. This also satisfies
 		 * the 8 byte alignment required by the VMAC
 		 */
-		struct aa3_buffer_desc rxbd[RX_BDT_LEN] __attribute__((aligned(32)));
+		struct arc_emac_buffer_desc rxbd[RX_BDT_LEN] __attribute__((aligned(32)));
 		/* tx buffer descriptor */
-		struct aa3_buffer_desc txbd[TX_BDT_LEN] __attribute__((aligned(32)));
+		struct arc_emac_buffer_desc txbd[TX_BDT_LEN] __attribute__((aligned(32)));
 		/* The actual socket buffers */
 		struct sk_buff *rx_skbuff[RX_BDT_LEN];
 		struct sk_buff *tx_skbuff[TX_BDT_LEN];
@@ -317,26 +290,28 @@ struct aa3_emac_priv
  * This MAC addr is given to the first opened EMAC, the last byte will be
  * incremented by 1 each time so succesive emacs will get a different
  * hardware address
+ * Intialised while  processing parameters in setup.c
  */
-	extern struct sockaddr mac_addr;	/* Intialised while
-						 * processing parameters in
-						 * setup.c */
-/*
- * static struct sockaddr mac_addr = { 0,
- *
- * { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05 } };
- */
+	extern struct sockaddr mac_addr;
 
-	int             aa3_emac_open(struct net_device * dev);
-	int             aa3_emac_stop(struct net_device * dev);
-	int             aa3_emac_ioctl(struct net_device * dev, struct ifreq * rq, int cmd);
-	struct net_device_stats *aa3_emac_stats(struct net_device * dev);
-	void            aa3_emac_update_stats(struct aa3_emac_priv * ap);
-	int             aa3_emac_tx(struct sk_buff * skb, struct net_device * dev);
-	void            aa3_emac_tx_timeout(struct net_device * dev);
-	void            aa3_emac_set_multicast_list(struct net_device * dev);
-	int             aa3_emac_set_address(struct net_device * dev, void *p);
-	int             aa3_emac_init(struct net_device * dev);
+
+static int arc_thread(void *unused);
+static int arc_emac_tx_clean(struct net_device *dev);
+void arc_emac_update_stats(struct arc_emac_priv * ap);
+
+static int arc_emac_clean(struct net_device *dev
+#ifdef CONFIG_EMAC_NAPI
+    ,unsigned int work_to_do
+#endif
+);
+
+
+#ifdef EMAC_STATS
+//Stats proc file system
+static int read_proc(char *sysbuf, char **start,
+			    off_t off, int count, int *eof, void *data);
+struct proc_dir_entry *myproc;
+#endif
 
 static void     dump_phy_status(unsigned int status)
 {
@@ -353,10 +328,12 @@ static void     dump_phy_status(unsigned int status)
 		printk("100mbps, ");
 	else
 		printk("10mbps, ");
+
 	if (status & LXT971A_STATUS2_FULL)
 		printk("full duplex, ");
 	else
 		printk("half duplex, ");
+
 	if (status & LXT971A_STATUS2_NEGOTIATED)
 	{
 		printk("auto-negotiation ");
@@ -366,6 +343,7 @@ static void     dump_phy_status(unsigned int status)
 			printk("in progress, ");
 	} else
 		printk("manual mode, ");
+
 	if (status & LXT971A_STATUS2_LINK_UP)
 		printk("link is up\n");
 	else
@@ -375,19 +353,19 @@ static void     dump_phy_status(unsigned int status)
 
 #ifdef CONFIG_EMAC_NAPI
 
-static int aa3_poll (struct napi_struct *napi, int budget)
+static int arc_emac_poll (struct napi_struct *napi, int budget)
 {
-   struct net_device *dev = aa3_root_dev;
-   struct aa3_emac_priv *ap = netdev_priv(dev);
-   unsigned int work_done;
+    struct net_device *dev = napi->dev;
+	struct arc_emac_priv *ap = netdev_priv(dev);
+    unsigned int work_done;
 
-     work_done = aa3_clean(dev, budget);
+    work_done = arc_emac_clean(dev, budget);
 
-        if(work_done < budget)
-        {
-            napi_complete(napi);
-            EMAC_REG(ap)->enable |= RXINT_MASK;
-        }
+    if(work_done < budget)
+    {
+        napi_complete(napi);
+        EMAC_REG(ap)->enable |= RXINT_MASK;
+    }
 
 //    printk("work done %u budget %u\n", work_done, budget);
     return(work_done);
@@ -395,13 +373,13 @@ static int aa3_poll (struct napi_struct *napi, int budget)
 
 #endif
 
-static int aa3_clean(struct net_device *dev
+static int arc_emac_clean(struct net_device *dev
 #ifdef CONFIG_EMAC_NAPI
     ,unsigned int work_to_do
 #endif
 )
 {
-	struct aa3_emac_priv *ap = netdev_priv(dev);
+	struct arc_emac_priv *ap = netdev_priv(dev);
 	unsigned int len, info;
 	struct sk_buff *skb, *skbnew;
     int work_done=0, i, loop;
@@ -449,10 +427,12 @@ static int aa3_clean(struct net_device *dev
 						ap->stats.rx_dropped++;
                         continue;
 					}
+#ifdef EMAC_STATS
                     else {
                         // Not fatal, purely for statistical purposes
 						skb_not_preallocated++;
 					}
+#endif
 				}
 
                 /* Actually preparing the BD for next cycle */
@@ -498,10 +478,10 @@ static int aa3_clean(struct net_device *dev
     return work_done;
 }
 
-static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
+static irqreturn_t arc_emac_intr (int irq, void *dev_instance)
 {
 	struct net_device *dev = (struct net_device *) dev_instance;
-	struct aa3_emac_priv *ap = netdev_priv(dev);
+	struct arc_emac_priv *ap = netdev_priv(dev);
 	unsigned int status, enable;
 
 	status = EMAC_REG(ap)->status;
@@ -524,7 +504,7 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
             __napi_schedule(&ap->napi);
         }
 #else
-        aa3_clean(dev);
+        arc_emac_clean(dev);
 #endif
     }
 
@@ -538,7 +518,7 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 
     if (status & TXINT_MASK)
     {
-        aa3_tx_clean(dev);
+        arc_emac_tx_clean(dev);
     }
 
 	if (status & ERR_MASK)
@@ -573,9 +553,9 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 }
 
 
-static int aa3_tx_clean(struct net_device *dev)
+static int arc_emac_tx_clean(struct net_device *dev)
 {
-	struct aa3_emac_priv *ap = netdev_priv(dev);
+	struct arc_emac_priv *ap = netdev_priv(dev);
 	unsigned int i, info;
 	struct sk_buff *skb;
 
@@ -628,12 +608,12 @@ err_int:
 	return IRQ_HANDLED;
 }
 
-/* aa3 emac open routine */
+/* arc emac open routine */
 int
-aa3_emac_open(struct net_device * dev)
+arc_emac_open(struct net_device * dev)
 {
-	struct aa3_emac_priv *ap;
-	struct aa3_buffer_desc *bd;
+	struct arc_emac_priv *ap;
+	struct arc_emac_buffer_desc *bd;
 	struct sk_buff *skb;
 	int             i;
 	unsigned int    temp, duplex;
@@ -644,7 +624,7 @@ aa3_emac_open(struct net_device * dev)
 		return -ENODEV;
 
 	/* Register interrupt handler for device */
-	request_irq(dev->irq, aa3_emac_intr, 0, dev->name, dev);
+	request_irq(dev->irq, arc_emac_intr, 0, dev->name, dev);
 
 	EMAC_REG(ap)->enable |= MDIO_MASK;	/* MDIO Complete Interrupt Mask */
 
@@ -789,19 +769,22 @@ aa3_emac_open(struct net_device * dev)
 	//ARC Emac helper thread.
     kthread_run(arc_thread, 0, "EMAC helper");
 
+#ifdef EMAC_STATS
     myproc = create_proc_entry("emac", 0644, NULL);
 	if (myproc)
 	{
 		myproc->read_proc = read_proc;
 	}
+#endif
+
 	return 0;
 }
 
-/* aa3 close routine */
+/* arc_emac close routine */
 int
-aa3_emac_stop(struct net_device * dev)
+arc_emac_stop(struct net_device * dev)
 {
-	struct aa3_emac_priv *ap = netdev_priv(dev);
+	struct arc_emac_priv *ap = netdev_priv(dev);
 
 #ifdef CONFIG_EMAC_NAPI
     napi_disable(&ap->napi);
@@ -820,31 +803,31 @@ aa3_emac_stop(struct net_device * dev)
 	return 0;
 }
 
-/* aa3 emac ioctl commands */
+/* arc emac ioctl commands */
 int
-aa3_emac_ioctl(struct net_device * dev, struct ifreq * rq, int cmd)
+arc_emac_ioctl(struct net_device * dev, struct ifreq * rq, int cmd)
 {
 	dbg_printk("ioctl called\n");
 	/* FIXME :: not ioctls yet :( */
 	return (-EOPNOTSUPP);
 }
 
-/* aa3 emac get statistics */
+/* arc emac get statistics */
 struct net_device_stats *
-aa3_emac_stats(struct net_device * dev)
+arc_emac_stats(struct net_device * dev)
 {
 	unsigned long flags;
-	struct aa3_emac_priv *ap = netdev_priv(dev);
+	struct arc_emac_priv *ap = netdev_priv(dev);
 
 	spin_lock_irqsave(&ap->lock, flags);
-	aa3_emac_update_stats(ap);
+	arc_emac_update_stats(ap);
 	spin_unlock_irqrestore(&ap->lock, flags);
 
 	return (&ap->stats);
 }
 
 void
-aa3_emac_update_stats(struct aa3_emac_priv * ap)
+arc_emac_update_stats(struct arc_emac_priv * ap)
 {
 	unsigned long   miss, rxerr, rxfram, rxcrc, rxoflow;
 
@@ -867,14 +850,14 @@ aa3_emac_update_stats(struct aa3_emac_priv * ap)
 	return;
 }
 
-/* aa3 emac transmit routine */
+/* arc emac transmit routine */
 int
-aa3_emac_tx(struct sk_buff * skb, struct net_device * dev)
+arc_emac_tx(struct sk_buff * skb, struct net_device * dev)
 {
 	int             len, data_len, bitmask;
 	unsigned int    info;
 	char           *data;
-	struct aa3_emac_priv *ap = netdev_priv(dev);
+	struct arc_emac_priv *ap = netdev_priv(dev);
 	int             inpacket;
 
 	len = skb->len < ETH_ZLEN ? ETH_ZLEN : skb->len;
@@ -939,7 +922,7 @@ aa3_emac_tx(struct sk_buff * skb, struct net_device * dev)
 
 /* the transmission timeout function */
 void
-aa3_emac_tx_timeout(struct net_device * dev)
+arc_emac_tx_timeout(struct net_device * dev)
 {
 	dbg_printk("transmission timed out\n");
 	printk(KERN_CRIT "transmission timeout\n");
@@ -948,7 +931,7 @@ aa3_emac_tx_timeout(struct net_device * dev)
 
 /* the set multicast list method */
 void
-aa3_emac_set_multicast_list(struct net_device * dev)
+arc_emac_set_multicast_list(struct net_device * dev)
 {
 	dbg_printk("set multicast list called\n");
 	return;
@@ -959,10 +942,10 @@ aa3_emac_set_multicast_list(struct net_device * dev)
  * ioctl and from open above
  */
 int
-aa3_emac_set_address(struct net_device * dev, void *p)
+arc_emac_set_address(struct net_device * dev, void *p)
 {
 	struct sockaddr *addr = p;
-	struct aa3_emac_priv *ap = netdev_priv(dev);
+	struct arc_emac_priv *ap = netdev_priv(dev);
     char buf[32];
 
 	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
@@ -975,153 +958,129 @@ aa3_emac_set_address(struct net_device * dev, void *p)
 	return 0;
 }
 
+static const struct net_device_ops arc_emac_netdev_ops = {
+	.ndo_open 			= arc_emac_open,
+	.ndo_stop 			= arc_emac_stop,
+	.ndo_start_xmit 	= arc_emac_tx,
+	.ndo_set_multicast_list = arc_emac_set_multicast_list,
+	.ndo_tx_timeout 	= arc_emac_tx_timeout,
+	.ndo_set_mac_address= arc_emac_set_address,
+    .ndo_get_stats      = arc_emac_stats,
+    // .ndo_do_ioctl    = arc_emac_ioctl;
+	// .ndo_change_mtu 	= arc_emac_change_mtu, FIXME:  not allowed
+};
 
-static int
-__init aa3_emac_probe(int num)
+static int __devinit arc_emac_probe(struct platform_device *pdev)
 {
+	struct net_device *dev;
+	struct arc_emac_priv *priv;
+	int err = -ENODEV;
 	arc_emac_reg *reg;
 	unsigned int id;
 
-	if (num == 8)
-		return -ENODEV;	/* Only upto 8 instances of the VMAC are possible */
+	/* Probe for all the vmac's */
 
 	/* Calculate the register base address of this instance (num) */
-	reg = (arc_emac_reg *)(VMAC_REG_BASEADDR | (num << 8));
+	reg = (arc_emac_reg *)(VMAC_REG_BASEADDR);
 	id = reg->id;
 
 	/* Check for VMAC revision 5 or 7, magic number */
-	if (id == 0x0005fd02 || id == 0x0007fd02)
-		return 0;
-
-	return -ENODEV;
-}
-
-		// dev->hard_start_xmit = aa3_emac_tx;
-
-static const struct net_device_ops aa3_emac_netdev_ops = {
-	.ndo_open 			= aa3_emac_open,
-	.ndo_stop 			= aa3_emac_stop,
-	.ndo_start_xmit 	= aa3_emac_tx,
-	.ndo_set_multicast_list = aa3_emac_set_multicast_list,
-	.ndo_tx_timeout 	= aa3_emac_tx_timeout,
-	.ndo_set_mac_address= aa3_emac_set_address,
-    .ndo_get_stats      = aa3_emac_stats,
-    // .ndo_do_ioctl    = aa3_emac_ioctl;
-	// .ndo_change_mtu 	= aa3_emac_change_mtu, FIXME:  not allowed
-};
-
-int __init
-aa3_module_init(void)
-{
-	int  vmacs = 0;	/* Number of vmac's detected */
-	struct net_device *dev;
-	struct aa3_emac_priv *priv;
-	int             err = -ENODEV;
-#ifdef ARCTANGENT_EMAC_SETUP
-	struct ifreq    ifr;
-	struct sockaddr_in *addr;
-#endif
-	/* Probe for all the vmac's */
-	while (aa3_emac_probe(vmacs) != -ENODEV)
-	{
-		vmacs++;
-
-		/*
-		 * Allocate a net device structure and the priv structure and
-		 * intitialize to generic ethernet values
-		 */
-		dev = alloc_etherdev(sizeof(struct aa3_emac_priv));
-
-		if (dev == NULL)
-			return -ENOMEM;
-
-		priv = netdev_priv(dev);
-		priv->reg_base_addr = (arc_emac_reg *) (VMAC_REG_BASEADDR | ((vmacs - 1) << 8));
-		/* link this device into the list of all detected devices */
-		priv->prev_dev = aa3_root_dev;
-		aa3_root_dev = dev;
-
-		/* populate our net_device structure */
-        dev->netdev_ops = &aa3_emac_netdev_ops;
-
-		dev->watchdog_timeo = TX_TIMEOUT;
-		/* FIXME :: no multicast support yet */
-		dev->flags &= ~IFF_MULTICAST;
-		dev->irq = VMAC_IRQ + (vmacs - 1);	/* set irq number here */
-#ifdef CONFIG_NET_POLL_CONTROLLER
-        dev->poll_controller = aa3_netpoll;
-#endif
-
-		/* Set EMAC hardware address */
-		aa3_emac_set_address(dev, &mac_addr);
-
-		spin_lock_init(&((struct aa3_emac_priv *)netdev_priv(dev))->lock);
-		//Amit 's hack
-			break;
-	}
-
-	printk_init("ARCTangent emac: Probed and found %u vmac's\n", vmacs);
-	if (vmacs == 0 )  {
+	if (!(id == 0x0005fd02 || id == 0x0007fd02)) {
 		printk_init("***ARC EMAC [NOT] detected, skipping EMAC init\n");
 		return -ENODEV;
 	}
 
-#ifdef ARCTANGENT_EMAC_SETUP
-	strcpy(ifr.ifr_name, "eth0");
-	addr = (struct sockaddr_in *) & ifr.ifr_addr;
-	addr->sin_family = AF_INET;
-	addr->sin_port = 0;
-	addr->sin_addr.s_addr = in_aton("192.168.100.222");
-	devinet_ioctl(SIOCSIFADDR, &ifr);
-	addr = (struct sockaddr_in *) & ifr.ifr_broadaddr;
-	addr->sin_family = AF_INET;
-	addr->sin_port = 0;
-	addr->sin_addr.s_addr = in_aton("192.168.100.255");
-	devinet_ioctl(SIOCSIFBRDADDR, &ifr);
-	addr = (struct sockaddr_in *) & ifr.ifr_netmask;
-	addr->sin_family = AF_INET;
-	addr->sin_port = 0;
-	addr->sin_addr.s_addr = in_aton("255.255.255.0");
-	devinet_ioctl(SIOCSIFNETMASK, &ifr);
-	ifr.ifr_flags = IFF_UP;
-	devinet_ioctl(SIOCSIFFLAGS, &ifr);
-	dbg_printk("ARCTangent emac: Interface is up\n");
-#endif
+	printk_init("ARCTangent EMAC detected\n");
+
+    /*
+     * Allocate a net device structure and the priv structure and
+     * intitialize to generic ethernet values
+     */
+    dev = alloc_etherdev(sizeof(struct arc_emac_priv));
+    if (dev == NULL)
+        return -ENOMEM;
+
+    SET_NETDEV_DEV(dev, &pdev->dev);
+	platform_set_drvdata(pdev, dev);
+
+    priv = netdev_priv(dev);
+	priv->reg_base_addr = reg;
+
+	/* populate our net_device structure */
+    dev->netdev_ops = &arc_emac_netdev_ops;
+
+	dev->watchdog_timeo = TX_TIMEOUT;
+	/* FIXME :: no multicast support yet */
+	dev->flags &= ~IFF_MULTICAST;
+	dev->irq = VMAC_IRQ;
+
+	/* Set EMAC hardware address */
+	arc_emac_set_address(dev, &mac_addr);
+
+	spin_lock_init(&priv->lock);
 
 #ifdef CONFIG_EMAC_NAPI
-    netif_napi_add(dev,&priv->napi,aa3_poll, NAPI_WEIGHT);
+    netif_napi_add(dev,&priv->napi,arc_emac_poll, NAPI_WEIGHT);
 #endif
 
 	err = register_netdev(dev);
 
-	if (err)
-		goto out;
-	return err;
-out:
-	free_netdev(dev);
-	return err;
+	if (err) {
+	    free_netdev(dev);
+    }
 
+	return err;
+}
+
+static int arc_emac_remove(struct platform_device *pdev)
+{
+	struct net_device *dev;
+
+    dev = platform_get_drvdata(pdev);
+
+    /* unregister the network device */
+    unregister_netdev(dev);
+    free_netdev(dev);
+
+    return 0;
+}
+
+static struct platform_device *arc_emac_dev;
+static struct platform_driver arc_emac_driver = {
+     .driver = {
+         .name = "arc_emac",
+     },
+     .probe = arc_emac_probe,
+     .remove = arc_emac_remove
+};
+
+int __init arc_emac_init(void)
+{
+    int err;
+
+    if ((err = platform_driver_register(&arc_emac_driver))) {
+        printk_init("emac driver registration failed\n");
+        return err;
+    }
+
+    if (!(arc_emac_dev = platform_device_alloc("arc_emac",0))) {
+        printk_init("emac dev alloc failed\n");
+        return -ENOMEM;
+    }
+
+    err = platform_device_add(arc_emac_dev);
+
+    return err;
 }
 
 void __exit
-aa3_module_cleanup(void)
-{
-	struct net_device *dev, *prev_dev;
-	dev = aa3_root_dev;
-	while (dev)
-	{
-		/* unregister the network device */
-		unregister_netdev(dev);
-		/* free up memory for private data */
-		prev_dev = ((struct aa3_emac_priv *)netdev_priv(dev))->prev_dev;
-		kfree(netdev_priv(dev));
-		dev = prev_dev;
-	}
-
-	return;
-
+arc_emac_exit(void) {
+	platform_device_unregister(arc_emac_dev);
+	platform_driver_unregister(&arc_emac_driver);
 }
 
+module_init(arc_emac_init);
+module_exit(arc_emac_exit);
 
 static int
 arc_thread(void *unused) //helps with interrupt mitigation.
@@ -1149,6 +1108,7 @@ arc_thread(void *unused) //helps with interrupt mitigation.
     return 0;
 }
 
+#ifdef EMAC_STATS
 static int read_proc(char *sysbuf, char **start,
 			    off_t off, int count, int *eof, void *data)
 {
@@ -1165,6 +1125,4 @@ static int read_proc(char *sysbuf, char **start,
 	len += sprintf(sysbuf + len, "EMAC UFLO count : %u\n", emac_uflo);
 	return (len);
 }
-
-module_init(aa3_module_init);
-module_exit(aa3_module_cleanup);
+#endif

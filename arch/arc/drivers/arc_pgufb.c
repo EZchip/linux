@@ -980,10 +980,10 @@ static int arc_pgu_probe (struct platform_device *dev)
 	fb_devdata.info.var = arc_pgu_var;
 	memcpy(&fb_devdata.default_yuv, &fb_devdata.yuv, sizeof(struct yuv_info));
 
+	platform_set_drvdata(dev, &fb_devdata);
 	if (register_framebuffer(&fb_devdata.info) < 0)
 		return -EINVAL;
 
-	platform_set_drvdata(dev, &fb_devdata);
 	arc_vsync_init(do_switch);
 	printk(KERN_INFO "fb%d: installed\n",MINOR(fb_devdata.info.node));
 

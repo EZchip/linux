@@ -177,14 +177,17 @@ void show_kernel_fault_diag(const char *str, struct pt_regs *regs,
  * The macro itself can be switched on/off at runtime using a toggle
  * @irq_inspect_on
  */
-extern void raw_printk5(const char *str, uint n1, uint n2, uint n3, uint n4);
-
 int irq_inspect_on = 1;   // toggle to switch on/off at runtime
 
 /* Function called from level ISR */
 void print_var_on_irq(int irq, int in_or_out, uint addr, uint val)
 {
+    extern void raw_printk5(const char *str, uint n1, uint n2,
+                                uint n3, uint n4);
+
+#ifdef CONFIG_ARC_UART_CONSOLE
     raw_printk5("IRQ \n", irq, in_or_out, addr, val);
+#endif
 }
 
 #ifdef CONFIG_DEBUG_FS
