@@ -205,21 +205,19 @@ asmlinkage int sys_ipc(uint call, int first, int second,
 
 int kernel_execve(const char *filename, char *const argv[], char *const envp[])
 {
-    return (int)(
-        ({
-            /* Although the arguments (order, number) to this function are
-             * same as sys call, we don't need to setup args in regs again.
-             * However in case mainline kernel changes the order of args to
-             * kernel_execve, that assumtion will break.
-             * So to be safe, let gcc know the args for sys call.
-             * If they match no extra code will be generated
-             */
-            register int arg1  = (int)filename;
-            register int arg2 asm ("r1") = (int)argv;
-            register int arg3 asm ("r2") = (int)envp;
-            register int ret asm ("r0");
+    /* Although the arguments (order, number) to this function are
+     * same as sys call, we don't need to setup args in regs again.
+     * However in case mainline kernel changes the order of args to
+     * kernel_execve, that assumtion will break.
+     * So to be safe, let gcc know the args for sys call.
+     * If they match no extra code will be generated
+     */
+    register int arg1  = (int)filename;
+    register int arg2 asm ("r1") = (int)argv;
+    register int arg3 asm ("r2") = (int)envp;
+    register int ret asm ("r0");
 
-            __asm__ __volatile__(
+    __asm__ __volatile__(
                  "mov   r8, %0\n\t"
                  "trap0 \n\t"
                  "nop    \n\t"
@@ -228,8 +226,6 @@ int kernel_execve(const char *filename, char *const argv[], char *const envp[])
                  :"i"(__NR_execve), "r"(arg1), "r"(arg2), "r"(arg3)
                  :"r0","memory");
 
-            ret;
-        })
-    );
+    return ret;
 }
 EXPORT_SYMBOL(kernel_execve);
