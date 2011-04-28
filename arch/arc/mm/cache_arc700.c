@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: Apr 2011
+ *  -Now that MMU can support larger pg sz (16K), the determiniation of
+ *   aliasing shd not be based on assumption of 8k pg
+ *
  * vineetg: Mar 2011
  *  -optimised version of flush_icache_range( ) for making I/D coherent
  *   when vaddr is available
@@ -86,19 +90,15 @@
  * Ashwin Chaugule <ashwin.chaugule@codito.com>
  */
 
-#include <linux/mm.h>
-#include <linux/bootmem.h>
-#include <linux/interrupt.h>
 #include <linux/module.h>
-#include <asm/page.h>
 #include <asm/cache.h>
 #include <asm/cacheflush.h>
 #include <asm/mmu_context.h>
 
 #ifdef CONFIG_ARC700_USE_ICACHE
 static void __arc_icache_inv_lines_no_alias(unsigned long, int);
-static void __arc_icache_inv_lines_32k(unsigned long, int);
-static void __arc_icache_inv_lines_64k(unsigned long, int);
+static void __arc_icache_inv_lines_2_alias(unsigned long, int);
+static void __arc_icache_inv_lines_4_alias(unsigned long, int);
 
 /* Holds the ptr to flush routine, dependign on size due to aliasing issues */
 static void (* ___flush_icache_rtn)(unsigned long, int);
@@ -182,6 +182,7 @@ void __init arc_cache_init(void)
 {
     struct cpuinfo_arc_cache *dc, *ic;
     unsigned int temp;
+    int way_pg_ratio;
 
     ARC_shmlba = max(ARC_shmlba, (unsigned int)PAGE_SIZE);
 
@@ -198,25 +199,30 @@ void __init arc_cache_init(void)
         panic("Cache H/W doesn't match kernel Config");
     }
 
-    switch(ic->sz) {
-    case 8 * 1024:
-    case 16 * 1024:
+    /* if Cache way size is <= page size then no aliasing exhibited
+     * otherwise ratio determines num of aliases.
+     * e.g. 32K I$, 2 way set assoc, 8k pg size
+     *       way-sz = 32k/2 = 16k
+     *       way-pg-ratio = 16k/8k = 2, so 2 aliases possible
+     *       (meaning 1 line could be in 2 possible locations).
+     */
+    way_pg_ratio = ic->sz/ICACHE_COMPILE_WAY_NUM/PAGE_SIZE;
+    switch(way_pg_ratio) {
+    case 0:
+    case 1:
         ___flush_icache_rtn = __arc_icache_inv_lines_no_alias;
         break;
-    case 32 * 1024:
-        ___flush_icache_rtn = __arc_icache_inv_lines_32k;
+    case 2:
+        ___flush_icache_rtn = __arc_icache_inv_lines_2_alias;
         break;
-    case 64 * 1024:
-        ___flush_icache_rtn = __arc_icache_inv_lines_64k;
+    case 4:
+        ___flush_icache_rtn = __arc_icache_inv_lines_4_alias;
         break;
     default:
         panic("Unsupported I-Cache Sz\n");
     }
 
-    /* check whether Icache way size greater than PAGE_SIZE as it
-     * cause Aliasing Issues and requires special handling
-     */
-    if ( (ic->sz / ICACHE_COMPILE_WAY_NUM) > PAGE_SIZE) {
+    if (way_pg_ratio > 1) {
         ic->has_aliasing = 1;
         ARC_shmlba = max(ARC_shmlba, ic->sz / ICACHE_COMPILE_WAY_NUM);
     }
@@ -247,6 +253,7 @@ void __init arc_cache_init(void)
 
     /* check for D-Cache aliasing */
     if ((dc->sz / DCACHE_COMPILE_WAY_NUM) > PAGE_SIZE) {
+        panic("D$ aliasing not handled right now\n");
         dc->has_aliasing = 1;
         ARC_shmlba = max(ARC_shmlba, dc->sz / DCACHE_COMPILE_WAY_NUM);
     }
@@ -529,7 +536,7 @@ static void __arc_icache_inv_lines_no_alias(unsigned long start, int num_lines)
     }
 }
 
-static void __arc_icache_inv_lines_32k(unsigned long start, int num_lines)
+static void __arc_icache_inv_lines_2_alias(unsigned long start, int num_lines)
 {
     while (num_lines-- > 0) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
@@ -538,7 +545,7 @@ static void __arc_icache_inv_lines_32k(unsigned long start, int num_lines)
     }
 }
 
-static void __arc_icache_inv_lines_64k(unsigned long start, int num_lines)
+static void __arc_icache_inv_lines_4_alias(unsigned long start, int num_lines)
 {
     while (num_lines-- > 0) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
