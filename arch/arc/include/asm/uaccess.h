@@ -192,7 +192,7 @@ do {                                                    \
     __asm__ __volatile__(                   \
     "1: "op"    %1,[%2]\n"                  \
     "   mov %0, 0x0\n"                      \
-    "2: nop\n"                              \
+    "2: ;nop\n"                              \
     "   .section .fixup, \"ax\"\n"          \
     "   .align 4\n"                         \
     "3: mov %0, %3\n"                       \
@@ -210,7 +210,7 @@ do {                                                    \
     "1: ld  %1,[%2]\n"                      \
     "2: ld  %R1,[%2, 4]\n"                  \
     "   mov %0, 0x0\n"                      \
-    "3: nop\n"                              \
+    "3: ;nop\n"                              \
     "   .section .fixup, \"ax\"\n"          \
     "   .align 4\n"                         \
     "4: mov %0, %3\n"                       \
@@ -242,7 +242,7 @@ do {                                                    \
     __asm__ __volatile__(                   \
     "1: "op"    %1,[%2]\n"                  \
     "   mov %0, 0x0\n"                      \
-    "2: nop\n"                              \
+    "2: ;nop\n"                              \
     "   .section .fixup, \"ax\"\n"          \
     "   .align 4\n"                         \
     "3: mov %0, %3\n"                       \
@@ -260,7 +260,7 @@ do {                                                    \
     "1: st  %1,[%2]\n"                  \
     "2: st  %R1,[%2, 4]\n"              \
     "   mov %0, 0x0\n"                  \
-    "3: nop\n"                          \
+    "3: ;nop\n"                          \
     "   .section .fixup, \"ax\"\n"      \
     "   .align 4\n"                     \
     "4: mov %0, %3\n"                   \
@@ -426,7 +426,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "       st.ab   %5, [%1, 4]             \n"
                 "       st.ab   %6, [%1, 4]             \n"
                 "       sub     %0,%0,16                \n"
-                "3:     nop                             \n"
+                "3:     ;nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
                 "4:     j   3b                          \n"
@@ -454,7 +454,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "       st.ab   %3, [%1,4]              \n"
                 "       st.ab   %4, [%1,4]              \n"
                 "       sub.f   %0,%0,8                 \n"
-                "31:     nop                            \n"
+                "31:    ;nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
                 "4:     j   31b                         \n"
@@ -477,7 +477,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "16:    ld.ab   %3, [%2,4]              \n"
                 "       st.ab   %3, [%1,4]              \n"
                 "       sub.f   %0,%0,4                 \n"
-                "32:     nop                            \n"
+                "32:     ;nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
                 "4:     j   32b                         \n"
@@ -499,7 +499,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "17:    ldw.ab   %3, [%2,2]              \n"
                 "       stw.ab   %3, [%1,2]              \n"
                 "       sub.f   %0,%0,2                 \n"
-                "33:     nop                            \n"
+                "33:     ;nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
                 "4:     j   33b                         \n"
@@ -519,7 +519,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
                 "18:    ldb.ab   %3, [%2,2]             \n"
                 "       stb.ab   %3, [%1,2]             \n"
                 "       sub.f   %0,%0,1                 \n"
-                "34:     nop                            \n"
+                "34:    ; nop                            \n"
                 "   .section .fixup, \"ax\"             \n"
                 "   .align 4                            \n"
                 "4:     j   34b                         \n"
@@ -570,7 +570,7 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
         "18:    ldb.ab  %5, [%2,1]              \n" // just one byte left
         "       stb.ab  %5, [%1,1]              \n"
         "       sub.f   %0,%0,1                 \n"
-        "34:    nop                             \n"
+        "34:    ;nop                             \n"
         "   .section .fixup, \"ax\"             \n"
         "   .align 4                            \n"
         "4: j   34b                             \n"
@@ -790,7 +790,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "12:  st.ab %5, [%1, 4]         \n"
                 "13:  st.ab %6, [%1, 4]         \n"
                 "     sub   %0, %0, 16          \n"
-                "3:   nop                       \n"
+                "3:   ;nop                      \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
                 "4: j   3b                      \n"
@@ -819,7 +819,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "14:  st.ab   %3, [%1,4]        \n"
                 "15:  st.ab   %4, [%1,4]        \n"
                 "     sub.f   %0, %0, 8         \n"
-                "31:  nop                       \n"
+                "31:  ;nop                      \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
                 "4: j   31b                     \n"
@@ -842,7 +842,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "     ld.ab   %3, [%2,4]        \n"
                 "16:  st.ab   %3, [%1,4]        \n"
                 "     sub.f   %0, %0, 4         \n"
-                "32:  nop                       \n"
+                "32:  ;nop                      \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
                 "4: j   32b                     \n"
@@ -864,7 +864,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "     ldw.ab    %3, [%2,2]      \n"
                 "17:  stw.ab    %3, [%1,2]      \n"
                 "     sub.f %0, %0, 2           \n"
-                "33:  nop                       \n"
+                "33:  ;nop                       \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
                 "4: j   33b                     \n"
@@ -884,7 +884,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
                 "     ldb.ab  %3, [%2,1]      \n" // just one byte left
                 "18:  stb.ab  %3, [%1,1]        \n"
                 "     sub.f %0, %0, 1           \n"
-                "34:  nop                       \n"
+                "34:  ;nop                       \n"
                 "   .section .fixup, \"ax\"     \n"
                 "   .align 4                    \n"
                 "4: j   34b                     \n"
@@ -934,7 +934,7 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
         "     ldb.ab    %5, [%2,1]      \n" // just one byte left
         "18:  stb.ab  %5, [%1,1]        \n"
         "     sub.f %0, %0, 1           \n"
-        "34:  nop                       \n"
+        "34:  ;nop                       \n"
         "   .section .fixup, \"ax\"     \n"
         "   .align 4                    \n"
         "4: j   34b                     \n"
@@ -1094,7 +1094,7 @@ __do_strncpy_from_user(char *dst, const char *src, long count)
         "   breq.d    %3, 0, 2f           \n"
         "   stb.ab  %3, [%1, 1]         \n"
         "2: sub %0, %6, %4              \n"
-        "3: nop                         \n"
+        "3: ;nop                         \n"
         "   .section .fixup, \"ax\"     \n"
         "   .align 4                    \n"
         "4: mov %0, %5                  \n"
@@ -1149,7 +1149,7 @@ strnlen_user(const char *s, long n)
         "   bnz 1b                      \n"
         "   sub %2, %2, 1               \n"
         "2: sub %0, %1, %2              \n"
-        "3: nop                         \n"
+        "3: ;nop                         \n"
         "   .section .fixup, \"ax\"     \n"
         "   .align 4                    \n"
         "4: mov %0, 0                   \n"
