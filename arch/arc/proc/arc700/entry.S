@@ -777,7 +777,7 @@ not_exception:
     st      r9, [r10, THREAD_INFO_PREEMPT_COUNT]
 
 149:
-    TAKE_SNAP_ASM r8, r9, SNAP_INTR_OUT2
+    TAKE_SNAP_C_FROM_ASM SNAP_INTR_OUT2
     ;return from level 2
     RESTORE_ALL_INT2
 debug_marker_l2:
@@ -793,7 +793,7 @@ not_level2_interrupt:
     ;DBG_INSPECT_ON_IRQ_OUT  my_var
 
     ;return from level 1
-    TAKE_SNAP_ASM r8, r9, SNAP_INTR_OUT
+    TAKE_SNAP_C_FROM_ASM SNAP_INTR_OUT
 
     RESTORE_ALL_INT1
 debug_marker_l1:
@@ -1297,6 +1297,15 @@ __syscall_start:
 /* 325 */        .long   SYMBOL_NAME(sys_fallocate)
         .long   SYMBOL_NAME(sys_timerfd_settime)
         .long   SYMBOL_NAME(sys_timerfd_gettime)
+        .long   SYMBOL_NAME(sys_signalfd4)
+        .long   SYMBOL_NAME(sys_eventfd2)
+/* 330 */        .long   SYMBOL_NAME(sys_epoll_create1)
+        .long   SYMBOL_NAME(sys_dup3)
+        .long   SYMBOL_NAME(sys_pipe2)
+        .long   SYMBOL_NAME(sys_inotify_init1)
+        .long   SYMBOL_NAME(sys_preadv)
+/* 335 */        .long   SYMBOL_NAME(sys_pwritev)
+
 
 
 __syscall_end:

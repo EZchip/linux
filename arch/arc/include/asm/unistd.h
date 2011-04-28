@@ -364,9 +364,17 @@
 #define __NR_fallocate          325
 #define __NR_timerfd_settime    326
 #define __NR_timerfd_gettime    327
+#define __NR_signalfd4          328
+#define __NR_eventfd2           329
+#define __NR_epoll_create1      330
+#define __NR_dup3               331
+#define __NR_pipe2              332
+#define __NR_inotify_init1       333
+#define __NR_preadv             334
+#define __NR_pwritev            335
 #endif	/* ! __ASSEMBLY__ */
 
-#define NR_syscalls             327
+#define NR_syscalls             335
 
 
 

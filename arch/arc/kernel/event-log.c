@@ -93,7 +93,7 @@ void take_snap2(int event)
         local_irq_save(flags);
 
     timeline_log[timeline_ctr].time = read_new_aux_reg(ARC_REG_TIMER1_CNT);
-    timeline_log[timeline_ctr].task = current->pid;
+    timeline_log[timeline_ctr].task = current_thread_info()->task->pid;
     timeline_log[timeline_ctr].event = event;
     timeline_log[timeline_ctr].extra2 = stat32;
 

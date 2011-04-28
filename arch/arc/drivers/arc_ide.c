@@ -620,6 +620,21 @@ int arc_ide_dma_init(ide_hwif_t *hwif, const struct ide_port_info *d)
     return 0;
 }
 
+/*  Hooking arc_ide_ack_irq to the hwif->ack_intr will work but results in two
+    ISR invocations for each hardware interrupt. IDE Controller Interrupt status
+    is raised until the status is read on the drive. In the generic ide_intr, it
+    invokes hwif->ack_intr in the beginning which will not clear the interrupt
+    because the status on the drive is read later resulting another ISR call. To
+    avoid this we are overwriting the generic ide_read_status.
+*/
+
+u8 arc_ide_read_status(struct hwif_s *hwif)
+{
+    u8 ret = ide_read_status(hwif);
+    arc_ide_ack_irq(NULL);
+    return ret;
+}
+
 static const struct ide_dma_ops arc_ide_dma_ops = {
     .dma_host_set     = arc_ide_dma_host_set,
     .dma_setup        = arc_ide_dma_setup,
@@ -637,8 +652,25 @@ static const struct ide_port_ops arc_ide_port_ops =
     .set_dma_mode   = arc_ide_set_dma_mode,
 };
 
+
+const struct ide_tp_ops arc_ide_tp_ops = {
+    .exec_command = ide_exec_command,
+    .read_status = arc_ide_read_status,
+    .read_altstatus = ide_read_altstatus,
+    .write_devctl = ide_write_devctl,
+
+    .dev_select = ide_dev_select,
+    .tf_load = ide_tf_load,
+    .tf_read = ide_tf_read,
+
+    .input_data = ide_input_data,
+    .output_data = ide_output_data,
+};
+
+
 static struct ide_port_info arc_ide_port_info = {
     .port_ops = &arc_ide_port_ops,
+    .tp_ops = &arc_ide_tp_ops,
 #ifdef CONFIG_ARC_BLK_DEV_IDEDMA
     .init_dma = arc_ide_dma_init,
     .dma_ops  = &arc_ide_dma_ops,
@@ -705,7 +737,7 @@ int __init arc_ide_init(void)
     arc_ide_reset_controller(0);
 
     arc_ide_setup_ports(&hw, IDE_CONTROLLER_BASE + DRIVE_REGISTER_OFFSET,
-                   IDE_CONTROLLER_BASE + DRIVE_STATCTRL_OFFSET, IDE_IRQ, arc_ide_ack_irq);
+                   IDE_CONTROLLER_BASE + DRIVE_STATCTRL_OFFSET, IDE_IRQ, NULL);
 
     // Clear the Interrupt
     arc_ide_ack_irq(NULL);
