@@ -180,15 +180,15 @@ int __init read_arc_build_cfg_regs(void)
 
 char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
 {
-    int i, num=0;
-    struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
-
     cpuinfo_data_t cpu_fam_nm [] = {
         { 0x10, "ARCTangent A5", 0x1F },
         { 0x20, "ARC 600", 0x2F },
         { 0x30, "ARC 700", 0x3F },
         { 0x0, NULL }
     };
+    int i, num=0;
+    struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
+
 
     for ( i = 0; cpu_fam_nm[i].id != 0; i++) {
         if ( (p_cpu->cpu.family >=  cpu_fam_nm[i].id ) &&
@@ -222,24 +222,25 @@ char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
 
 char * arc_extn_mumbojumbo(int cpu_id, char *buf)
 {
+    const cpuinfo_data_t mul_type_nm [] = {
+        { 0x0, "Not Present" },
+        { 0x1, "32x32 with SPECIAL Result Reg" },
+        { 0x2, "32x32 with ANY Result Reg" }
+    };
+
+    const cpuinfo_data_t mac_mul_nm[] = {
+        { 0x0, "Not Present" },
+        { 0x1, "Not Present" },
+        { 0x2, "Dual 16 x 16" },
+        { 0x3, "Not Present" },
+        { 0x4, "32 x 16" },
+        { 0x5, "Not Present" },
+        { 0x6, "Dual 16 x 16 and 32 x 16" }
+    };
+
     int num=0;
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
 
-const cpuinfo_data_t mul_type_nm [] = {
-    { 0x0, "Not Present" },
-    { 0x1, "32x32 with SPECIAL Result Reg" },
-    { 0x2, "32x32 with ANY Result Reg" }
-};
-
-const cpuinfo_data_t mac_mul_nm[] = {
-    { 0x0, "Not Present" },
-    { 0x1, "Not Present" },
-    { 0x2, "Dual 16 x 16" },
-    { 0x3, "Not Present" },
-    { 0x4, "32 x 16" },
-    { 0x5, "Not Present" },
-    { 0x6, "Dual 16 x 16 and 32 x 16" }
-};
 
 #define IS_AVAIL1(var)   ((var)? "Present" :"NA")
 
@@ -251,17 +252,13 @@ const cpuinfo_data_t mac_mul_nm[] = {
     num += sprintf(buf+num, "   MAC Multiplier: %s\n",
                         mac_mul_nm[p_cpu->extn_mac_mul.type].str);
 
-#ifdef CONFIG_ARCH_ARC_DCCM
     num += sprintf(buf+num, "DCCM: %s,", IS_AVAIL1(p_cpu->extn.dccm));
     if (p_cpu->extn.dccm)
         num += sprintf(buf+num, " (%x)\n", p_cpu->extn.dccm);
-#endif
 
-#ifdef CONFIG_ARCH_ARC_ICCM
     num += sprintf(buf+num, "   ICCM: %s\n", IS_AVAIL1(p_cpu->extn.iccm));
     if (p_cpu->extn.iccm)
         num += sprintf(buf+num, " (%x)\n", p_cpu->extn.iccm);
-#endif
 
     num += sprintf(buf+num, "CRC  Instrn: %s,", IS_AVAIL1(p_cpu->extn.crc));
     num += sprintf(buf+num, "   SWAP Instrn: %s", IS_AVAIL1(p_cpu->extn.swap));
@@ -546,32 +543,32 @@ void __init setup_arch(char **cmdline_p)
 
     _current_task[0] = &init_task;
 
-	/******* Setup bootmem allocator *************/
+    /******* Setup bootmem allocator *************/
 
 #define TO_PFN(addr) ((addr) >> PAGE_SHIFT)
 
-	/* Make sure that "end_kernel" is page aligned in linker script
-	 * so that it points to first free page in system
-	 * Also being a linker script var, we need to do &end_kernel which
-	 * doesn't work with >> operator, hence helper "kernel_end_addr"
-	 */
-	kernel_end_addr = (unsigned long) &end_kernel;
+    /* Make sure that "end_kernel" is page aligned in linker script
+     * so that it points to first free page in system
+     * Also being a linker script var, we need to do &end_kernel which
+     * doesn't work with >> operator, hence helper "kernel_end_addr"
+     */
+    kernel_end_addr = (unsigned long) &end_kernel;
     first_free_pfn = TO_PFN(kernel_end_addr);
 
     min_low_pfn = TO_PFN(PAGE_OFFSET);
     max_low_pfn = max_pfn = TO_PFN(end_mem);   // for us no HIGH Mem
     num_physpages = max_low_pfn - min_low_pfn;
 
-	bootmap_size = init_bootmem_node(NODE_DATA(0),
-					first_free_pfn, min_low_pfn, max_low_pfn);
+    bootmap_size = init_bootmem_node(NODE_DATA(0),
+                    first_free_pfn, min_low_pfn, max_low_pfn);
 
-	free_bootmem(kernel_end_addr,  end_mem - kernel_end_addr);
-	reserve_bootmem(kernel_end_addr, bootmap_size, BOOTMEM_DEFAULT);
+    free_bootmem(kernel_end_addr,  end_mem - kernel_end_addr);
+    reserve_bootmem(kernel_end_addr, bootmap_size, BOOTMEM_DEFAULT);
 
-	/* If no initramfs provided to kernel, and no NFS root, we fall back to
-	 * /dev/hda2 as ROOT device, assuming it has busybox and other
-	 * userland stuff
-	 */
+    /* If no initramfs provided to kernel, and no NFS root, we fall back to
+     * /dev/hda2 as ROOT device, assuming it has busybox and other
+     * userland stuff
+     */
 #if !defined(CONFIG_BLK_DEV_INITRD) && !defined(CONFIG_ROOT_NFS)
     ROOT_DEV = Root_HDA2;
 #endif
