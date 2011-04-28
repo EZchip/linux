@@ -3,6 +3,8 @@
  *
  * vineetg: Nov 2009
  *  -Unified NAPI and Non-NAPI Code.
+ *  -API changes since 2.6.26 for making NAPI independent of netdevice
+ *  -Cutting a few checks in main rx poll routine
  *
  * vineetg: Nov 2009
  *  -Rewrote the driver register access macros so that multiple accesses
@@ -371,7 +373,7 @@ static int aa3_poll (struct napi_struct *napi, int budget)
 
         if(work_done < budget)
         {
-            netif_rx_complete(dev, napi);
+            napi_complete(napi);
             EMAC_REG(ap)->enable |= RXINT_MASK;
         }
 
@@ -400,7 +402,7 @@ static int aa3_clean(struct net_device *dev
         if ((info & OWN_MASK) == FOR_CPU)
         {
             /* Packet fits in one BD (Non Fragmented) */
-			if ((info & FRST_MASK) && (info &LAST_MASK))
+			if ((info & (FRST_MASK|LAST_MASK)) == (FRST_MASK|LAST_MASK))
 			{
 				len = info & LEN_MASK;
 				ap->stats.rx_packets++;
@@ -421,6 +423,7 @@ static int aa3_clean(struct net_device *dev
 						arc_write_uncached_32(&ap->rxbd[i].info,
 							      (FOR_EMAC| (dev->mtu + VMAC_BUFFER_PAD)));
 						ap->stats.rx_dropped++;
+                        continue;
 					}
                     else {
                         // Not fatal, purely for statistical purposes
@@ -428,9 +431,7 @@ static int aa3_clean(struct net_device *dev
 					}
 				}
 
-                if (skbnew)
-                {
-                /* Prepare the BD for next cycle */
+                /* Actually preparing the BD for next cycle */
 
 				skb_reserve(skbnew, 2); /* IP hdr align, eth is 14 bytes */
 				ap->rx_skbuff[i] = skbnew;
@@ -459,7 +460,6 @@ static int aa3_clean(struct net_device *dev
 #else
                 netif_rx(skb);
 #endif
-                }
             }
             else {
 				printk(KERN_INFO "Rx chained, Packet bigger than device MTU\n");
@@ -495,10 +495,10 @@ static irqreturn_t aa3_emac_intr (int irq, void *dev_instance)
 	{
 
 #ifdef CONFIG_EMAC_NAPI
-        if(likely(netif_rx_schedule_prep(dev, &ap->napi)))
+        if(likely(napi_schedule_prep(&ap->napi)))
         {
             EMAC_REG(ap)->enable &= ~RXINT_MASK; // no more interrupts.
-            __netif_rx_schedule(dev,&ap->napi);
+            __napi_schedule(&ap->napi);
         }
 #else
         aa3_clean(dev);
