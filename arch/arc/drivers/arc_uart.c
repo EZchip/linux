@@ -64,29 +64,30 @@ typedef volatile struct {
 #define RXFERR  0x01    // Frame Error: Stop Bit not detected
 #define RXOERR  0x02    // OverFlow Err: Char recv but RXFULL still set
 
-/* Uart bit fiddling helpers */
+/* Uart bit fiddling helpers: lowest level */
 #define RBASE(uart)  ((arc_uart_registers *)(uart->port.membase))
+#define UART_REG_SET(u, reg, val) (RBASE(u)->reg = (val))
+#define UART_REG_OR(u, reg, val)  (RBASE(u)->reg |= (val))
+#define UART_REG_CLR(u, reg, val) (RBASE(u)->reg &= (~(val)))
+#define UART_REG_GET(u, reg)      (RBASE(u)->reg)
 
-#define UART_RSET_STATUS(uart, value) RBASE(uart)->status |= (value)
-#define UART_RCLR_STATUS(uart, value) RBASE(uart)->status &= (~(value))
-#define UART_RGET_STATUS(uart) RBASE(uart)->status
+/* Uart bit fiddling helpers: API level */
+#define UART_SET_DATA(uart, val)   UART_REG_SET(uart,data,val)
+#define UART_GET_DATA(uart)        UART_REG_GET(uart,data)
 
-#define UART_ALL_IRQ_DISABLE(uart) UART_RCLR_STATUS(uart, RXIENB|TXIENB)
-#define UART_ALL_IRQ_ENABLE(uart)  UART_RSET_STATUS(uart, RXIENB|TXIENB)
+#define UART_SET_BAUDH(uart, val)  UART_REG_SET(uart,baudh,val)
+#define UART_SET_BAUDL(uart, val)  UART_REG_SET(uart,baudl,val)
 
-#define UART_RX_IRQ_DISABLE(uart) UART_RCLR_STATUS(uart, RXIENB)
-#define UART_RX_IRQ_ENABLE(uart)  UART_RSET_STATUS(uart, RXIENB)
+#define UART_CLR_STATUS(uart, val) UART_REG_CLR(uart,status,val)
+#define UART_GET_STATUS(uart)      UART_REG_GET(uart,status)
 
-#define UART_TX_IRQ_DISABLE(uart) UART_RCLR_STATUS(uart, TXIENB)
-#define UART_TX_IRQ_ENABLE(uart)  UART_RSET_STATUS(uart, TXIENB)
+#define UART_ALL_IRQ_DISABLE(uart) UART_REG_CLR(uart,status,RXIENB|TXIENB)
+#define UART_RX_IRQ_DISABLE(uart)  UART_REG_CLR(uart,status,RXIENB)
+#define UART_TX_IRQ_DISABLE(uart)  UART_REG_CLR(uart,status,TXIENB)
 
-
-#define UART_RSET_DATA(uart, value) RBASE(uart)->data = (value)
-#define UART_RGET_DATA(uart) RBASE(uart)->data
-
-
-#define UART_RSET_BAUDH(uart, value) RBASE(uart)->baudh = (value)
-#define UART_RSET_BAUDL(uart, value) RBASE(uart)->baudl = (value)
+#define UART_ALL_IRQ_ENABLE(uart)  UART_REG_OR(uart,status,RXIENB|TXIENB)
+#define UART_RX_IRQ_ENABLE(uart)   UART_REG_OR(uart,status,RXIENB)
+#define UART_TX_IRQ_ENABLE(uart)   UART_REG_OR(uart,status,TXIENB)
 
 /* Board specific helpers */
 
@@ -184,7 +185,7 @@ static void arc_serial_stop_tx(struct uart_port *port)
 {
 	struct arc_serial_port *uart = (struct arc_serial_port *)port;
 
-    while (!(UART_RGET_STATUS(uart) & TXEMPTY))
+    while (!(UART_GET_STATUS(uart) & TXEMPTY))
         cpu_relax();
 
     UART_TX_IRQ_DISABLE(uart);
@@ -198,7 +199,7 @@ static unsigned int arc_serial_tx_empty(struct uart_port *port)
 	struct arc_serial_port *uart = (struct arc_serial_port *)port;
     unsigned int stat;
 
-    stat = UART_RGET_STATUS(uart);
+    stat = UART_GET_STATUS(uart);
     if (stat & TXEMPTY )
         return TIOCSER_TEMT;
     else
@@ -222,7 +223,7 @@ static void arc_serial_tx_chars(struct arc_serial_port *uart)
     unsigned char ch;
 
 	if (unlikely(uart->port.x_char)) {
-		UART_RSET_DATA(uart, uart->port.x_char);
+		UART_SET_DATA(uart, uart->port.x_char);
 		uart->port.icount.tx++;
 		uart->port.x_char = 0;
         sent = 1;
@@ -231,9 +232,9 @@ static void arc_serial_tx_chars(struct arc_serial_port *uart)
         ch = xmit->buf[xmit->tail];
 		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
 		uart->port.icount.tx++;
-        while( !(UART_RGET_STATUS(uart) & TXEMPTY))
+        while( !(UART_GET_STATUS(uart) & TXEMPTY))
             arc_cnt++;
-		UART_RSET_DATA(uart, ch);
+		UART_SET_DATA(uart, ch);
         sent = 1;
 	}
 
@@ -275,22 +276,22 @@ static void arc_serial_rx_chars(struct arc_serial_port *uart)
     *  before RX-EMPTY=0, implies some sort of buffering going on in the
     *  controller, which is indeed the Rx-FIFO.
     */
-  while( !( (status = UART_RGET_STATUS(uart)) & RXEMPTY)) {
+  while( !( (status = UART_GET_STATUS(uart)) & RXEMPTY)) {
 
-	ch = UART_RGET_DATA(uart);
+	ch = UART_GET_DATA(uart);
 	uart->port.icount.rx++;
 
     if (unlikely(status & (RXOERR|RXFERR))) {
 	    if (status & RXOERR) {
 		    uart->port.icount.overrun++;
             flg = TTY_OVERRUN;
-            UART_RCLR_STATUS(uart, RXOERR);
+            UART_CLR_STATUS(uart, RXOERR);
         }
 
 	    if (status & RXFERR) {
 		    uart->port.icount.frame++;
 		    flg = TTY_FRAME;
-            UART_RCLR_STATUS(uart, RXFERR);
+            UART_CLR_STATUS(uart, RXFERR);
         }
     }
 	else
@@ -339,7 +340,7 @@ static irqreturn_t arc_serial_isr(int irq, void *dev_id)
 	struct arc_serial_port *uart = dev_id;
     unsigned int status;
 
-    status = UART_RGET_STATUS(uart);
+    status = UART_GET_STATUS(uart);
 
     /* Single IRQ for both Rx (data available) Tx (room available) Interrupt
      * notifications from the UART Controller.
@@ -468,8 +469,8 @@ arc_serial_set_termios(struct uart_port *port, struct ktermios *termios,
 
 	UART_ALL_IRQ_DISABLE(uart);
 
-    UART_RSET_BAUDL(uart, uartl);
-    UART_RSET_BAUDH(uart, uarth);
+    UART_SET_BAUDL(uart, uartl);
+    UART_SET_BAUDH(uart, uarth);
 
 	UART_RX_IRQ_ENABLE(uart);
 
@@ -526,11 +527,11 @@ static void arc_serial_config_port(struct uart_port *port, int flags)
 #ifdef CONFIG_CONSOLE_POLL
 static void arc_serial_poll_put_char(struct uart_port *port, unsigned char chr)
 {
-    while( !( (status = UART_RGET_STATUS(uart)) & TXEMPTY)) {
+    while( !( (status = UART_GET_STATUS(uart)) & TXEMPTY)) {
 		cpu_relax();
     }
 
-	UART_RSET_DATA(uart, chr);
+	UART_SET_DATA(uart, chr);
 }
 
 static int arc_serial_poll_get_char(struct uart_port *port)
@@ -538,10 +539,10 @@ static int arc_serial_poll_get_char(struct uart_port *port)
 	struct arc_serial_port *uart = (struct arc_serial_port *)port;
 	unsigned char chr;
 
-    while( !( (status = UART_RGET_STATUS(uart)) & RXEMPTY)) {
+    while( !( (status = UART_GET_STATUS(uart)) & RXEMPTY)) {
 		cpu_relax();
 
-	chr = UART_RGET_DATA(uart);
+	chr = UART_GET_DATA(uart);
 	return chr;
 }
 #endif
@@ -665,9 +666,9 @@ static void arc_serial_console_putchar(struct uart_port *port, int ch)
 {
 	struct arc_serial_port *uart = (struct arc_serial_port *)port;
 
-    while (!(UART_RGET_STATUS(uart) & TXEMPTY));
+    while (!(UART_GET_STATUS(uart) & TXEMPTY));
 
-	UART_RSET_DATA(uart, ch);
+	UART_SET_DATA(uart, ch);
 }
 
 /*
@@ -711,11 +712,11 @@ static __init void early_serial_putc(struct uart_port *port, int ch)
 	unsigned timeout = 0xffff;
 	struct arc_serial_port *uart = (struct arc_serial_port *)port;
 
-    while( !(UART_RGET_STATUS(uart) & TXEMPTY) &&
+    while( !(UART_GET_STATUS(uart) & TXEMPTY) &&
 	        --timeout)
 		cpu_relax();
 
-	UART_RSET_DATA(uart, ch);
+	UART_SET_DATA(uart, ch);
 }
 
 static __init void early_serial_write(struct console *con, const char *s,
