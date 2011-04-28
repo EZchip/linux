@@ -49,17 +49,21 @@ SECTIONS
         __tagtable_begin = .;
             *(.taglist.init)
         __tagtable_end = .;
-#ifdef CONFIG_BLK_DEV_INITRD
-        . = ALIGN(PAGE_SIZE);
-        __initramfs_start = .;
-            *(.init.ramfs)
-        __initramfs_end = .;
-#endif
+
         . = ALIGN(PAGE_SIZE);
         __per_cpu_start = .;
             *(.data.percpu)
         __per_cpu_end = .;
     }
+
+#ifdef CONFIG_BLK_DEV_INITRD
+    .init.ramfs : {
+        . = ALIGN(PAGE_SIZE);
+        __initramfs_start = .;
+            *(.init.ramfs)
+        __initramfs_end = .;
+    }
+#endif
 
 	.init.rodata : {
 		*(.init.rodata)
