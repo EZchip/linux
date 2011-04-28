@@ -291,9 +291,9 @@
      *  dont have since rest of the reg file has been restored to
      *  PRE-INTR/EXCP values
      */
-    st.a    sp, [sp, -4]
+    b.d 77f
 
-    b 77f
+    st.a    sp, [sp, -4]
 
 88: /*------Intr/Ecxp happened in user mode, "switch" stack ------ */
 
@@ -305,14 +305,7 @@
      *  -safekeep USER R25 in task->thread_struct->user_r25
      *  -load R25 with current task ptr
      */
-
-    // Can't use this Single instruction becoz offset > 512
-    //st      r25, [r9, TASK_THREAD + THREAD_USER_R25]
-
-    add     r9, r9, TASK_THREAD
-    st      r25, [r9, THREAD_USER_R25]
-    sub     r9, r9, TASK_THREAD
-
+    st.as      r25, [r9, (TASK_THREAD + THREAD_USER_R25)/4]
     mov     r25, r9
 #endif
 
@@ -349,8 +342,8 @@
 .macro FAKE_RET_FROM_EXCPN  reg
 
     ld  \reg, [sp, PT_status32]
-    and \reg, \reg, ~(STATUS_U_MASK|STATUS_DE_MASK)
-    or  \reg, \reg, STATUS_L_MASK
+    bic  \reg, \reg, (STATUS_U_MASK|STATUS_DE_MASK)
+    bset \reg, \reg, STATUS_L_BIT
     sr  \reg, [erstatus]
     mov \reg, 55f
     sr  \reg, [eret]
