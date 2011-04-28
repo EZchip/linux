@@ -42,9 +42,13 @@ void print_task_path_n_nm(struct task_struct *task, char *buf)
     char *nm = NULL;
     struct mm_struct *mm;
     struct file *exe_file;
+    int asid = -1;
 
     mm = get_task_mm(task);
+    if (!mm) goto done;
+
     exe_file = get_mm_exe_file(mm);
+    asid = mm->context.asid;
     mmput(mm);
 
     if (exe_file) {
@@ -55,8 +59,9 @@ void print_task_path_n_nm(struct task_struct *task, char *buf)
         path_put(&path);
     }
 
-    printk("Current task = %s '%s', PID = %u, ASID = %lu\n", nm, task->comm,
-               task->pid, task->active_mm->context.asid);
+done:
+    printk("\ntask = %s '%s', PID = %u, ASID = %d\n", nm, task->comm,
+               task->pid, asid);
 }
 
 static void show_faulting_vma(unsigned long address, char *buf)
