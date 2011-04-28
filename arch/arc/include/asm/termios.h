@@ -54,15 +54,15 @@ struct termio {
 #endif
 
 /* modem lines */
-#define TIOCM_LE	0x001
-#define TIOCM_DTR	0x002
-#define TIOCM_RTS	0x004
-#define TIOCM_ST	0x008
-#define TIOCM_SR	0x010
-#define TIOCM_CTS	0x020
-#define TIOCM_CAR	0x040
-#define TIOCM_RNG	0x080
-#define TIOCM_DSR	0x100
+#define TIOCM_LE	0x001   /* line enable */
+#define TIOCM_DTR	0x002   /* data terminal ready */
+#define TIOCM_RTS	0x004   /* request to send */
+#define TIOCM_ST	0x008   /* secondary transmit */
+#define TIOCM_SR	0x010   /* secondary receive */
+#define TIOCM_CTS	0x020   /* clear to send */
+#define TIOCM_CAR	0x040   /* carrier detect */
+#define TIOCM_RNG	0x080   /* ring */
+#define TIOCM_DSR	0x100   /* data set ready */
 #define TIOCM_CD	TIOCM_CAR
 #define TIOCM_RI	TIOCM_RNG
 #define TIOCM_OUT1	0x2000

@@ -20,9 +20,7 @@
 #include <asm/ptrace.h>
 #include <plat_irq.h>   // Board Specific IRQ assignments
 
-#ifndef irq_cannonicalize
-#define irq_cannonicalize(i)    (i)
-#endif
+#define irq_canonicalize(i)    (i)
 
 #define IRQ_FLG_LOCK    (0x0001)        /* handler is not replaceable   */
 #define IRQ_FLG_REPLACE (0x0002)        /* replace existing handler     */
