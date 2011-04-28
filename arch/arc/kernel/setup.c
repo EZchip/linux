@@ -66,6 +66,7 @@ extern void __init arc_verify_sig_sz(void);
 extern void __init read_decode_cache_bcr(void);
 
 struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
+#define FIX_PTR(x)  __asm__ __volatile__(";":"+r"(x))
 
 /* Important System variables
  * We start with compile time DEFAULTS and over-ride ONLY if bootloader
@@ -204,6 +205,7 @@ char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
     };
     int i, num=0;
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
+    FIX_PTR(p_cpu);
 
 
     for ( i = 0; cpu_fam_nm[i].id != 0; i++) {
@@ -256,6 +258,7 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
 
     int num=0;
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
+    FIX_PTR(p_cpu);
 
 
 #define IS_AVAIL1(var)   ((var)? "Present" :"N/A")
