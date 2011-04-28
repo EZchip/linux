@@ -117,7 +117,7 @@ __clear_bss_loop:
 
     ; setup stack (fp, sp)
     mov fp, 0
-    mov sp,init_thread_union + 8192
+    mov sp,init_thread_union + THREAD_SIZE
 
     /* Jump to start of kernel initialization routine */
     jal start_kernel

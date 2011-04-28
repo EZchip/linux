@@ -8,6 +8,7 @@
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/vmlinux.lds.h>
 #include <asm/page.h>
+#include <asm/thread_info.h>
 #include <asm/board/plat_memmap.h>
 
 OUTPUT_ARCH(arc)
@@ -148,7 +149,7 @@ SECTIONS
     RO_DATA(PAGE_SIZE)
 
     /* writeable */
-    . = ALIGN(PAGE_SIZE);
+    . = ALIGN(THREAD_SIZE);   /* init.task must be kernel-stk sz aligned */
     .data : {
 
         *(.init.task)

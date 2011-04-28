@@ -22,8 +22,6 @@
 #ifndef _ASM_ARC_PARAM_H
 #define _ASM_ARC_PARAM_H
 
-#define EXEC_PAGESIZE   8192
-
 #ifdef __KERNEL__
 #define HZ CONFIG_HZ
 #endif

@@ -106,7 +106,7 @@ ex_saved_reg1:
     ; need to switch to kernel mode stack to call error routine
     GET_CURR_TASK_ON_CPU  sp
     ld  sp, [sp, TASK_THREAD_INFO]
-    add sp, sp, ( 0x2000 - 4 )
+    add sp, sp, ( THREAD_SIZE - 4 )
 
     ; Call printk to shoutout aloud
     mov r0, 1
@@ -140,7 +140,7 @@ ex_saved_reg1:
     ; need to switch to kernel mode stack to call error routine
     GET_CURR_TASK_ON_CPU  sp
     ld  sp, [sp, TASK_THREAD_INFO]
-    add sp, sp, ( 0x2000 - 4 )
+    add sp, sp, ( THREAD_SIZE - 4 )
 
     j print_pgd_mismatch
 

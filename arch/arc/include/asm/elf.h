@@ -51,7 +51,7 @@ typedef unsigned long elf_fpregset_t;
 
 #define USE_ELF_CORE_DUMP
 #define CORE_DUMP_USE_REGSET
-#define ELF_EXEC_PAGESIZE  8192
+#define ELF_EXEC_PAGESIZE PAGE_SIZE
 
 /* This is the location that an ET_DYN program is loaded if exec'ed.  Typical
    use of this is to invoke "./ld.so someprog" to test out a new version of

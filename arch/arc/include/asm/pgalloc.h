@@ -73,6 +73,7 @@ pmd_populate(struct mm_struct *mm, pmd_t *pmd, pgtable_t ptep)
     pmd_set(pmd, (pte_t *)ptep);
 }
 
+/* 1 Page whatever is PAGE_SIZE: 8k or 16k */
 #define PTE_ORDER 0
 
 static inline pgd_t *get_pgd_slow(void)

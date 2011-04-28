@@ -134,7 +134,7 @@ typedef unsigned long sigset_t;
 #define SS_DISABLE	2
 
 #define MINSIGSTKSZ	2048
-#define SIGSTKSZ	8192
+#define SIGSTKSZ	PAGE_SIZE
 
 #ifdef __KERNEL__
 
