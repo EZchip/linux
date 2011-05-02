@@ -102,7 +102,7 @@
 
 
 #if (CONFIG_ARC_MMU_VER > 2)
-#define SASID_ENABLE        (1 << 30)   /* enable SASID for process */
+#define SASID_ENABLE        (1 << 29)   /* enable SASID for process */
 #else
 #define SASID_ENABLE        0
 #endif
