@@ -164,7 +164,8 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
 
 #ifdef CONFIG_MMAP_CODE_CMN_VADDR
     if (!(IS_ERR_VALUE(vaddr)) && (prot & PROT_EXEC)) {
-        if (mmapcode_enab_vaddr(file, pgoff, PAGE_ALIGN(len), vaddr) == -1) {
+
+        if (mmapcode_enab_vaddr(file, pgoff, PAGE_ALIGN(len), vaddr) == -3) {
             printk("cmn-addr alloc err: svaddr[%lx] pvt%lx\n",
                         addr_hint, vaddr);
         }
@@ -415,6 +416,9 @@ int mmapcode_enab_vaddr(struct file *filp, unsigned long pgoff,
     int i;
     unsigned long ino;
 
+    /* uClibc-libpthread does a anon mmap with prot-exec, which "mis-leads"
+     * in here
+     */
     if (!filp)
         return -2;
 
@@ -424,20 +428,25 @@ int mmapcode_enab_vaddr(struct file *filp, unsigned long pgoff,
     for (i = MMAP_CODE_SPC_MAX_IDX; i >= 0 ; i--,db--) {
 
         /* An addr space already reserved for this dso */
-        if (db->ino == ino && vaddr >= db->dso.vaddr &&
-            len <= db->dso.len) {
-            db->code.len = len;
-            db->code.vaddr = vaddr;
+        if (db->ino == ino) {
+            if (likely(vaddr >= db->dso.vaddr && len <= db->dso.len)) {
+                db->code.len = len;
+                db->code.vaddr = vaddr;
 
-            db->refcnt++;
-            mmapcode_task_subscribe(current->mm, i);
+                db->refcnt++;
+                mmapcode_task_subscribe(current->mm, i);
 
-            MMAP_DBG("ENABLE (%d) ino %lx, len %lx : [%lx] refs %d\n",
+                MMAP_DBG("ENABLE (%d) ino %lx, len %lx : [%lx] refs %d\n",
                     i, ino, len, vaddr, db->refcnt);
-            return i;
+                return i;
+            }
+            else {
+                return -3;   /* This is fatal */
+            }
         }
     }
 
+    /* this inode (code) was not registered for cmd addr */
     return -1;
 }
 
