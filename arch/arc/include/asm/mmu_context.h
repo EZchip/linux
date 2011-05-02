@@ -198,13 +198,7 @@ activate_mm (struct mm_struct *prev, struct mm_struct *next)
     get_new_mmu_context(next, 0);
 
 #ifdef CONFIG_ARC_MMU_SASID
-    {
-        unsigned int tsk_sasids;
-
-        if ((tsk_sasids = is_any_mmapcode_task_subscribed(next))) {
-            write_new_aux_reg(ARC_REG_SASID, tsk_sasids);
-        }
-    }
+    BUG_ON((is_any_mmapcode_task_subscribed(next)));
 #endif
 }
 
