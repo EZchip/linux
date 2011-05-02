@@ -57,7 +57,7 @@ ifdef CONFIG_ARC_STACK_UNWIND
 KBUILD_CFLAGS		+= -fasynchronous-unwind-tables
 endif
 
-KBUILD_CFLAGS		+= -include arch/arc/include/asm/current.h
+LINUXINCLUDE +=  -include arch/arc/include/asm/current.h
 
 ifeq ($(CONFIG_CPU_BIG_ENDIAN),y)
 KBUILD_CFLAGS    	+= -mbig-endian
