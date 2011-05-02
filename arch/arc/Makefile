@@ -11,9 +11,6 @@
 # Author : Sameer Dhavale
 #
 
-
-# Its a rewrite from old arcch/arc/proc/arc700/Rules.make
-
 UTS_MACHINE := arc
 PROCESSOR  := arc700
 
