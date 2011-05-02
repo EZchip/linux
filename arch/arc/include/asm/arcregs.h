@@ -96,6 +96,12 @@
 #define ARC_REG_PID         0x409
 #define ARC_REG_SCRATCH_DATA0   0x418
 
+/* Bits in MMU PID register */
+#define MMU_ENABLE          (1 << 31)
+
+/* Error code if probe fails */
+#define TLB_LKUP_ERR    0x80000000
+
 /* Instruction cache related Auxiliary registers */
 #define ARC_REG_I_CACHE_BUILD_REG 0x77
 #define ARC_REG_IC_IVIC     0x10

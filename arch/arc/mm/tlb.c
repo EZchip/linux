@@ -66,7 +66,7 @@
 
 /* Need for MMU v2
  *
- * ARC700 MMU has a Joint-TLB for Code and Data and is 2 way set associative.
+ * ARC700 MMU-v1 has a Joint-TLB for Code and Data and is 2 way set-assoc.
  * For a memcpy operation with 3 players (src/dst/code) such that all 3 pages
  * map into same set, there would be contention for the 2 ways causing severe
  * Thrashing.
@@ -79,7 +79,7 @@
  *
  * Yet we still see the Thrashing because a J-TLB Write cause flush of u-TLBs.
  * This is a simple design for keeping them in sync. So what do we do?
- * The solution which James came up was pretty neat. It utilised the associativity
+ * The solution which James came up was pretty neat. It utilised the assoc
  * of uTLBs by not invalidating always but only when absolutely necessary.
  *
  *===========================================================================
@@ -485,7 +485,7 @@ void __init read_decode_mmu_bcr(void)
     tmp = read_new_aux_reg(ARC_REG_MMU_BCR);
     mmu->ver = (tmp >>24);
 
-    if (mmu->ver <= MMU_VER_2) {
+    if (mmu->ver <= 2) {
         mmu2 = (struct bcr_mmu_1_2 *)&tmp;
         mmu->pg_sz = PAGE_SIZE;
         mmu->sets = 1 << mmu2->sets;
@@ -519,7 +519,7 @@ char * arc_mmu_mumbojumbo(int cpu_id, char *buf)
     num += sprintf(buf+num, "   uDTLB %d entr, uITLB %d entr\n",
                         p_mmu->u_dtlb, p_mmu->u_itlb);
     num += sprintf(buf+num,"TLB Refill \"will %s\" Flush uTLBs\n",
-                        p_mmu->ver >= MMU_VER_2 ? "NOT":"");
+                        p_mmu->ver >= 2 ? "NOT":"");
 	return buf;
 }
 

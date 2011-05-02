@@ -29,11 +29,6 @@
 /* #define METAL_FIX  1 */
 #define METAL_FIX  0
 
-#define TLB_LKUP_ERR    0x80000000      // Error code if Probe Fails
-#define MMU_VER_2       2
-#define MMU_VER_3       3
-
-
 /*************************************
  * Basic TLB Commands
  ************************************/
@@ -69,10 +64,6 @@
                              _PAGE_EXECUTE | _PAGE_WRITE | _PAGE_READ | \
                              _PAGE_K_EXECUTE | _PAGE_K_WRITE | _PAGE_K_READ)
 
-/* MMU PID Register contains 1 bit for MMU Enable and 8 bits of ASID */
-#define MMU_ENABLE          0x80000000
-#define ASID_EXTRACT_MASK   (~MMU_ENABLE)
-
 #ifndef __ASSEMBLY__
 
 void arc_mmu_init(void);
@@ -93,6 +84,9 @@ void __init read_decode_mmu_bcr(void);
 
 #include <linux/pagemap.h>
 #include <asm-generic/tlb.h>
+
+#else
+#include <asm/tlb-mmu1.h>
 #endif
 
 
