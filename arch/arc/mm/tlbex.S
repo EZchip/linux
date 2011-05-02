@@ -240,18 +240,17 @@ ex_saved_reg1:
 ; Convert Linux PTE entry into TLB entry
 ; A one-word PTE entry is programmed as two-word TLB Entry [PD0:PD1] in mmu
 ; IN: r0 = PTE, r1 = ptr to PTE
-
 .macro TLB_RELOAD
-    and r1, r0, PTE_BITS_IN_PD0 ; Valid, Global
-#if (CONFIG_ARC_MMU_VER <= 2)   // Neednot be done with v3 onwards
-    lsr r1, r1                  ; shift PTE flags to match layout in PD0
-#endif
-    and r0, r0, PTE_BITS_IN_PD1 ; from PTE, mask out above flags
-    sr  r0, [ARC_REG_TLBPD1]    ; Phy addr and access permission flags in PD1
+    and r3, r0, PTE_BITS_IN_PD1 ; Extract permission flags+PFN from PTE
+    sr  r3, [ARC_REG_TLBPD1]    ; these go in PD1
 
-    lr  r0,[ARC_REG_TLBPD0]     ; MMU prepares PD0 with vaddr and ASID
-    or  r1, r1, r0              ; Stuff the above flags there
-    sr  r1,[ARC_REG_TLBPD0]     ; rewrite PD0
+    and r2, r0, PTE_BITS_IN_PD0 ; Extract other PTE flags: (V)alid, (G)lb
+#if (CONFIG_ARC_MMU_VER <= 2)   // Neednot be done with v3 onwards
+    lsr r2, r2                  ; shift PTE flags to match layout in PD0
+#endif
+    lr  r3,[ARC_REG_TLBPD0]     ; MMU prepares PD0 with vaddr and asid
+    or  r3, r3, r2              ; Stuff the above flags there
+    sr  r3,[ARC_REG_TLBPD0]     ; rewrite PD0
 .endm
 
 .macro TLB_WRITE_DATA
