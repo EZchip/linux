@@ -2,7 +2,11 @@
  * Copyright ARC International (www.arc.com) 2007-2009
  *
  * vineetg: April 2011 :
- *  -MMU v3: PD bits slightly different
+ *  -MMU v1: moved out legacy code into a seperate file
+ *  -MMU v3: PD{0,1} bits layout changed: They don't overlap anymore,
+        helps avoid a shift when preparing PD0 from PTE
+ *  -CONFIG_ARC_MMU_SASID: support for ARC MMU Shared Address spaces
+ *      TLB_RELOAD can create shared TLB entries now.
  *
  * Vineetg: July 2009
  *  - For MMU V2, we need not do heuristics at the time of commiting a D-TLB
@@ -248,8 +252,20 @@ ex_saved_reg1:
 #if (CONFIG_ARC_MMU_VER <= 2)   // Neednot be done with v3 onwards
     lsr r2, r2                  ; shift PTE flags to match layout in PD0
 #endif
+
     lr  r3,[ARC_REG_TLBPD0]     ; MMU prepares PD0 with vaddr and asid
-    or  r3, r3, r2              ; Stuff the above flags there
+
+#ifdef CONFIG_ARC_MMU_SASID
+    and.f 0, r0, _PAGE_SHARED_CODE
+    bz  1f
+
+    ld.as r1, [r1, PTRS_PER_PTE]       ; sasid
+    or    r2, r2, _PAGE_SHARED_CODE_H  ; S | V
+    bic   r3, r3, 0x1F                 ; vaddr | ---
+    or    r3, r3, r1                   ; vaddr | sasid
+1:
+#endif
+    or  r3, r3, r2              ; S | vaddr | {sasid|asid}
     sr  r3,[ARC_REG_TLBPD0]     ; rewrite PD0
 .endm
 

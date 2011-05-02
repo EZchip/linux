@@ -210,8 +210,8 @@ config ARC_MMU_VER
 
 config ARC_MMU_SASID
         bool "shared TLB entries for library code segments"
-        default Y
-        select MMAP_CODE_CMD_VADDR
+        default n
+        depends on MMAP_CODE_CMN_VADDR
         help
         Enable MMU support for code TLB entries, sharable across processes.
         So instead of a per-process TLB entry per page of library code, a

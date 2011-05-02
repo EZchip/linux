@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: April 2011
+ *  -CONFIG_ARC_MMU_SASID: support for ARC MMU Shared Address spaces
+ *     activate_mm() and switch_mm() to setup MMU SASID reg with task's
+ *     current sasid subscriptions
  *
  * Vineetg: March 25th Bug #92690
  *  -Major rewrite of Core ASID allocation routine get_new_mmu_context
@@ -158,10 +162,20 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 
     if (next->context.asid > asid_cache) {
         get_new_mmu_context(next, 0);
+    } else {
+        BUG_ON(next->context.asid > MAX_ASID);
+        write_new_aux_reg(ARC_REG_PID, next->context.asid|MMU_ENABLE);
     }
 
-    BUG_ON(next->context.asid > MAX_ASID);
-    write_new_aux_reg(ARC_REG_PID, (next->context.asid & 0xff) | MMU_ENABLE);
+#ifdef CONFIG_ARC_MMU_SASID
+    {
+        unsigned int tsk_sasids;
+
+        if ((tsk_sasids = is_any_mmapcode_task_subscribed(next))) {
+            write_new_aux_reg(ARC_REG_SASID, tsk_sasids);
+        }
+    }
+#endif
 
 }
 
@@ -182,6 +196,16 @@ activate_mm (struct mm_struct *prev, struct mm_struct *next)
 
     /* Unconditionally get a new ASID */
     get_new_mmu_context(next, 0);
+
+#ifdef CONFIG_ARC_MMU_SASID
+    {
+        unsigned int tsk_sasids;
+
+        if ((tsk_sasids = is_any_mmapcode_task_subscribed(next))) {
+            write_new_aux_reg(ARC_REG_SASID, tsk_sasids);
+        }
+    }
+#endif
 }
 
 #endif  /* __ASM_ARC_MMU_CONTEXT_H */

@@ -54,13 +54,13 @@ typedef struct {
 #endif
 
 /* Page Table flags: some implemented by MMU (H), others emulated (S)
- * Since these are for Linux vm, they need to be unique: thus some of
- * the h/w provided bits have value difft from what's captured here.
+ * However not all (H) represent the exact bit value in hardware.
+ * Since these are primarily for Linux vm, they need to be unique
  * e.g. MMU v2: K_READ bit is 8 and so is GLOBAL (possible becoz they live in
  *      seperate PD0 and PD1, which combined forms a translation entry)
  *      while for PTE perspective, they are 8 and 9 respectively
- * with MMU v3: all the PTE bits provided by hardware represent the exact
- *      values implemented in MMU (saves some bit shift ops in TLB Miss hdlrs)
+ * with MMU v3: Most bits (except SHARED) represent the exact hardware pos
+ *      (saves some bit shift ops in TLB Miss hdlrs)
  */
 
 #if (CONFIG_ARC_MMU_VER <= 2)
@@ -101,6 +101,7 @@ typedef struct {
 // XXX: This must be MMU-v3 only, but for ISS testing, keeping out
 #define _PAGE_SHARED_CODE   (1<<10) /* Shared Code page with cmn vaddr
                                        usable for shared TLB entries (H) */
+#define _PAGE_SHARED_CODE_H (1<<31)
 #define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 
 /* Kernel allowed all permissions for all pages */

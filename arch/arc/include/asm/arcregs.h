@@ -95,9 +95,25 @@
 #define ARC_REG_TLBCOMMAND  0x408
 #define ARC_REG_PID         0x409
 #define ARC_REG_SCRATCH_DATA0   0x418
+#define ARC_REG_SASID       0x40e
 
 /* Bits in MMU PID register */
-#define MMU_ENABLE          (1 << 31)
+#define TLB_ENABLE          (1 << 31)   /* Enable MMU for process */
+
+
+#if (CONFIG_ARC_MMU_VER > 2)
+#define SASID_ENABLE        (1 << 30)   /* enable SASID for process */
+#else
+#define SASID_ENABLE        0
+#endif
+
+/* In MMU-v3, there is option to enable sasid per process.
+ * However for now, it is enabled for all.
+ * Non-relevant processes won't have a shared TLB entry to begin with
+ * thus this bit being set for them won't matter anyways
+ * Also it will help catch bugs initially - due to stray shared TLB entries
+ */
+#define MMU_ENABLE          (TLB_ENABLE|SASID_ENABLE)
 
 /* Error code if probe fails */
 #define TLB_LKUP_ERR    0x80000000

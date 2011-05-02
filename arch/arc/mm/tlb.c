@@ -2,8 +2,10 @@
  * Copyright ARC International (www.arc.com) 2007-2009
  *
  * vineetg: April 2011 :
- *  -MMU v3: PD bits slightly different ensuring that their define in PTE
- *   matches the exact placement in hardware. Helps avoid some shifts
+ *  -MMU v3: PD{0,1} bits layout changed: They don't overlap anymore,
+        helps avoid a shift when preparing PD0 from PTE
+ *  -CONFIG_ARC_MMU_SASID: support for ARC MMU Shared Address spaces
+ *      update_mmu_cache can create shared TLB entries now.
  *
  * vineetg: April 2011 : Preparing for MMU V3
  *  -MMU v2/v3 BCRs decoded differently
@@ -364,11 +366,7 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 {
     unsigned long flags;
-    pgd_t *pgdp;
-    pud_t *pudp;
-    pmd_t *pmdp;
-    pte_t *ptep;
-    unsigned int idx, asid=0;
+    unsigned int idx, asid_or_sasid;
     unsigned long pd0_flags;
 
     local_irq_save(flags);
@@ -404,9 +402,29 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 #else
     pd0_flags = ((pte_val(*ptep) & PTE_BITS_IN_PD0));
 #endif
-    asid = read_new_aux_reg(ARC_REG_PID) & 0xff;
 
-    write_new_aux_reg(ARC_REG_TLBPD0, (address|pd0_flags|asid));
+#ifdef CONFIG_ARC_MMU_SASID
+    if (pte_val(*ptep) & _PAGE_SHARED_CODE) {
+
+        unsigned int tsk_sasids;
+
+        pd0_flags |= _PAGE_SHARED_CODE_H;
+
+        /* SASID for this vaddr mapping */
+        asid_or_sasid = pte_val(*(ptep + PTRS_PER_PTE));
+
+        /* All the SASIDs for this task */
+        tsk_sasids = is_any_mmapcode_task_subscribed(vma->vm_mm);
+        BUG_ON(tsk_sasids == 0);
+
+        write_new_aux_reg(ARC_REG_SASID, tsk_sasids);
+    } else
+#endif
+        /* ASID for this task */
+        asid_or_sasid = read_new_aux_reg(ARC_REG_PID) & 0xff;
+
+
+    write_new_aux_reg(ARC_REG_TLBPD0, (address|pd0_flags|asid_or_sasid));
 
     /* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags etc) */
     write_new_aux_reg(ARC_REG_TLBPD1, (pte_val(*ptep) & PTE_BITS_IN_PD1));
