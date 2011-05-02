@@ -41,6 +41,7 @@
 #include <asm/page.h>
 #include <asm/mmu.h>
 #include <asm-generic/pgtable-nopmd.h>
+#include <asm/mmapcode.h>
 
 /* Page Table Lookup split */
 #define BITS_IN_PAGE  PAGE_SHIFT
@@ -78,9 +79,6 @@
 
 #define pte_unmap(pte)		do { } while (0)
 #define pte_unmap_nested(pte)		do { } while (0)
-
-#define set_pte_at(mm,addr,ptep,pteval) set_pte(ptep,pteval)
-
 
 static inline void flush_tlb_pgtables(struct mm_struct *mm,
 				      unsigned long start, unsigned long end)
@@ -195,6 +193,55 @@ static inline pte_t mk_pte_phys(unsigned long physpage, pgprot_t pgprot)
 static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 {
 	return __pte((pte_val(pte) & _PAGE_CHG_MASK) | pgprot_val(newprot));
+}
+
+static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
+                                pte_t *ptep, pte_t pteval)
+{
+#ifdef CONFIG_ARC_MMU_SASID
+    int sasid;
+
+    /* For now, we are only interested in PTEs for code */
+    if ( (pte_val(pteval) & (_PAGE_READ|_PAGE_WRITE|_PAGE_EXECUTE)) ==
+                            (_PAGE_READ|_PAGE_EXECUTE)) {
+
+        /* Does this code page belong to a mapped shared library, which has
+         * been mapped such that vaddr is cmn across processes.
+         * If yes, make a note in PTE that
+         *  -it is shared
+         *  -it's SASID - (S)hared (A)ddr (S)pace ID - a "handle" to this
+         *   cmn-vadd-space instance)
+         * That way TLB Miss handlers, which look at the PTE, will have all
+         * the info to actually program a shared TLB entry into MMU.
+         */
+        sasid = mmapcode_find_mm_vaddr(mm, addr);
+
+        if (sasid >= 0) {
+            /* PTE now needs to save extra 5 bits SASID which won't fit in
+             * orig 1 word-wide PTE (containing PFN and flags).
+             * Using a long-long or pte[2] was generating horrible code.
+             * So we split the info into 2 parts, each part in a seperate
+             * page-table.
+             *
+             * When allocating page-frame for page table, we allocate double
+             * the size, to fit 2 logical tables.
+             * First one is the normal, containing normal PTE info, and is
+             * the one hooked-up to upper level PGD.
+             * The 2nd one, adjecent to first one in memory (by way of alloc),
+             * is more-or-less hidden, containing only SASIDs (if at all).
+             *
+             * A full PTE entry correponds to one word each, in both, at same
+             * relative indexes.
+             * Given ptr to pte in main table, getting the corresp sibling
+             * in other table is simply (ptep + PTRS_IN_PTE*4)
+             */
+
+            pte_val(pteval) |= _PAGE_SHARED_CODE;
+            set_pte((ptep + PTRS_PER_PTE), sasid);
+        }
+    }
+#endif
+    set_pte(ptep, pteval);
 }
 
 /* to find an entry in a kernel page-table-directory.

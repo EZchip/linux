@@ -208,6 +208,17 @@ config ARC_MMU_VER
             Variable Page size (1k-16k), var JTLB size 128 x (2 or 4)
             changes to programming model
 
+config ARC_MMU_SASID
+        bool "shared TLB entries for library code segments"
+        default Y
+        select MMAP_CODE_CMD_VADDR
+        help
+        Enable MMU support for code TLB entries, sharable across processes.
+        So instead of a per-process TLB entry per page of library code, a
+        single TLB entry is used across all proceeses, mapping this lib.
+        This is difft from glabal TLB entries as it is subscription based
+        This will reduce pressure on TLB immensely.
+
 config ARCH_ARC_LV2_INTR
         bool "Enable two levels of Interrupts high(2)low(1)"
         default n
@@ -515,6 +526,8 @@ config MMAP_CODE_CMN_VADDR
         This boosts performance because each alias occupies a cache-line
         of own hence needs to be fetched per instance as opposed to just
         once.
+        It is _must_ for enabling hardware SASID feature, where a single
+        shared TLB entry for shared code can be used across processes.
 
 config HZ
     int "Timer Frequency"

@@ -98,6 +98,9 @@ typedef struct {
 
 #endif
 
+// XXX: This must be MMU-v3 only, but for ISS testing, keeping out
+#define _PAGE_SHARED_CODE   (1<<10) /* Shared Code page with cmn vaddr
+                                       usable for shared TLB entries (H) */
 #define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 
 /* Kernel allowed all permissions for all pages */
