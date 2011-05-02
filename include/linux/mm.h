@@ -1395,6 +1395,7 @@ extern unsigned long mmap_region(struct file *file, unsigned long addr,
 	unsigned long len, unsigned long flags,
 	vm_flags_t vm_flags, unsigned long pgoff);
 
+#ifndef ARCH_ELF_DO_MMAP
 static inline unsigned long do_mmap(struct file *file, unsigned long addr,
 	unsigned long len, unsigned long prot,
 	unsigned long flag, unsigned long offset)
@@ -1407,6 +1408,7 @@ static inline unsigned long do_mmap(struct file *file, unsigned long addr,
 out:
 	return ret;
 }
+#endif
 
 extern int do_munmap(struct mm_struct *, unsigned long, size_t);
 
