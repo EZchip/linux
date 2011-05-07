@@ -194,30 +194,60 @@ config ARCH_ARC_DCCM
         Single Cycle RAMS to store Fast Path Data
         default n
 
-config ARC_MMU_VER
-        int "ARC700 MMU Version 1,2,3"
-        range 1 3
-        default "2"
-        depends on MMU
+choice
+        prompt "ARC700 MMU Version"
+        default ARC_MMU_V3 if ARC700_V_4_10
+        default ARC_MMU_V2 if !ARC700_V_4_10
+
+config ARC_MMU_V1
+        bool "MMU v1"
         help
-        V1: Orig MMU (suffers from possible thrashing in memcpy scenario
-            when 2 D-TLB and 1 I-TLB entries index into same 2way set)
-        V2: A new TLBWriteNi cmd which doesn't flush the uTLBS (used in
-            miss handlers. Orig TLBWrite for shooting down stale entries
-        V3: Introduced with ARC700 4.10: New Features
+            Orig ARC700 MMU
+
+config ARC_MMU_V2
+        bool "MMU v2"
+        help
+            Fixed the deficiency of v1 - possible thrashing in memcpy sceanrio
+            when 2 D-TLB and 1 I-TLB entries index into same 2way set.
+
+config ARC_MMU_V3
+        bool "MMU v3"
+# enable this later on, otherwise we are bound to use news insn with v3
+#        depends on ARC700_V_4_10
+        help
+            Introduced with ARC700 4.10: New Features
             Variable Page size (1k-16k), var JTLB size 128 x (2 or 4)
-            changes to programming model
+            Shared Address Spaces (SASID)
+
+endchoice
+
 
 config ARC_MMU_SASID
         bool "shared TLB entries for library code segments"
-        default n
-        depends on MMAP_CODE_CMN_VADDR
+        default y
+        depends on ARC_MMU_V3
+        select MMAP_CODE_CMN_VADDR
         help
         Enable MMU support for code TLB entries, sharable across processes.
         So instead of a per-process TLB entry per page of library code, a
         single TLB entry is used across all proceeses, mapping this lib.
         This is difft from glabal TLB entries as it is subscription based
         This will reduce pressure on TLB immensely.
+
+choice
+        prompt "MMU Page Size"
+        default ARC_PAGE_SIZE_8K
+
+config ARC_PAGE_SIZE_8K
+        bool "8KB"
+        help
+            Choose between 8k vs 16k
+
+config ARC_PAGE_SIZE_16K
+        bool "16KB"
+        depends on ARC_MMU_V3
+
+endchoice
 
 config ARCH_ARC_LV2_INTR
         bool "Enable two levels of Interrupts high(2)low(1)"
@@ -233,6 +263,15 @@ config ARCH_ARC_FPU
         hardware pieces to allow software to conditionally save/restore,
         based on actual usage of FPU by a task. Thus our implemn does
         this for all tasks in system.
+
+config ARC700_V_4_10
+        bool "Build kernel for ARC700 v 4.10 - Summer 2011"
+        default n
+        help
+        This rel of ARC700 provides a bunch of new feature:
+        -MMU-v3: Variable Pg Sz, bigger J-TLB, Shared Address Spaces
+        -Caches: New Prog Model, Region Flush
+        -Insns: endian swap, load-locked/store-conditional, time-stamp-ctr
 
 endmenu   #CPU Core config
 

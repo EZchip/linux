@@ -23,7 +23,11 @@
 #define __ASM_ARC_PAGE_H
 
 /* PAGE_SHIFT determines the page size */
-#define PAGE_SHIFT  13
+#if defined(CONFIG_ARC_PAGE_SIZE_8K)
+#define PAGE_SHIFT 13
+#elif defined(CONFIG_ARC_PAGE_SIZE_16K)
+#define PAGE_SHIFT 14
+#endif
 
 #ifdef __ASSEMBLY__
 #define PAGE_SIZE       (1 << PAGE_SHIFT)
