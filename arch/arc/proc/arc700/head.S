@@ -50,6 +50,7 @@ stext:
 
 
 no_params:
+#ifdef CONFIG_SMP
     lr  r0,[identity]
 
     ; processor ID [ 3 2 <1> 0 ]
@@ -68,6 +69,7 @@ no_params:
     flag 1
 
 master_proceed:
+#endif
 
 #ifdef CONFIG_ARC_UBOOT_CMDLINE
 
@@ -90,7 +92,6 @@ __clear_bss:
 ; Clear BSS before updating any globals
 ; If u-boot is configured, then only clean the beginning.
 
-    lr  r0, [identity]
     mov r5, __bss_start
 #ifdef CONFIG_ARC_UBOOT_CMDLINE
     mov r6, __bss_start + 256
@@ -105,6 +106,7 @@ __clear_bss_loop:
 
     ; chip-id [ <3 2> 1 0 ]
     ; useful for determining SIM vs Real H/w (SIM = 0xffff)
+    lr  r0, [identity]
     lsr r3, r0, 16
     sub r3, 0xffff, r3
     st  r3, [SYMBOL_NAME(running_on_hw)] ; 0 for sim, non-zero for real hw
