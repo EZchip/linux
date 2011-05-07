@@ -746,35 +746,43 @@ static __init void early_serial_write(struct console *con, const char *s,
 	}
 }
 
+static int __init arc_early_serial_init(struct console *co, char *options)
+{
+	struct arc_serial_port *uart;
+	unsigned int baud, uartl, uarth, hw_val;
+
+	arc_serial_init_ports();
+
+	uart = &arc_serial_ports[co->index];
+
+    baud = CONFIG_ARC_SERIAL_BAUD;
+    hw_val = uart->port.uartclk / (baud*4) -1;
+    uartl = hw_val & 0xFF;
+    uarth = (hw_val >> 8) & 0xFF;
+
+    if (!running_on_hw) {
+        uarth = 1;
+    }
+
+    UART_SET_BAUDL(uart, uartl);
+    UART_SET_BAUDH(uart, uarth);
+    UART_RX_IRQ_ENABLE(uart);
+
+    return 0;
+}
+
 static struct __initdata console arc_early_serial_console = {
 	.name = "early_ARCuart",
 	.write = early_serial_write,
 	.device = uart_console_device,
-	.flags = CON_PRINTBUFFER,
-	.setup = arc_serial_console_setup,
-	.index = -1,
-	.data  = &arc_uart_driver
+	.flags = CON_PRINTBUFFER | CON_BOOT,
+	.setup = arc_early_serial_init,
+	.index = -1
 };
 
-struct console __init *arc_earlyserial_init(unsigned int port,
-						unsigned int cflag)
+void __init arc_early_serial_reg(void)
 {
-	struct arc_serial_port *uart;
-	struct ktermios t;
-
-	if (port == -1 || port >= CONFIG_ARC_SERIAL_NR_PORTS)
-		port = 0;
-
-	arc_serial_init_ports();
-	arc_early_serial_console.index = port;
-	uart = &arc_serial_ports[port];
-	t.c_cflag = cflag;
-	t.c_iflag = 0;
-	t.c_oflag = 0;
-	t.c_lflag = ICANON;
-	t.c_line = port;
-	arc_serial_set_termios(&uart->port, &t, &t);
-	return &arc_early_serial_console;
+    register_console(&arc_early_serial_console);
 }
 
 #endif /* CONFIG_EARLY_PRINTK */

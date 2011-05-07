@@ -97,9 +97,6 @@ char __initdata command_line[COMMAND_LINE_SIZE] = {"console=ttyS0"};
 // Clean, no kernel command line.
 char __initdata command_line[COMMAND_LINE_SIZE];
 
-// Use this next line to temporarily switch on "earlyprintk"
-//char __initdata command_line[COMMAND_LINE_SIZE] = {"earlyprintk=1"};
-
 #endif
 
 struct task_struct *_current_task[NR_CPUS];  /* currently active task */
@@ -639,6 +636,11 @@ void __init setup_arch(char **cmdline_p)
     unsigned long first_free_pfn, kernel_end_addr;
     extern unsigned long atag_head;
     struct tag *tags = (struct tag *)&init_tags;   /* to shut up gcc */
+
+    /* Before probing MMU or caches, so any discrepancy printk( ) shows up */
+#ifdef CONFIG_EARLY_PRINTK
+    arc_early_serial_reg();
+#endif
 
     /* If parameters passed by u-boot, override compile-time parameters */
     if (atag_head) {

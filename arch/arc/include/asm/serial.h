@@ -23,5 +23,6 @@
 #ifndef _ASM_ARC_SERIAL_H
 #define _ASM_ARC_SERIAL_H
 
+void __init arc_early_serial_reg(void);
 
 #endif  /* _ASM_ARC_SERIAL_H */
