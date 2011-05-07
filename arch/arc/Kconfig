@@ -554,7 +554,7 @@ config ARCH_ARC_SPACE_RND
 
 config MMAP_CODE_CMN_VADDR
         bool "mmap shared lib code at same vaddr across proceses"
-        default Y
+        default y
         select GENERIC_ALLOCATOR
         help
         This feature forces kernel to map a particular shared lib's code
