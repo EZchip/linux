@@ -7,16 +7,14 @@
  *
  * vineetg: Mar 2011
  *  -optimised version of flush_icache_range( ) for making I/D coherent
- *   when vaddr is available
+ *   when vaddr is available (agnostic of num of aliases)
  *
  * vineetg: Mar 2011
  *  -Added documentation about I-cache aliasing on ARC700 and the way it
  *   was handled up until MMU V2.
- *  -Spotted a three year old bug when killing the 4 aliases, bottom 2
- *   bits correspond to 4 aliases, so need to do:
- *   paddr | 0x00, paddr | 0x01, paddr | 0x02, paddr | 0x03
- *      instead of
- *   paddr | 0x00, paddr | 0x01, paddr | 0x10, paddr | 0x11
+ *  -Spotted a three year old bug when killing the 4 aliases, which needs
+ *   bottom 2 bits, so we need to do paddr | {0x00, 0x01, 0x02, 0x03}
+ *                        instead of paddr | {0x00, 0x01, 0x10, 0x11}
  *   (Rajesh you owe me one now)
  *
  * vineetg: Dec 2010
@@ -95,6 +93,8 @@
 #include <asm/cacheflush.h>
 #include <asm/mmu_context.h>
 
+extern int running_on_hw;
+
 #ifdef CONFIG_ARC700_USE_ICACHE
 static void __arc_icache_inv_lines_no_alias(unsigned long, int);
 static void __arc_icache_inv_lines_2_alias(unsigned long, int);
@@ -153,6 +153,7 @@ void __init read_decode_cache_bcr(void)
 
         p_ic->line_len = 8 << ibcr.line_len;
         p_ic->sz = 0x200 << ibcr.sz;
+        p_ic->ver = ibcr.ver;
     }
 #endif
 
@@ -168,6 +169,7 @@ void __init read_decode_cache_bcr(void)
 
         p_dc->line_len = 16 << dbcr.line_len;
         p_dc->sz = 0x200 << dbcr.sz;
+        p_dc->ver = dbcr.ver;
     }
 #endif
 
@@ -183,6 +185,9 @@ void __init arc_cache_init(void)
     struct cpuinfo_arc_cache *dc, *ic;
     unsigned int temp;
     int way_pg_ratio;
+    char str[512];
+
+    printk(arc_cache_mumbojumbo(0, str));
 
     ARC_shmlba = max(ARC_shmlba, (unsigned int)PAGE_SIZE);
 
@@ -198,6 +203,15 @@ void __init arc_cache_init(void)
          ( ic->line_len != ICACHE_COMPILE_LINE_LEN ) ) {
         panic("Cache H/W doesn't match kernel Config");
     }
+
+#if (CONFIG_ARC_MMU_VER > 2)
+    if (ic->ver != 3) {
+        if (!running_on_hw)
+            printk("Use -prop=icache_version=3,-prop=dcache_version=3\n");
+
+        panic("Cache ver doesn't match MMU ver\n");
+    }
+#endif
 
     /* if Cache way size is <= page size then no aliasing exhibited
      * otherwise ratio determines num of aliases.
@@ -276,10 +290,6 @@ void __init arc_cache_init(void)
     write_new_aux_reg(ARC_REG_DC_CTRL, temp | BIT_IC_CTRL_CACHE_DISABLE);
 #endif
 
-    {
-        char str[512];
-        printk(arc_cache_mumbojumbo(0, str));
-    }
     return;
 }
 
@@ -339,6 +349,15 @@ static inline void __arc_dcache_per_line_op(unsigned long start, unsigned long s
     num_lines = (sz + DCACHE_COMPILE_LINE_LEN - 1)/DCACHE_COMPILE_LINE_LEN;
 
     while (num_lines-- > 0) {
+#if (CONFIG_ARC_MMU_VER > 2)
+        /* Just as for I$, in MMU v3, D$ ops also require
+         * "tag" bits in DC_PTAG, "index" bits in {FL|IV}DL
+         * But we pass phy addr for both. This works for now since Linux
+         * doesn't support aliasing configs for D$, yet. Thus paddr is
+         * enough to provide both tag and index.
+         */
+        write_new_aux_reg(ARC_REG_DC_PTAG, start);
+#endif
         write_new_aux_reg(aux_reg, start);
         start += DCACHE_COMPILE_LINE_LEN;
     }
@@ -488,6 +507,9 @@ EXPORT_SYMBOL(flush_dcache_page);
  *      2-way-set-assoc, 64K I$ with 8k MMU pg sz => 4 aliases
  *      2-way-set-assoc, 16K I$ with 8k MMU pg sz => NO aliases
  *
+ * ------------------
+ * MMU v2
+ * ------------------
  * The solution was to provide CDU with these additonal vaddr bits. These
  * would be bits [x:13], x would depend on cache-geom.
  * H/w folks chose [17:13] to be a future safe range, and moreso these 5 bits
@@ -522,6 +544,17 @@ EXPORT_SYMBOL(flush_dcache_page);
  *  32b line-sz: 9 bits set-index-calc, 5 bits offset-in-line => 1 extra bit
  *  64b line-sz: 8 bits set-index-calc, 6 bits offset-in-line => 1 extra bit
  *
+ * ------------------
+ * MMU v3
+ * ------------------
+ * This ver of MMU supports var page sizes (1k-16k) - Linux will support
+ * 8k (default) and 16k.
+ * However from hardware perspective, smaller page sizes aggrevate aliasing
+ * meaning more vaddr bits needed to disambiguate the cache-line-op ;
+ * the existing scheme of piggybacking won't work for certain configurations.
+ * Two new registers IC_PTAG and DC_PTAG inttoduced.
+ * "tag" bits are provided in PTAG, index bits in existing IVIL/IVDL/FLDL regs
+ *
  **********************************************************/
 
 /*
@@ -531,6 +564,9 @@ EXPORT_SYMBOL(flush_dcache_page);
 static void __arc_icache_inv_lines_no_alias(unsigned long start, int num_lines)
 {
     while (num_lines-- > 0) {
+#if (CONFIG_ARC_MMU_VER > 2)
+        write_new_aux_reg(ARC_REG_IC_PTAG, start);
+#endif
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         start += ICACHE_COMPILE_LINE_LEN;
     }
@@ -539,8 +575,25 @@ static void __arc_icache_inv_lines_no_alias(unsigned long start, int num_lines)
 static void __arc_icache_inv_lines_2_alias(unsigned long start, int num_lines)
 {
     while (num_lines-- > 0) {
+
+#if (CONFIG_ARC_MMU_VER > 2)
+        /* MMU v3, CDU prog model (for line ops) now uses a new IC_PTAG reg
+         * to pass the "tag" bits and existing IVIL reg only looks at bits
+         * relevant for "index" (details above)
+         * Programming Notes:
+         * -when writing tag to PTAG reg, bit chopping can be avoided,
+         *  CDU ignores non-tag bits.
+         * -Ideally "index" must be computed from vaddr, but it is not avail
+         *  in these rtns. So to be safe, we kill the lines in all possible
+         *  indexes corresp to num of aliases possible for given cache config.
+         */
+        write_new_aux_reg(ARC_REG_IC_PTAG, start);
+        write_new_aux_reg(ARC_REG_IC_IVIL, start & ~(0x1 << PAGE_SHIFT));
+        write_new_aux_reg(ARC_REG_IC_IVIL, start |  (0x1 << PAGE_SHIFT));
+#else
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
+#endif
         start += ICACHE_COMPILE_LINE_LEN;
     }
 }
@@ -548,10 +601,20 @@ static void __arc_icache_inv_lines_2_alias(unsigned long start, int num_lines)
 static void __arc_icache_inv_lines_4_alias(unsigned long start, int num_lines)
 {
     while (num_lines-- > 0) {
+
+#if (CONFIG_ARC_MMU_VER > 2)
+        write_new_aux_reg(ARC_REG_IC_PTAG, start);
+
+        write_new_aux_reg(ARC_REG_IC_IVIL, start & ~(0x3 << PAGE_SHIFT));
+        write_new_aux_reg(ARC_REG_IC_IVIL, start & ~(0x2 << PAGE_SHIFT));
+        write_new_aux_reg(ARC_REG_IC_IVIL, start & ~(0x1 << PAGE_SHIFT));
+        write_new_aux_reg(ARC_REG_IC_IVIL, start |  (0x3 << PAGE_SHIFT));
+#else
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x02);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x03);
+#endif
         start += ICACHE_COMPILE_LINE_LEN;
     }
 }
@@ -574,26 +637,44 @@ static void __arc_icache_inv_lines(unsigned long start, unsigned long sz)
     local_irq_restore(flags);
 }
 
+/* Unlike routines above, having vaddr for flush op (along with paddr),
+ * prevents the need to speculatively kill the lines in multiple sets
+ * based on ratio of way_sz : pg_sz
+ */
 static void __arc_icache_inv_lines_vaddr(unsigned long phy_start,
                 unsigned long vaddr, unsigned long sz)
 {
     unsigned long flags;
     int num_lines, slack;
-    unsigned int vbits;
+    unsigned int addr;
 
     slack = phy_start & ~ICACHE_LINE_MASK;
     sz += slack;
     phy_start -= slack;
     num_lines = (sz + ICACHE_COMPILE_LINE_LEN - 1)/ICACHE_COMPILE_LINE_LEN;
 
-    // bits 17:13
-    vbits = ( vaddr >> 13 ) & 0x1F;
-    phy_start |= vbits;
+#if (CONFIG_ARC_MMU_VER > 2)
+    vaddr &= ~ICACHE_LINE_MASK;
+    addr = phy_start;
+#else
+    // bits 17:13 of vaddr go as bits 4:0 of paddr
+    addr = phy_start | (( vaddr >> 13 ) & 0x1F);
+#endif
 
     local_irq_save(flags);
     while (num_lines-- > 0) {
-        write_new_aux_reg(ARC_REG_IC_IVIL, phy_start);
-        phy_start += ICACHE_COMPILE_LINE_LEN;
+#if (CONFIG_ARC_MMU_VER > 2)
+        /* tag comes from phy addr */
+        write_new_aux_reg(ARC_REG_IC_PTAG, addr);
+
+        /* index bits come from vaddr */
+        write_new_aux_reg(ARC_REG_IC_IVIL, vaddr);
+        vaddr += ICACHE_COMPILE_LINE_LEN;
+#else
+        /* this paddr contains vaddrs bits as needed */
+        write_new_aux_reg(ARC_REG_IC_IVIL, addr);
+#endif
+        addr += ICACHE_COMPILE_LINE_LEN;
     }
     local_irq_restore(flags);
 }

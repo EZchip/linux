@@ -123,6 +123,9 @@
 #define ARC_REG_IC_IVIC     0x10
 #define ARC_REG_IC_CTRL     0x11
 #define ARC_REG_IC_IVIL     0x19
+#if (CONFIG_ARC_MMU_VER > 2)
+#define ARC_REG_IC_PTAG     0x1E
+#endif
 
 /* Bit val in IC_CTRL */
 #define BIT_IC_CTRL_CACHE_DISABLE   0x1
@@ -134,6 +137,10 @@
 #define ARC_REG_DC_IVDL     0x4A
 #define ARC_REG_DC_FLSH     0x4B
 #define ARC_REG_DC_FLDL     0x4C
+#if (CONFIG_ARC_MMU_VER > 2)
+#define ARC_REG_DC_PTAG     0x5C
+#endif
+
 
 /* Bit val in DC_CTRL */
 #define BIT_DC_CTRL_INV_MODE_FLUSH  0x40
@@ -349,7 +356,7 @@ struct bcr_mp {
 #endif
 
 struct cpuinfo_arc_cache {
-    unsigned int has_aliasing, sz, line_len, assoc;
+    unsigned int has_aliasing, sz, line_len, assoc, ver;
 };
 
 struct cpuinfo_arc_mmu {
