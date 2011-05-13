@@ -45,7 +45,16 @@
 
 /* Page Table Lookup split */
 #define BITS_IN_PAGE  PAGE_SHIFT
+
+/* Optimal Sizing of Pg Tbl - based on page size */
+#if defined(CONFIG_ARC_PAGE_SIZE_8K)
 #define BITS_FOR_PTE  8
+#elif defined(CONFIG_ARC_PAGE_SIZE_16K)
+#define BITS_FOR_PTE  8
+#elif defined(CONFIG_ARC_PAGE_SIZE_4K)
+#define BITS_FOR_PTE  9
+#endif
+
 #define BITS_FOR_PGD  (32 - BITS_FOR_PTE - BITS_IN_PAGE)
 
 #define PGDIR_SHIFT	(BITS_FOR_PTE + BITS_IN_PAGE)
