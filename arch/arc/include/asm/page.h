@@ -27,6 +27,8 @@
 #define PAGE_SHIFT 13
 #elif defined(CONFIG_ARC_PAGE_SIZE_16K)
 #define PAGE_SHIFT 14
+#elif defined(CONFIG_ARC_PAGE_SIZE_4K)
+#define PAGE_SHIFT 12
 #endif
 
 #ifdef __ASSEMBLY__

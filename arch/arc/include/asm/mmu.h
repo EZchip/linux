@@ -5,6 +5,8 @@
  *  -Folded PAGE_PRESENT (used by VM) and PAGE_VALID (used by MMU) into 1.
  *     They are semantically the same although in different contexts
  *     VALID marks a TLB entry exists and it will only happen if PRESENT
+ *  - Utilise some unused free bits to confine PTE flags to 12 bits
+ *     This is a must for 4k pg-sz
  *
  * vineetg: Mar 2011 - changes to accomodate MMU TLB Page Descriptor mods
  *  -TLB Locking never really existed, except for initial specs
@@ -74,10 +76,10 @@ typedef struct {
 #define _PAGE_K_WRITE       (1<<7)  /* Page has kernel write perm (H) */
 #define _PAGE_K_READ        (1<<8)  /* Page has kernel perm (H) */
 #define _PAGE_GLOBAL        (1<<9)  /* Page is global (H) */
+#define _PAGE_MODIFIED      (1<<10) /* Page modified (dirty) (S) */
+#define _PAGE_FILE          (1<<10) /* page cache/ swap (S) */
 #define _PAGE_VALID         (1<<11) /* Page is valid (H) */
 #define _PAGE_PRESENT       _PAGE_VALID  /* Page present in memory (S)*/
-#define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
-#define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 
 #else
 
@@ -98,8 +100,8 @@ typedef struct {
 #define _PAGE_SHARED_CODE   (1<<10) /* Shared Code page with cmn vaddr
                                        usable for shared TLB entries (H) */
 
-#define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
-#define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
+#define _PAGE_MODIFIED      (1<<11) /* Page modified (dirty) (S) */
+#define _PAGE_FILE          (1<<11) /* page cache/ swap (S) */
 
 #define _PAGE_SHARED_CODE_H (1<<31) /* Hardware counterpart of above */
 #endif

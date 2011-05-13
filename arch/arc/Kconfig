@@ -247,6 +247,10 @@ config ARC_PAGE_SIZE_16K
         bool "16KB"
         depends on ARC_MMU_V3
 
+config ARC_PAGE_SIZE_4K
+        bool "4KB"
+        depends on ARC_MMU_V3
+
 endchoice
 
 config ARCH_ARC_LV2_INTR
