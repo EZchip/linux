@@ -1,11 +1,19 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2010-2011
+/*
+ * Copyright (C) 2011-2012 Synopsys (www.synopsys.com)
+ * Copyright (C) 2007-2010 ARC International (www.arc.com)
+ * Copyright (C) 2004 Codito Technologies (www.codito.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * ------------------------------------------------------------------------
  *
  * vineetg: May 2011
  *  -Variable pg-sz means that Page Tables could be variable sized themselves
  *    So calculate it based on addr traversal split [pgd-bits:pte-bits:xxx]
- *    in __get_order_pgd( ) and __get_order_pte( ).
- *    Since these deal with constants, they are optimised away by gcc.
+ *  -Page Table size capped to max 1 to save memory - hence verified.
+ *  -Since these deal with constants, gcc compile-time optimizes them.
  *
  * vineetg: Nov 2010
  *  -Added pgtable ctor/dtor used for pgtable mem accounting
@@ -18,28 +26,7 @@
  *      =sweet side effect is avoiding calls to ugly page_address( ) from the
  *       pg-tlb allocator sub-sys (pte_alloc_one, ptr_free, pmd_populate
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arc/pgalloc.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Autors : Amit Bhor, Sameer Dhavale
- * PGD, PMD, PTE allocation and freeing routines, taken from mips
+ * Amit Bhor, Sameer Dhavale: Codito 2004
  */
 
 #ifndef _ASM_ARC_PGALLOC_H
@@ -117,7 +104,21 @@ static inline void free_pgd_slow(pgd_t *pgd)
 #define pgd_free(mm, pgd)      free_pgd_slow(pgd)
 #define pgd_alloc(mm)          get_pgd_slow()
 
-static inline int __get_order_pte(void)
+/* 1 Page whatever is PAGE_SIZE: 8k or 16k or 4k */
+#define PTE_ORDER 0
+
+/* We want to cap Page Table Size to 1 pg (although multiple tables can fit in
+ * one page). This is obviously done to conserve resident-lockedup-memory and
+ * also be able to use quicklists in future.
+ * With software-only page-tables, aadr-split for traversal is tweakable and
+ * that directly governs how big tables would be at each level. A wrong split
+ * can overflow table size (complicated further by variable page size).
+ * thus we need to programatically assert the size constraint
+ *
+ * All of this is const math, allowing gcc to do constant folding/propagation.
+ * For good cases the entire fucntion is elimiated away.
+ */
+static inline void __verify_pte_order(void)
 {
     /* SASID requires PTE to be two words - thus size of pg tbl is doubled */
 #ifdef CONFIG_ARC_MMU_SASID
@@ -128,10 +129,8 @@ static inline int __get_order_pte(void)
 
     const int num_pgs = (PTRS_PER_PTE * 4 * multiplier)/PAGE_SIZE;
 
-    if (num_pgs)
-        return order_base_2(num_pgs);
-
-    return 0;  /* 1 Page */
+    if (num_pgs > 1)
+        panic("PTE TBL too big\n");
 }
 
 
@@ -140,8 +139,10 @@ pte_alloc_one_kernel(struct mm_struct *mm, unsigned long address)
 {
     pte_t *pte;
 
+    __verify_pte_order();
+
     pte = (pte_t *) __get_free_pages(GFP_KERNEL|__GFP_REPEAT|__GFP_ZERO,
-									__get_order_pte());
+                                    PTE_ORDER);
 
     return pte;
 }
@@ -151,7 +152,9 @@ pte_alloc_one(struct mm_struct *mm, unsigned long address)
 {
     pgtable_t pte_pg;
 
-    pte_pg = __get_free_pages(GFP_KERNEL | __GFP_REPEAT, __get_order_pte());
+    __verify_pte_order();
+
+    pte_pg = __get_free_pages(GFP_KERNEL | __GFP_REPEAT, PTE_ORDER);
     if (pte_pg)
     {
 		memset_aligned((void *)pte_pg, PTRS_PER_PTE * 4);
@@ -163,13 +166,13 @@ pte_alloc_one(struct mm_struct *mm, unsigned long address)
 
 static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 {
-    free_pages((unsigned long)pte, __get_order_pte());  // takes phy addr
+    free_pages((unsigned long)pte, PTE_ORDER);  // takes phy addr
 }
 
 static inline void pte_free(struct mm_struct *mm, pgtable_t ptep)
 {
 	pgtable_page_dtor(virt_to_page(ptep));
-    free_pages(ptep, __get_order_pte());
+    free_pages(ptep, PTE_ORDER);
 }
 
 
