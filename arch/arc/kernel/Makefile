@@ -40,4 +40,6 @@ endif
 CFLAGS_fpu.o   += -mdpfp
 obj-$(CONFIG_ARCH_ARC_FPU) += fpu.o
 
+obj-$(CONFIG_ARC_MISAILGNED_ACCESS) += unaligned.o
+
 extra-y := init_task.o vmlinux.lds

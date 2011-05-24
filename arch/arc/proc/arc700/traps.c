@@ -5,6 +5,9 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * vineetg: May 2011
+ *  -user-space unaligned access emulation
+ *
  * Vineetg: June 10th 2008
  *  -Added show_callee_regs to display CALLEE REGS
  *  -Added show_fault_diagnostics as a common function to display all
@@ -83,8 +86,29 @@ int name(unsigned long cause, unsigned long address, struct pt_regs *regs) \
     return do_fatal_exception(cause,str,regs,&info);\
 }
 
-DO_ERROR_INFO(SIGSEGV, "Misaligned Access",
-                do_misaligned_access, SEGV_ACCERR)
+#ifdef CONFIG_ARC_MISAILGNED_ACCESS
+extern int misaligned_fixup(unsigned long address, struct pt_regs *regs,
+        unsigned long cause,  struct callee_regs *cregs);
+
+int do_misaligned_access(unsigned long cause, unsigned long address,
+             struct pt_regs *regs, struct callee_regs *cregs)
+{
+	if (misaligned_fixup(address, regs, cause, cregs) != 0) {
+	    siginfo_t info;
+
+        info.si_signo = SIGSEGV;
+        info.si_errno = 0;
+        info.si_code = SEGV_ACCERR;
+        info.si_addr = (void *)address;
+        return do_fatal_exception(cause,"Misaligned Access", regs,&info);
+    }
+    return 0;
+}
+
+#else
+DO_ERROR_INFO(SIGSEGV, "Misaligned Access", do_misaligned_access, SEGV_ACCERR)
+#endif
+
 DO_ERROR_INFO(SIGILL, "Privileged Operation/Disabled Extension/Actionpoint Hit",
                 do_privilege_fault, ILL_PRVOPC)
 DO_ERROR_INFO(SIGILL, "Extenion Instruction Exception",

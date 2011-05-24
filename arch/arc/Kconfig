@@ -548,6 +548,14 @@ config ARC_TLS_REG_EMUL
             pointer to TLS Data area.
             So we emulate the TLS register using a TLS Virtual addr
 
+config ARC_MISAILGNED_ACCESS
+        bool "Emulate unaligned memory access (userspace only)"
+        default N
+        help
+            This enables misaligned 16 & 32 bit memory access from user space.
+            Use ONLY-IF-ABS-NECESSARY as it will be very slow and also can hide
+            potential bugs in code
+
 config ARCH_ARC_SPACE_RND
         bool "Address Space Randomisation (mmap/SP)"
         default N

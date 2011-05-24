@@ -10,6 +10,9 @@
  *   needed before task_pt_regs was invented. This saves a branch per call
  *   and more importantly allows clean invocation of post-syscall ptrace hook
  *
+ * vineetg: May 2011
+ *  -Userspace unaligned access emulation
+ *
  * vineetg: Feb 2011 (ptrace low level code fixes)
  *  -traced syscall return code (r0) was not saved into pt_regs for restoring
  *   into user reg-file when traded task rets to user space.
@@ -425,7 +428,18 @@ ARC_ENTRY EV_TLBProtV
     mov r0, r3              ; cause code
     mov r1, r4              ; faulting address
     mov r2, sp              ; pt_regs
+
+#ifdef  CONFIG_ARC_MISAILGNED_ACCESS
+    SAVE_CALLEE_SAVED_USER
+    mov r3, sp              ; callee_regs
+#endif
+
     bl  do_misaligned_access
+
+#ifdef  CONFIG_ARC_MISAILGNED_ACCESS
+    DISCARD_CALLEE_SAVED_USER
+#endif
+
     b   ret_from_exception
 
 ; ---------------------------------------------
