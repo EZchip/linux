@@ -99,7 +99,6 @@ KBUILD_IMAGE := bootpImage
 
 all:	$(KBUILD_IMAGE)
 
-boot := arch/arc/boot
 
 # Sameer: People update symlinks to machine and proc folders
 #         here. We wil need it when we'll add more processors
