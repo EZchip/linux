@@ -210,7 +210,7 @@ SYMBOL_NAME_LABEL(reserved) ; processor restart
 ; ---------------------------------------------
 ;  Level 2 ISR: Can interrupt a Level 1 ISR
 ; ---------------------------------------------
-SYMBOL_NAME_LABEL(handle_interrupt_level2)
+ARC_ENTRY handle_interrupt_level2
 
     ; TODO-vineetg for SMP this wont work
     ; free up r9 as scratchpad
@@ -253,6 +253,8 @@ SYMBOL_NAME_LABEL(handle_interrupt_level2)
 
     b   ret_from_exception
 
+ARC_EXIT handle_interrupt_level2
+
 #endif
 
 ; ---------------------------------------------
@@ -287,6 +289,7 @@ ARC_ENTRY handle_interrupt_level1
     sr r8, [AUX_IRQ_LV12]       ; clear bit in Sticky Status Reg
 
     b   ret_from_exception
+ARC_EXIT handle_interrupt_level1
 
 ;################### Non TLB Exception Handling #############################
 
@@ -314,6 +317,7 @@ ARC_ENTRY instr_service
 
     bl  do_insterror_or_kprobe
     b   ret_from_exception
+ARC_EXIT instr_service
 
 ; ---------------------------------------------
 ; Memory Error Exception Handler
@@ -335,6 +339,7 @@ ARC_ENTRY mem_service
     mov r2, sp
     bl  do_memory_error
     b   ret_from_exception
+ARC_EXIT mem_service
 
 ; ---------------------------------------------
 ; Machine Check Exception Handler
@@ -367,6 +372,7 @@ not_tlb_overlap:
 
     j  do_machine_check_fault
 
+ARC_EXIT EV_MachineCheck
 
 ; ---------------------------------------------
 ; Protection Violation Exception Handler
@@ -442,6 +448,8 @@ ARC_ENTRY EV_TLBProtV
 
     b   ret_from_exception
 
+ARC_EXIT EV_TLBProtV
+
 ; ---------------------------------------------
 ; Privilege Violation Exception Handler
 ; ---------------------------------------------
@@ -463,6 +471,7 @@ ARC_ENTRY EV_PrivilegeV
 
     bl  do_privilege_fault
     b   ret_from_exception
+ARC_EXIT EV_PrivilegeV
 
 ; ---------------------------------------------
 ; Extension Instruction Exception Handler
@@ -479,6 +488,7 @@ ARC_ENTRY EV_Extension
     mov r2, sp
     bl  do_extension_fault
     b   ret_from_exception
+ARC_EXIT EV_Extension
 
 ;######################### System Call Tracing #########################
 
@@ -609,6 +619,7 @@ ARC_ENTRY EV_Trap
 
     ; fall through to ret_from_system_call
 
+ARC_EXIT EV_Trap
 ARC_ENTRY ret_from_system_call
 
     st  r0, [sp, PT_r0]     ; sys call return value in pt_regs
@@ -824,6 +835,7 @@ ARC_ENTRY ret_from_fork
     ; put last task in scheduler queue
     bl  SYMBOL_NAME(schedule_tail)
     b SYMBOL_NAME(ret_from_exception)
+ARC_EXIT ret_from_fork
 
 ;################### Special Sys Call Wrappers ##########################
 
@@ -838,6 +850,7 @@ ARC_ENTRY sys_execve_wrapper
 
     bz ret_from_system_call
     b  tracesys_exit
+ARC_EXIT sys_execve_wrapper
 
 ARC_ENTRY sys_fork_wrapper
     ; copy pointer to pt_regs as a parameter
@@ -852,7 +865,7 @@ ARC_ENTRY sys_fork_wrapper
 
     bz ret_from_system_call
     b  tracesys_exit
-
+ARC_EXIT sys_fork_wrapper
 
 ARC_ENTRY sys_vfork_wrapper
     ; copy pointer to pt_regs as a parameter
@@ -867,6 +880,7 @@ ARC_ENTRY sys_vfork_wrapper
 
     bz ret_from_system_call
     b  tracesys_exit
+ARC_EXIT sys_vfork_wrapper
 
 ARC_ENTRY sys_clone_wrapper
     ; clone sys-call takes 2 mandatary args: @flags and @child-stack
@@ -885,6 +899,7 @@ ARC_ENTRY sys_clone_wrapper
 
     bz ret_from_system_call
     b  tracesys_exit
+ARC_EXIT sys_clone_wrapper
 
 ;################### Sys Call Table ##########################
 
@@ -1255,3 +1270,4 @@ __syscall_end:
         .rept   NR_syscalls - (__syscall_end - __syscall_start) / 4
                 .long   SYMBOL_NAME(sys_ni_syscall)
         .endr
+ARC_EXIT sys_call_table
