@@ -71,3 +71,12 @@ EXPORT_SYMBOL(__floatunsisf);
 
 EXPORT_SYMBOL(clk_speed);
 EXPORT_SYMBOL(mac_addr);
+
+/* ARC optimised assembler routines */
+EXPORT_SYMBOL(memset);
+EXPORT_SYMBOL(memcpy);
+EXPORT_SYMBOL(memcmp);
+EXPORT_SYMBOL(strchr);
+EXPORT_SYMBOL(strcpy);
+EXPORT_SYMBOL(strcmp);
+EXPORT_SYMBOL(strlen);

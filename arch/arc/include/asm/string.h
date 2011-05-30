@@ -5,22 +5,36 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * vineetg: May 2011
+ *  -We had half-optimised memset/memcpy, got better versions of those
+ *  -Added memcmp, strchr, strcpy, strcmp, strlen
+ *
  * Amit Bhor: Codito Technologies 2004
  */
 
 #ifndef _ASM_ARC_STRING_H
 #define _ASM_ARC_STRING_H
 
+#include <linux/types.h>
+
+#ifdef __KERNEL__
+
 #define __HAVE_ARCH_MEMSET
-
-extern void * memset(void *, int, __kernel_size_t);
-
-#define memzero(buff, len)	memset(buff, 0, len)
-
 #define __HAVE_ARCH_MEMCPY
+#define __HAVE_ARCH_MEMCMP
+#define __HAVE_ARCH_STRCHR
+#define __HAVE_ARCH_STRCPY
+#define __HAVE_ARCH_STRCMP
+#define __HAVE_ARCH_STRLEN
 
+extern void * memset(void *ptr, int, __kernel_size_t);
 extern void * memcpy(void *, const void *, __kernel_size_t);
+extern void memzero(void *ptr, __kernel_size_t n);
+extern int memcmp(const void *, const void *, __kernel_size_t);
+extern char * strchr(const char * s, int c);
+extern char *strcpy(char *dest, const char *src);
+extern int strcmp(const char *cs, const char *ct);
+extern __kernel_size_t strlen(const char *);
 
-
-
-#endif
+#endif  /* __KERNEL__ */
+#endif  /* _ASM_ARC_STRING_H */

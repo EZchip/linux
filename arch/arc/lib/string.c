@@ -80,6 +80,13 @@ slowpath_copy_to_user(void *to, const void *from, unsigned long n)
 
 EXPORT_SYMBOL(slowpath_copy_to_user);
 
+/****************************************************************
+ * Legacy arch string routines:
+ * to be removed, once the new tight asm code proves alright
+ * */
+
+#ifdef __HAVE_ARCH_SLOW_STRINGS
+
 #ifdef __HAVE_ARCH_MEMSET
 
 #undef memset
@@ -155,4 +162,5 @@ void * memcpy (void * to, const void * from, size_t count)
 }
 EXPORT_SYMBOL(memcpy);
 
-#endif
+#endif /* __HAVE_ARCH_MEMCPY */
+#endif /* __HAVE_ARCH_SLOW_STRING */
