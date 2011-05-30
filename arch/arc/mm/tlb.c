@@ -270,10 +270,11 @@ void noinline local_flush_tlb_mm(struct mm_struct *mm)
 
 /*
  * Flush a Range of TLB entries for userland.
+ * @start is inclusive, while @end is exclusive
  * Difference between this and Kernel Range Flush is
  *  -Here the fastest way (if range is too large) is to move to next ASID
  *      without doing any explicit Shootdown
- *  --In case of kernel Flush, entry has to be shot down explictly
+ *  -In case of kernel Flush, entry has to be shot down explictly
  */
 void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
                unsigned long end)
@@ -314,6 +315,12 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 
 }
 
+/* Flush the kernel TLB entries - vmalloc/modules (Global from MMU perspective)
+ *  @start, @end interpreted as kvaddr
+ * Interestingly, shared TLB entries can also be flushed using just
+ * @start,@end alone (interpreted as user vaddr), although technically SASID
+ * is also needed. However our smart TLbProbe lookup takes care of that.
+ */
 void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
     unsigned long flags;
@@ -424,7 +431,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
         asid_or_sasid = read_new_aux_reg(ARC_REG_PID) & 0xff;
 
 
-    write_new_aux_reg(ARC_REG_TLBPD0, (address|pd0_flags|asid_or_sasid));
+    write_new_aux_reg(ARC_REG_TLBPD0, address|pd0_flags|asid_or_sasid);
 
     /* Load remaining info in PD1 (Page Frame Addr and Kx/Kw/Kr Flags etc) */
     write_new_aux_reg(ARC_REG_TLBPD1, (pte_val(*ptep) & PTE_BITS_IN_PD1));

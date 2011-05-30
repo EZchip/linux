@@ -24,6 +24,7 @@
 #include <asm/mman.h>
 #include <asm/mmapcode.h>
 #include <asm/uaccess.h>
+#include <asm/tlbflush.h>
 
 #if 0
 //#define MMAP_DBG(fmt, args...)  pr_debug(fmt , ## args)
@@ -450,6 +451,27 @@ int mmapcode_enab_vaddr(struct file *filp, unsigned long pgoff,
     return -1;
 }
 
+static void mmapcode_free_one(struct mm_struct *mm, mmapcode_tracker_t *db,
+                                int sasid)
+{
+    mmapcode_task_unsubscribe(mm, sasid);
+
+    db->refcnt--;
+    BUG_ON(db->refcnt < 0);
+    if (db->refcnt == 0) {
+        /* Flush the cmn-code TLB entries
+         * the Probe semantics are same as that for global entries
+         * XXX: we can leave the non-code entries behind.
+         * Since process pvt ASID will get invalid, the entries will
+         * be used anyways
+         */
+        local_flush_tlb_kernel_range(db->code.vaddr,
+                            db->code.vaddr + db->code.len);
+        gen_pool_free(mmapcode_addr_pool, db->dso.vaddr, db->dso.len);
+        memset(db, 0, sizeof(*db));
+    }
+}
+
 /* Called upon unmap of a cmn-vaddr egion */
 
 int mmapcode_free(struct mm_struct *mm, unsigned long vaddr,
@@ -472,17 +494,10 @@ int mmapcode_free(struct mm_struct *mm, unsigned long vaddr,
         if (db->code.vaddr == vaddr && db->code.len == len &&
             is_mmapcode_task_subscribed(mm, i)) {
 
-            mmapcode_task_unsubscribe(mm, i);
-
             MMAP_DBG("UNMAP (%d) ino %lx, len %lx : [%lx] refs %d\n",
-                    i, db->ino, len, vaddr, db->refcnt);
+                    i, db->ino, len, vaddr, db->refcnt-1);
 
-            db->refcnt--;
-            BUG_ON(db->refcnt < 0);
-            if (db->refcnt == 0) {
-                gen_pool_free(mmapcode_addr_pool, vaddr, db->dso.len);
-                memset(db, 0, sizeof(*db));
-            }
+            mmapcode_free_one(mm, db, i);
             break;
         }
     }
@@ -503,17 +518,10 @@ int mmapcode_free_all(struct mm_struct *mm)
 
         if (is_mmapcode_task_subscribed(mm, i)) {
 
-            mmapcode_task_unsubscribe(mm, i);
-
             MMAP_DBG("EXIT (%d) ino %lx, [%lx] refs %d\n",
                     i, db->ino, db->code.vaddr, db->refcnt-1);
 
-            db->refcnt--;
-            BUG_ON(db->refcnt < 0);
-            if (db->refcnt == 0) {
-                gen_pool_free(mmapcode_addr_pool, db->dso.vaddr, db->dso.len);
-                memset(db, 0, sizeof(*db));
-            }
+            mmapcode_free_one(mm, db, i);
         }
     }
 
@@ -565,7 +573,7 @@ void arch_dup_mmap(struct mm_struct *oldmm, struct mm_struct *mm)
 
 /* Checks if the @vaddr contained in @mm belongs to a cmn-vaddr-space
  * instance.
- * If yes returns the "id" of that address space, else -1
+ * If yes returns the "sasid" of that address space, else -1
  */
 int mmapcode_find_mm_vaddr(struct mm_struct *mm, unsigned long vaddr)
 {
