@@ -5,6 +5,13 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * vineetg: May 2011
+ *  -No need to flush_cache_page( ) for each call to update_mmu_cache()
+ *   some of the LMBench tests improved amazingly
+ *      = page-fault thrice as fast (75 usec to 28 usec)
+ *      = mmap twice as fast (9.6 msec to 4.6 msec),
+ *      = fork (5.3 msec to 3.7 msec)
+ *
  * vineetg: April 2011 :
  *  -MMU v3: PD{0,1} bits layout changed: They don't overlap anymore,
         helps avoid a shift when preparing PD0 from PTE
@@ -447,20 +454,9 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
     local_irq_restore(flags);
 }
 
-/*
- * Things to do when a new PTE is entered in Page Tables or an existing one
- * is modified.
- * (1) for VIPT caches, deal with Cache flushing.
- * (2) Also as an optimisation, create/modify the TLB entry corresponding
- *    to vaddr+pfn. This routine, most likely got called as a result of
- *    TLB Miss or Prot Violation (to break COW) with fast Path TLB refill code
- *    unable to create the TLB.
- *   TLB Miss => page fault hdlr => VM code => chg PTE => update_mmu_cache()
- *   So it provides an opportunity to create the TLB. Otherwise if we simply fix
- *   the VM data structures (Page Tables) in this control flow and return away
- *   from page fault handler, SAME TLB Miss will be taken again, and
- *   Fast Path TLB Refill code will create the TLB. Creating the TLB here will
- *   save one TLB Miss exception
+/* arch hook called by core VM at the end of handle_mm_fault( ),
+ * when a new PTE is entered in Page Tables or an existing one
+ * is modified. We aggresively pre-install a TLB entry
  */
 
 void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t *ptep)
@@ -478,8 +474,6 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t 
         return;
 
     create_tlb(vma, vaddress, ptep);
-
-    flush_cache_page(vma, vaddress, pfn);
 }
 
 
