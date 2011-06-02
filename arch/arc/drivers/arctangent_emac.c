@@ -105,11 +105,16 @@ volatile unsigned int skb_count = 0;
 #define MAX_RX_BUFFER_LEN	0x800	/* 2^11 = 2048 = 0x800 */
 #define MAX_TX_BUFFER_LEN	0x800	/* 2^11 = 2048 = 0x800 */
 
-/*
- * 14 bytes of ethernet header, 8 bytes pad to prevent buffer chaining of
- * maximum sized ethernet packets (1514 bytes)
+/* Assuming MTU=1500 (IP pkt: hdr+payload), we round off to next cache-line
+ * boundary: 1536 % {32,64,128} == 0
+ * This provides enough space for ethernet header (14) and also ensures that
+ * buf-size passed to EMAC > max pkt rx (1514). Latter is due to a EMAC quirk
+ * wherein it can generate a chained pkt (with all data in first part, and
+ * an empty 2nd part - albiet with last bit set) when Rx-pkt-sz is exactly
+ * equal to buf-size: hence the need to keep buf-size sligtly bigger than
+ * largest pkt.
  */
-#define	VMAC_BUFFER_PAD ETH_HLEN + 8
+#define	VMAC_BUFFER_PAD 36
 
 /* VMAC register definitions */
 typedef volatile struct
@@ -720,6 +725,8 @@ arc_emac_open(struct net_device * dev)
 	__mdio_read(ap, LXT971A_STATUS2_REG, temp);
 	dump_phy_status(temp);
 
+    printk("EMAC MTU %d\n", dev->mtu);
+
 	/* Allocate and set buffers for rx BD's */
 	bd = ap->rxbd;
 	for (i = 0; i < RX_BDT_LEN; i++)
@@ -1119,7 +1126,7 @@ static int arc_thread(void *unused) //helps with interrupt mitigation.
 
 			for (i = 1; i != SKB_PREALLOC; i++)
 			{
-				skb_prealloc[i] = dev_alloc_skb(1518);
+				skb_prealloc[i] = dev_alloc_skb(1500 + VMAC_BUFFER_PAD);
 				//MTU
 					if (!skb_prealloc[i])
 					printk(KERN_CRIT "Failed to get an SKB\n");
