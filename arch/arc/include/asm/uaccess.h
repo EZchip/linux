@@ -5,6 +5,12 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * vineetg: Apr 2011 - access_ok( ) simplification
+ *    -Copied from IA-64
+ *    -No need to seperately check for kernel/user segments
+ *    -With addr_limit now having the exact last valid addr, it can simply
+ *     be add < get_fs()
+ *
  * vineetg: June 2010
  *    -__clear_user( ) called multiple times during elf load was byte loop
  *    converted to do as much word clear as possible.
