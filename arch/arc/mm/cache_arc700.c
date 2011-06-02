@@ -327,9 +327,18 @@ static inline void __arc_dcache_per_line_op(unsigned long start, unsigned long s
 {
     int num_lines, slack;
 
-    slack = start & ~DCACHE_LINE_MASK;
-    sz += slack;
-    start -= slack;
+    /* Ensure we properly floor/ceil the non-line aligned/sized requests
+     * and have @start - aligned to cache line and integral @num_lines
+     * However page sized flushes can be compile time optimised.
+     *  -@start will be cache-line aligned already (being page aligned)
+     *  -@sz will be integral multiple of line size (being page sized).
+     */
+    if (!(__builtin_constant_p(sz) && sz == PAGE_SIZE )) {
+        slack = start & ~DCACHE_LINE_MASK;
+        sz += slack;
+        start -= slack;
+    }
+
     num_lines = (sz + DCACHE_COMPILE_LINE_LEN - 1)/DCACHE_COMPILE_LINE_LEN;
 
     while (num_lines-- > 0) {
@@ -608,12 +617,18 @@ static void __arc_icache_inv_lines(unsigned long start, unsigned long sz)
     unsigned long flags;
     int num_lines, slack;
 
-    /* ensure we properly floor/ceil the non-line aligned/sized requests
-     * and have @start - aligned to pag sz, and integral @num_lines
+    /* Ensure we properly floor/ceil the non-line aligned/sized requests
+     * and have @start - aligned to cache line, and integral @num_lines
+     * However page sized flushes can be compile time optimised.
+     *  -@start will be cache-line aligned already (being page aligned)
+     *  -@sz will be integral multiple of line size (being page sized).
      */
-    slack = start & ~ICACHE_LINE_MASK;
-    sz += slack;
-    start -= slack;
+    if (!(__builtin_constant_p(sz) && sz == PAGE_SIZE )) {
+        slack = start & ~ICACHE_LINE_MASK;
+        sz += slack;
+        start -= slack;
+    }
+
     num_lines = (sz + ICACHE_COMPILE_LINE_LEN - 1)/ICACHE_COMPILE_LINE_LEN;
 
     local_irq_save(flags);
