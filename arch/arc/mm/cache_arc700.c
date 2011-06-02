@@ -10,6 +10,7 @@
  *  vineetg: May 2011: for Non-aliasing VIPT D-cache following can be NOPs
  *   -flush_cache_dup_mm (fork)
  *   -likewise for flush_cache_mm (exit/execve)
+ *   -likewise for flush_cache_{range,page} (munmap, exit, COW-break)
  *
  * vineetg: Apr 2011
  *  -Now that MMU can support larger pg sz (16K), the determiniation of
@@ -802,30 +803,6 @@ void flush_cache_all()
 
 }
 
-/*
- * FIXME: start and end user virtual addrs. How to ensure the correct cache
- * is getting invalidate??
- */
-
-void flush_cache_range(struct vm_area_struct *vma, unsigned long start,
-               unsigned long end)
-{
-    struct mm_struct *mm = vma->vm_mm;
-    if (mm->context.asid != NO_ASID)
-        flush_cache_all();
-}
-
-void flush_cache_page(struct vm_area_struct *vma, unsigned long page,
-              unsigned long pfn)
-{
-    unsigned int start = pfn << PAGE_SHIFT;
-
-    __arc_dcache_flush_lines(start, PAGE_SIZE);
-
-    if (vma->vm_flags & VM_EXEC)
-        __arc_icache_inv_lines(start, PAGE_SIZE);
-
-}
 #else
 #define __arc_icache_inv_lines(a,b)
 #endif

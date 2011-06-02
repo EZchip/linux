@@ -8,6 +8,7 @@
  *  vineetg: May 2011: for Non-aliasing VIPT D-cache following can be NOPs
  *   -flush_cache_dup_mm (fork)
  *   -likewise for flush_cache_mm (exit/execve)
+ *   -likewise for flush_cache_{range,page} (munmap, exit, COW-break)
  *
  *  vineetg: April 2008
  *   -Added a critical CacheLine flush to copy_to_user_page( ) which
@@ -31,6 +32,27 @@
 /* called during execve/exit */
 #define flush_cache_mm(mm)
 
+/* flush_cache_range( ): Flush the Cache lines for @u_vstart .. @u_vend
+ * 1) Called when a range of user-space V-P mappings are torn-down:
+ *     because of munmap() or exit().
+ * 2) For VIPT, Non-aliasing D-Cache, flush_cache_range() can be a NOP.
+ *    For now, ARC Linux doesn't support such ARC700 hardware configs, hence
+ *    it can safely be a NOP
+ *    If and when we do, this would have to be properly implemented
+ *      -ASID doesn't have any role to play here
+ *      -don't flush the entire I/D$, but iterate thru mappings, and
+ *        for v-pages with backing phy-frame, flush the page from cache.
+ *
+ */
+#define flush_cache_range(mm, u_vstart, u_vend)
+
+/* flush_cache_page( ): Flush Cache-lines for @u_vaddr mapped to @pfn
+ * Cousin of flush_cache_range( ) called mainly during page fault handling
+ * COW etc. Again per above, for now it can be a NOP.
+ */
+#define flush_cache_page(vma, u_vaddr, pfn)
+
+
 #ifdef CONFIG_ARC700_CACHE
 
 #ifdef CONFIG_SMP
@@ -41,14 +63,9 @@
 
 extern void flush_cache_all(void);
 
-extern void flush_cache_range(struct vm_area_struct *vma, unsigned long start,unsigned long end);
-extern void flush_cache_page(struct vm_area_struct *vma, unsigned long user_addr, unsigned long page);
-
 #else
 
 #define flush_cache_all()                       do { } while (0)
-#define flush_cache_range(mm,start,end)         do { } while (0)
-#define flush_cache_page(vma,user_addr,page)    do { } while (0)
 
 
 #endif /* CONFIG_ARC_CACHE */
