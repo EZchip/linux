@@ -5,11 +5,13 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- *  vineetg: April 2008
- *      -Added a critical CacheLine flush to copy_to_user_page( ) which
- *          was causing gdbserver to not setup breakpoints consistently
+ *  vineetg: May 2011: for Non-aliasing VIPT D-cache following can be NOPs
+ *   -flush_cache_dup_mm (fork)
+ *   -likewise for flush_cache_mm (exit/execve)
  *
- * Sameer Dhavale: Codito Technologies 2004
+ *  vineetg: April 2008
+ *   -Added a critical CacheLine flush to copy_to_user_page( ) which
+ *     was causing gdbserver to not setup breakpoints consistently
  */
 
 #ifndef _ASM_CACHEFLUSH_H
@@ -17,8 +19,17 @@
 
 #define flush_dcache_mmap_lock(mapping)     do { } while (0)
 #define flush_dcache_mmap_unlock(mapping)   do { } while (0)
+
 #define flush_cache_vmap(start, end)        flush_cache_all()
 #define flush_cache_vunmap(start, end)      flush_cache_all()
+
+/* NOPS for VIPT Cache with non-aliasing D$ configurations only */
+
+/* called during fork */
+#define flush_cache_dup_mm(mm)
+
+/* called during execve/exit */
+#define flush_cache_mm(mm)
 
 #ifdef CONFIG_ARC700_CACHE
 
@@ -29,8 +40,6 @@
 
 
 extern void flush_cache_all(void);
-extern void __flush_cache_all(void);
-extern void flush_cache_mm(struct mm_struct *mm);
 
 extern void flush_cache_range(struct vm_area_struct *vma, unsigned long start,unsigned long end);
 extern void flush_cache_page(struct vm_area_struct *vma, unsigned long user_addr, unsigned long page);
@@ -38,15 +47,12 @@ extern void flush_cache_page(struct vm_area_struct *vma, unsigned long user_addr
 #else
 
 #define flush_cache_all()                       do { } while (0)
-#define flush_cache_mm(mm)                      do { } while (0)
 #define flush_cache_range(mm,start,end)         do { } while (0)
 #define flush_cache_page(vma,user_addr,page)    do { } while (0)
 
 
 #endif /* CONFIG_ARC_CACHE */
 
-// TODO-vineetg : added after 2.6.19 need to look at this
-#define flush_cache_dup_mm(mm)  flush_cache_mm(mm)
 
 #ifdef CONFIG_ARC700_USE_ICACHE
 extern void flush_icache_all(void);

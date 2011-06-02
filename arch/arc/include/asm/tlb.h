@@ -57,6 +57,7 @@ void tlb_find_asid(unsigned int asid);
 void __init read_decode_mmu_bcr(void);
 
 #define tlb_flush(tlb) local_flush_tlb_mm((tlb)->mm)
+#define __tlb_remove_tlb_entry(tlb, ptep, address) do { } while (0)
 
 #define tlb_start_vma(tlb, vma)                 \
     do {                            \
@@ -66,7 +67,6 @@ void __init read_decode_mmu_bcr(void);
 
 #define tlb_end_vma(tlb, vma) do { } while (0)
 
-#define __tlb_remove_tlb_entry(tlb, ptep, address) do { } while (0)
 
 static inline void enter_lazy_tlb(struct mm_struct *mm,
                     struct task_struct *tsk)

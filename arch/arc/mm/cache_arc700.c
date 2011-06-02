@@ -7,6 +7,10 @@
  *
  * I-Cache and D-cache control functionality.
  *
+ *  vineetg: May 2011: for Non-aliasing VIPT D-cache following can be NOPs
+ *   -flush_cache_dup_mm (fork)
+ *   -likewise for flush_cache_mm (exit/execve)
+ *
  * vineetg: Apr 2011
  *  -Now that MMU can support larger pg sz (16K), the determiniation of
  *   aliasing shd not be based on assumption of 8k pg
@@ -541,7 +545,7 @@ EXPORT_SYMBOL(flush_dcache_page);
  * MMU v3
  * ------------------
  * This ver of MMU supports var page sizes (1k-16k) - Linux will support
- * 8k (default) and 16k.
+ * 8k (default), 16k and 4k.
  * However from hardware perspective, smaller page sizes aggrevate aliasing
  * meaning more vaddr bits needed to disambiguate the cache-line-op ;
  * the existing scheme of piggybacking won't work for certain configurations.
@@ -796,12 +800,6 @@ void flush_cache_all()
 
     local_irq_restore(flags);
 
-}
-
-void flush_cache_mm(struct mm_struct *mm)
-{
-    if (mm->context.asid != NO_ASID)
-        flush_cache_all();
 }
 
 /*
