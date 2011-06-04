@@ -33,4 +33,12 @@
 #undef ARC_HAS_SWAPE
 #endif
 
+/* Lot of hand written asm routines which get inlined as well contain ZOL
+ *   copy_from_user(), clear_user(), memset_aligned( ) etc
+ * Enabling these toggles prevents their inlining, confining ZOL to very few
+ * routines - good test to check if arc-gcc is generating ZOLs or not
+ */
+#undef  NONINLINE_USR_CPY
+#undef  NONINLINE_MEMSET
+
 #endif  /* __ARC_ASM_DEFINES_H__ */

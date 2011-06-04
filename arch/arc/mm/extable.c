@@ -39,7 +39,7 @@ copy_from_user(void *to, const void *from, unsigned long n)
 {
 
     if(access_ok(VERIFY_READ, from, n)) {
-        return (__generic_copy_from_user(to, from, n));
+        return (__copy_from_user_inline(to, from, n));
     }
     return n;
 }
@@ -55,7 +55,7 @@ copy_from_user(void *to, const void *from, unsigned long n)
 unsigned long
 __copy_from_user(void *to, const void *from, unsigned long n)
 {
-    return (__generic_copy_from_user(to, from, n));
+    return (__copy_from_user_inline(to, from, n));
 }
 
 /*
@@ -70,7 +70,7 @@ unsigned long
 copy_to_user(void *to, const void *from, unsigned long n)
 {
     if(access_ok(VERIFY_READ, to, n))
-        return (__generic_copy_to_user(to, from, n));
+        return (__copy_to_user_inline(to, from, n));
     return n;
 }
 
@@ -85,7 +85,42 @@ copy_to_user(void *to, const void *from, unsigned long n)
 unsigned long
 __copy_to_user(void *to, const void *from, unsigned long n)
 {
-    return(__generic_copy_to_user(to, from, n));
+    return(__copy_to_user_inline(to, from, n));
 }
+
+unsigned long
+__clear_user(void *to, unsigned long n)
+{
+    return __clear_user_inline(to,n);
+}
+
+unsigned long
+clear_user(void *to, unsigned long n)
+{
+    if(access_ok(VERIFY_WRITE, to, n))
+        return __clear_user_inline(to,n);
+
+    return n;
+}
+
+long
+strncpy_from_user(char *dst, const char *src, long count)
+{
+    long res = -EFAULT;
+
+    if (access_ok(VERIFY_READ, src, 1))
+        res = __strncpy_from_user_inline(dst, src, count);
+    return res;
+}
+
+long
+strnlen_user(const char *s, long n)
+{
+    if (!access_ok(VERIFY_READ, s, 0))
+        return 0;
+
+    return __strnlen_user_inline(s, n);
+}
+
 
 #endif

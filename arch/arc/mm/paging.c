@@ -11,6 +11,8 @@
 #include <asm/cacheflush.h> /* for flush_dcache_page_virt */
 #include <linux/module.h>
 
+#ifndef NONINLINE_MEMSET
+
 /* page functions */
 
 void copy_page(void *to, void *from)
@@ -60,6 +62,19 @@ void pgd_init(unsigned long page)
 	    );
 
 }
+
+#else
+
+void copy_page(void *to, void *from)
+{
+    memcpy(to, from, PAGE_SIZE);
+}
+
+void pgd_init(unsigned long page)
+{
+    memzero((void *)page, USER_PTRS_PER_PGD*4);
+}
+#endif
 
 void clear_user_page(void *addr, unsigned long vaddr, struct page *page)
 {

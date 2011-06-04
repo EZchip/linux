@@ -271,7 +271,7 @@ extern unsigned long slowpath_copy_from_user(
      void *to, const void *from, unsigned long n);
 
 static inline unsigned long
-__generic_copy_from_user(void *to, const void *from, unsigned long n)
+__copy_from_user_inline(void *to, const void *from, unsigned long n)
 {
     long res=0;
     char val;
@@ -590,51 +590,11 @@ __generic_copy_from_user(void *to, const void *from, unsigned long n)
     return (res);
 }
 
-//#define NONINLINE_USR_CPY
-#ifndef NONINLINE_USR_CPY
-/*
-  documentation says that copy_from_user should return the number of
-  bytes that couldn't be copied, we return 0 indicating that all data
-  was successfully copied.
-  NOTE: quite a few architectures return the size of the copy (n), this
-  is wrong because the refernces of copy_from_user consider it an error
-  when a positive value is returned
-*/
-static inline unsigned long
-copy_from_user(void *to, const void *from, unsigned long n)
-{
-
-    if(access_ok(VERIFY_READ, from, n)) {
-        return (__generic_copy_from_user(to, from, n));
-    }
-    return n;
-}
-
-/*
-  documentation says that __copy_from_user should return the number of
-  bytes that couldn't be copied, we return 0 indicating that all data
-  was successfully copied.
-  NOTE: quite a few architectures return the size of the copy (n), this
-  is wrong because the refernces of __copy_from_user consider it an error
-  when a positive value is returned
-*/
-static inline unsigned long
-__copy_from_user(void *to, const void *from, unsigned long n)
-{
-    return (__generic_copy_from_user(to, from, n));
-}
-#else
-
-unsigned long copy_from_user(void *to, const void *from, unsigned long n);
-unsigned long __copy_from_user(void *to, const void *from, unsigned long n);
-
-#endif
-
 extern unsigned long slowpath_copy_to_user(
      void *to, const void *from, unsigned long n);
 
 static inline unsigned long
-__generic_copy_to_user(void *to, const void *from, unsigned long n)
+__copy_to_user_inline(void *to, const void *from, unsigned long n)
 {
     long res=0;
     char val;
@@ -954,52 +914,12 @@ __generic_copy_to_user(void *to, const void *from, unsigned long n)
     return (res);
 }
 
-#ifndef NONINLINE_USR_CPY
-/*
-  documentation says that copy_to_user should return the number of
-  bytes that couldn't be copied, we return 0 indicating that all data
-  was successfully copied.
-  NOTE: quite a few architectures return the size of the copy (n), this
-  is wrong because the refernces of copy_to_user consider it an error
-  when a positive value is returned
-*/
-static inline unsigned long
-copy_to_user(void *to, const void *from, unsigned long n)
-{
-    if(access_ok(VERIFY_READ, to, n))
-        return (__generic_copy_to_user(to, from, n));
-    return n;
-}
-
-/*
-  documentation says that __copy_to_user should return the number of
-  bytes that couldn't be copied, we return 0 indicating that all data
-  was successfully copied.
-  NOTE: quite a few architectures return the size of the copy (n), this
-  is wrong because the refernces of __copy_to_user consider it an error
-  when a positive value is returned
-*/
-static inline unsigned long
-__copy_to_user(void *to, const void *from, unsigned long n)
-{
-    return(__generic_copy_to_user(to, from, n));
-}
-
-#else
-
-unsigned long copy_to_user(void *to, const void *from, unsigned long n);
-unsigned long __copy_to_user(void *to, const void *from, unsigned long n);
-#endif
-
-#define __copy_to_user_inatomic __copy_to_user
-#define __copy_from_user_inatomic __copy_from_user
-
 /*
  * Zero Userspace
  */
 
 static inline unsigned long
-__clear_user(void *to, unsigned long n)
+__clear_user_inline(void *to, unsigned long n)
 {
     long res = n;
     unsigned char *d_char = to;
@@ -1048,17 +968,6 @@ __clear_user(void *to, unsigned long n)
     return (res);
 }
 
-
-static inline unsigned long
-clear_user(void *to, unsigned long n)
-{
-    if(access_ok(VERIFY_WRITE, to, n))
-        return __clear_user(to,n);
-
-    return n;
-}
-
-
 /*
  * Copy a null terminated string from userspace.
  *
@@ -1070,7 +979,7 @@ clear_user(void *to, unsigned long n)
  */
 
 static inline long
-__do_strncpy_from_user(char *dst, const char *src, long count)
+__strncpy_from_user_inline(char *dst, const char *src, long count)
 {
     long res = count;
     char val;
@@ -1106,31 +1015,11 @@ __do_strncpy_from_user(char *dst, const char *src, long count)
 
 
 static inline long
-strncpy_from_user(char *dst, const char *src, long count)
-{
-    long res = -EFAULT;
-
-    if (access_ok(VERIFY_READ, src, 1))
-        res = __do_strncpy_from_user(dst, src, count);
-    return res;
-}
-
-
-/*
- * Return the size of a string (including the ending 0)
- *
- * Return length of string in userspace including terminating 0
- * or 0 for error.  Return a value greater than N if too long.
- */
-
-static inline long
-strnlen_user(const char *s, long n)
+__strnlen_user_inline(const char *s, long n)
 {
     long res, tmp1, cnt;
     char val;
 
-    if (!access_ok(VERIFY_READ, s, 0))
-        return 0;
 
     __asm__ __volatile__ (
         "   mov %2, %1                  \n"
@@ -1156,6 +1045,129 @@ strnlen_user(const char *s, long n)
 
     return (res);
 }
+
+#ifndef NONINLINE_USR_CPY
+/*
+  documentation says that copy_from_user should return the number of
+  bytes that couldn't be copied, we return 0 indicating that all data
+  was successfully copied.
+  NOTE: quite a few architectures return the size of the copy (n), this
+  is wrong because the refernces of copy_from_user consider it an error
+  when a positive value is returned
+*/
+static inline unsigned long
+copy_from_user(void *to, const void *from, unsigned long n)
+{
+
+    if(access_ok(VERIFY_READ, from, n)) {
+        return (__copy_from_user_inline(to, from, n));
+    }
+    return n;
+}
+
+/*
+  documentation says that __copy_from_user should return the number of
+  bytes that couldn't be copied, we return 0 indicating that all data
+  was successfully copied.
+  NOTE: quite a few architectures return the size of the copy (n), this
+  is wrong because the refernces of __copy_from_user consider it an error
+  when a positive value is returned
+*/
+static inline unsigned long
+__copy_from_user(void *to, const void *from, unsigned long n)
+{
+    return (__copy_from_user_inline(to, from, n));
+}
+
+/*
+  documentation says that copy_to_user should return the number of
+  bytes that couldn't be copied, we return 0 indicating that all data
+  was successfully copied.
+  NOTE: quite a few architectures return the size of the copy (n), this
+  is wrong because the refernces of copy_to_user consider it an error
+  when a positive value is returned
+*/
+static inline unsigned long
+copy_to_user(void *to, const void *from, unsigned long n)
+{
+    if(access_ok(VERIFY_READ, to, n))
+        return (__copy_to_user_inline(to, from, n));
+    return n;
+}
+
+/*
+  documentation says that __copy_to_user should return the number of
+  bytes that couldn't be copied, we return 0 indicating that all data
+  was successfully copied.
+  NOTE: quite a few architectures return the size of the copy (n), this
+  is wrong because the refernces of __copy_to_user consider it an error
+  when a positive value is returned
+*/
+static inline unsigned long
+__copy_to_user(void *to, const void *from, unsigned long n)
+{
+    return(__copy_to_user_inline(to, from, n));
+}
+
+static inline unsigned long __clear_user(void *to, unsigned long n)
+{
+    return __clear_user_inline(to,n);
+}
+
+static inline unsigned long clear_user(void *to, unsigned long n)
+{
+    if(access_ok(VERIFY_WRITE, to, n))
+        return __clear_user_inline(to,n);
+
+    return n;
+}
+
+static inline long
+strncpy_from_user(char *dst, const char *src, long count)
+{
+    long res = -EFAULT;
+
+    if (access_ok(VERIFY_READ, src, 1))
+        res = __strncpy_from_user_inline(dst, src, count);
+    return res;
+}
+
+
+/*
+ * Return the size of a string (including the ending 0)
+ *
+ * Return length of string in userspace including terminating 0
+ * or 0 for error.  Return a value greater than N if too long.
+ */
+
+static inline long
+strnlen_user(const char *s, long n)
+{
+    if (!access_ok(VERIFY_READ, s, 0))
+        return 0;
+
+    return __strnlen_user_inline(s, n);
+}
+
+#else
+
+unsigned long copy_from_user(void *to, const void *from, unsigned long n);
+unsigned long __copy_from_user(void *to, const void *from, unsigned long n);
+
+unsigned long copy_to_user(void *to, const void *from, unsigned long n);
+unsigned long __copy_to_user(void *to, const void *from, unsigned long n);
+
+unsigned long clear_user(void *to, unsigned long n);
+unsigned long __clear_user(void *to, unsigned long n);
+
+long strncpy_from_user(char *dst, const char *src, long count);
+long strnlen_user(const char *s, long n);
+
+#endif
+
+#define __copy_to_user_inatomic __copy_to_user
+#define __copy_from_user_inatomic __copy_from_user
+
 
 #define strlen_user(str)    strnlen_user((str), 0x7ffffffe)
 

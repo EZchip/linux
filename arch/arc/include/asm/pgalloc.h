@@ -31,6 +31,8 @@
 #include <linux/highmem.h>
 #include <linux/log2.h>
 
+#ifndef NONINLINE_MEMSET
+
 /* @sz is bytes, but gauranteed to be multiple of 4
  * Similarly @ptr is alo word aligned
  */
@@ -50,6 +52,10 @@ static void inline memset_aligned(void *ptr, unsigned int sz)
                   :"lp_count");
 
 }
+
+#else
+#define memset_aligned(p,s) memzero(p,s)
+#endif
 
 static inline void
 pmd_populate_kernel(struct mm_struct *mm, pmd_t *pmd, pte_t *pte)
