@@ -155,11 +155,16 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
     }
 
     /* TODO:
-     * currently loader does a MAP_FIXED for code of dso already registered
-     * if thats not the case, we need to lookup the dso and provide
-     * a addr_hint using cmn-vaddr for dso
+     * With uClibc ldso, mmap for code (PROT_EXEC) are always with MAP_FIXED
+     * (using a prior blanket mmap). However if MAP_FIXED is not specified,
+     * the cmn-vaddr allocator module needs to emulate MAP_FXED by allocating
+     * a chunck of cmn-vaddr - which we DONT at the moment.
+     * So a BUG_ON is added to cry for it when it is really needed.
+     * The basic condition to test is code mmaps w/o vaddr, i.e.
+     * PROT_EXEC && !MAP_FIXED.  However (PROT_EXEC && !PROT_WRITE) is a
+     * better indicator of code-mmap than PROT_EXEC alone.
      */
-    BUG_ON((prot & PROT_EXEC) && !(flags & MAP_FIXED));
+    BUG_ON((prot & PROT_EXEC) && !(flags & MAP_FIXED) && !(prot & PROT_WRITE));
 #endif
 
     vaddr = do_mmap_pgoff(file, addr_hint, len, prot, flags, pgoff);
