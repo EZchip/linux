@@ -84,8 +84,8 @@
 /* Bits in MMU PID register */
 #define TLB_ENABLE          (1 << 31)   /* Enable MMU for process */
 
-
-#if (CONFIG_ARC_MMU_VER > 2)
+/* Software can choose whether to utilize SASID (provided by v3) */
+#ifdef CONFIG_ARC_MMU_SASID
 #define SASID_ENABLE        (1 << 29)   /* enable SASID for process */
 #else
 #define SASID_ENABLE        0
