@@ -356,7 +356,7 @@ config ARC_SERIAL_BAUD
 config ARC_SERIAL_CONSOLE
         bool
         select SERIAL_CORE_CONSOLE
-        depends on !ARC_PGU_CONSOLE
+        depends on !ARC_PGU_CONSOLE && ARC_SERIAL
         default y
 
 config SERIAL_LV2

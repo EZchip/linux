@@ -68,8 +68,6 @@ struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
 
 unsigned long end_mem = CONFIG_SDRAM_SIZE + CONFIG_LINUX_LINK_BASE;
 unsigned long clk_speed = CONFIG_ARC700_CLK;
-unsigned long serial_baudrate = CONFIG_ARC_SERIAL_BAUD;
-int arc_console_baud = (CONFIG_ARC700_CLK/(CONFIG_ARC_SERIAL_BAUD * 4)) - 1;
 struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
 
 #ifdef CONFIG_ROOT_NFS
@@ -504,6 +502,7 @@ static int __init parse_tag_cache(struct tag *tag)
 
 __tagtable(ATAG_CACHE, parse_tag_cache);
 
+#ifdef CONFIG_ARC_SERIAL
 static int __init parse_tag_serial(struct tag *tag)
 {
     printk_init("ATAG_SERIAL: serial_nr = %d\n", tag->u.serial.serial_nr);
@@ -511,10 +510,10 @@ static int __init parse_tag_serial(struct tag *tag)
     printk_init("ATAG_SERIAL: serial baudrate = %d\n", tag->u.serial.baudrate);
     serial_baudrate = tag->u.serial.baudrate;
     return 0;
-
 }
-
 __tagtable(ATAG_SERIAL, parse_tag_serial);
+
+#endif
 
 static int __init parse_tag_vmac(struct tag *tag)
 {
@@ -631,10 +630,6 @@ void __init setup_arch(char **cmdline_p)
     extern unsigned long atag_head;
     struct tag *tags = (struct tag *)&init_tags;   /* to shut up gcc */
 
-    /* Before probing MMU or caches, so any discrepancy printk( ) shows up */
-#ifdef CONFIG_EARLY_PRINTK
-    arc_early_serial_reg();
-#endif
 
     /* If parameters passed by u-boot, override compile-time parameters */
     if (atag_head) {
@@ -650,9 +645,10 @@ void __init setup_arch(char **cmdline_p)
         printk_init("SKIPPING ATAG parsing...\n");
     }
 
-    /* clk_speed and serial_baudrate intialised during parsing
-       parameters */
-    arc_console_baud = (clk_speed / (serial_baudrate * 4)) - 1;
+    /* Before probing MMU or caches, so any discrepancy printk( ) shows up
+     * but after, tag parsing, as it could override the build-time baud
+     */
+    arc_early_serial_reg();
 
     setup_processor();
 

@@ -130,6 +130,9 @@ static struct console arc_serial_console;
 #define ARC_SERIAL_CONSOLE	NULL
 #endif
 
+/* Although compile time option, could be over-ridden by bootup tag parsing */
+unsigned long serial_baudrate = CONFIG_ARC_SERIAL_BAUD;
+
 static int arc_serial_probe(struct platform_device *dev);
 static int arc_serial_remove(struct platform_device *dev);
 

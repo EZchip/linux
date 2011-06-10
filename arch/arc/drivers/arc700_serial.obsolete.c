@@ -140,14 +140,8 @@ typedef volatile struct {
 
 
 
-/*
- * DECLARE_TASK_QUEUE(tq_serial);
- */
-
-extern unsigned long clk_speed;
-
-/* Baud Rate is calcuated early in bootup */
-extern int arc_console_baud;
+static int arc_console_baud = (CONFIG_ARC700_CLK/(CONFIG_ARC_SERIAL_BAUD * 4))
+                                     - 1;
 
 /*
  * Array of Serial devices indexed with their port numbers
@@ -1462,8 +1456,6 @@ EXPORT_SYMBOL(raw_printk5);
 
 extern void arcconsole_write(struct console *cp, const char *p, unsigned len);
 extern int arcconsole_setup(struct console *cp, char *arg);
-
-extern int arc_console_baud;
 
 // Low level console write.
 
