@@ -135,7 +135,8 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
     "   bnz     1b          \n"
     "2:                     \n"
     : "=&r" (prev)
-    : "r" (p),  "ir" (expected), "ir" (new)
+    : "r" (p),  "ir" (expected),
+      "r" (new)  /* this can't be "ir"; scond can't take limm as arg "b" */
     : "cc");
 
     return prev;
