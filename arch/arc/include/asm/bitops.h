@@ -58,7 +58,7 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 #if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
-#if defined(ARC_HAS_LLSC)
+#if defined(CONFIG_ARC_HAS_LLSC)
 
 static inline void set_bit(unsigned long nr, volatile unsigned long *m)
 {
@@ -297,7 +297,7 @@ test_and_change_bit(unsigned long nr, volatile unsigned long *m)
     return (old & (1 << nr)) != 0;
 }
 
-#endif /* ARC_HAS_LLSC */
+#endif /* CONFIG_ARC_HAS_LLSC */
 
 /***************************************
  * Non atomic variants

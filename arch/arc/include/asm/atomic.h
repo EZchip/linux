@@ -47,7 +47,7 @@ static inline void atomic_set(atomic_t *v, int i)
 
 #define atomic_read(v)  ((v)->counter)
 
-#if defined(ARC_HAS_LLSC)
+#if defined(CONFIG_ARC_HAS_LLSC)
 
 static inline void atomic_add(int i, atomic_t *v)
 {
@@ -213,7 +213,7 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
     return(prev);
 }
 
-#endif  /* ARC_HAS_LLSC */
+#endif  /* CONFIG_ARC_HAS_LLSC */
 
 #define atomic_cmpxchg(v, o, n) ((int)cmpxchg(&((v)->counter), (o), (n)))
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))

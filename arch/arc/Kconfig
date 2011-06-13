@@ -268,7 +268,7 @@ config ARCH_ARC_FPU
         based on actual usage of FPU by a task. Thus our implemn does
         this for all tasks in system.
 
-config ARC700_V_4_10
+menuconfig ARC700_V_4_10
         bool "Build kernel for ARC700 v 4.10 - Summer 2011"
         default n
         help
@@ -276,6 +276,21 @@ config ARC700_V_4_10
         -MMU-v3: Variable Pg Sz, bigger J-TLB, Shared Address Spaces
         -Caches: New Prog Model, Region Flush
         -Insns: endian swap, load-locked/store-conditional, time-stamp-ctr
+
+config ARC_HAS_LLSC
+        bool "llock/scond insns for faster atomic ops"
+        default y
+        depends on ARC700_V_4_10
+
+config ARC_HAS_SWAPE
+        bool "single cycle endian-swap insn"
+        default y
+        depends on ARC700_V_4_10
+
+config ARC_HAS_RTSC
+        bool "64-bit read-only time-stamp counter"
+        default y
+        depends on ARC700_V_4_10
 
 endmenu   #CPU Core config
 

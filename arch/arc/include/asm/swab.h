@@ -19,7 +19,7 @@
 #include <linux/types.h>
 
 /* Native single cycle endian swap insn */
-#ifdef ARC_HAS_SWAPE
+#ifdef CONFIG_ARC_HAS_SWAPE
 
 #define __arch_swab32(x)  		\
 ({								\
@@ -89,7 +89,7 @@
 
 #endif /* ARC_BSWAP_TYPE=zzz */
 
-#endif /* ARC_HAS_SWAPE */
+#endif /* CONFIG_ARC_HAS_SWAPE */
 
 #if !defined(__STRICT_ANSI__) || defined(__KERNEL__)
 #  define __BYTEORDER_HAS_U64__

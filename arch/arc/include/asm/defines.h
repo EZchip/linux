@@ -17,22 +17,6 @@
 #define CONFIG_ARC_MMU_VER 3
 #endif
 
-/* Support for Load-locked/Store Conditional
- *  for doing fast Read-Modify-Write on uni-processor systems
- */
-#if defined(CONFIG_ARC700_V_4_10) && defined(__Xlock)
-#define ARC_HAS_LLSC
-#else
-#undef ARC_HAS_LLSC
-#endif
-
-/* Support for single cycle Endian Swap insn */
-#if defined(CONFIG_ARC700_V_4_10) && defined(__Xswape)
-#define ARC_HAS_SWAPE
-#else
-#undef ARC_HAS_SWAPE
-#endif
-
 /* Lot of hand written asm routines which get inlined as well contain ZOL
  *   copy_from_user(), clear_user(), memset_aligned( ) etc
  * Enabling these toggles prevents their inlining, confining ZOL to very few

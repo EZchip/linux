@@ -21,8 +21,14 @@ KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
 						-D__linux__  -fcall-used-gp -multcost=16
 
 # preprocessor macros due to following: __Xlock __Xswape __Xrtsc
-ifdef CONFIG_ARC700_V_4_10
-KBUILD_CFLAGS		+= -mlock -mswape -mrtsc
+ifdef CONFIG_ARC_HAS_LLSC
+KBUILD_CFLAGS		+= -mlock
+endif
+ifdef CONFIG_ARC_HAS_SWAPE
+KBUILD_CFLAGS		+= -mswape
+endif
+ifdef CONFIG_ARC_HAS_RTSC
+KBUILD_CFLAGS		+= -mrtsc
 endif
 
 # Idea is to use -O3 for our builds (Default kernel makefile uses -O2)
