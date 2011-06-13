@@ -17,6 +17,30 @@
 #define CONFIG_ARC_MMU_VER 3
 #endif
 
+#ifdef CONFIG_ARC_HAS_LLSC
+#define __CONFIG_ARC_HAS_LLSC_VAL 1
+#else
+#define __CONFIG_ARC_HAS_LLSC_VAL 0
+#endif
+
+#ifdef CONFIG_ARC_HAS_SWAPE
+#define __CONFIG_ARC_HAS_SWAPE_VAL 1
+#else
+#define __CONFIG_ARC_HAS_SWAPE_VAL 0
+#endif
+
+#ifdef CONFIG_ARC_HAS_RTSC
+#define __CONFIG_ARC_HAS_RTSC_VAL 1
+#else
+#define __CONFIG_ARC_HAS_RTSC_VAL 0
+#endif
+
+#ifdef CONFIG_ARC_MMU_SASID
+#define __CONFIG_ARC_MMU_SASID_VAL 1
+#else
+#define __CONFIG_ARC_MMU_SASID_VAL 0
+#endif
+
 /* Lot of hand written asm routines which get inlined as well contain ZOL
  *   copy_from_user(), clear_user(), memset_aligned( ) etc
  * Enabling these toggles prevents their inlining, confining ZOL to very few

@@ -519,9 +519,15 @@ char * arc_mmu_mumbojumbo(int cpu_id, char *buf)
     int num=0;
     struct cpuinfo_arc_mmu *p_mmu = &cpuinfo_arc700[0].mmu;
 
-    num += sprintf(buf+num, "ARC700 MMU Ver [%x]\n",p_mmu->ver);
+    num += sprintf(buf+num, "ARC700 MMU Ver [%x]",p_mmu->ver);
+#if (CONFIG_ARC_MMU_VER > 2)
+    {
+        num += sprintf(buf+num, " SASID [%s]",
+                    __CONFIG_ARC_MMU_SASID_VAL ? "enabled" : "disabled");
+    }
+#endif
 
-    num += sprintf(buf+num, "   PAGE SIZE %dk\n",TO_KB(p_mmu->pg_sz));
+    num += sprintf(buf+num, "\n   PAGE SIZE %dk\n",TO_KB(p_mmu->pg_sz));
     num += sprintf(buf+num, "   JTLB %d x %d = %d entries\n",
                         p_mmu->sets, p_mmu->ways, p_mmu->num_tlb);
     num += sprintf(buf+num, "   uDTLB %d entr, uITLB %d entr\n",

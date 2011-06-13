@@ -263,8 +263,17 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
 
     num += sprintf(buf+num, "Extensions:\n");
 
-    if (p_cpu->core.family == 0x34)
-        num += sprintf(buf+num, "   Insns: LLOCK/SCOND, SWAPE, RTSC\n");
+    if (p_cpu->core.family == 0x34) {
+        const char *inuse = "(in-use)";
+        const char *notinuse = "(not used)";
+
+        num += sprintf(buf+num,
+            "   Insns: LLOCK/SCOND %s, SWAPE %s, RTSC %s\n",
+            __CONFIG_ARC_HAS_LLSC_VAL ? inuse : notinuse,
+            __CONFIG_ARC_HAS_SWAPE_VAL ? inuse : notinuse,
+            __CONFIG_ARC_HAS_RTSC_VAL ? inuse : notinuse);
+
+    }
 
     num += sprintf(buf+num, "   MPY: %s",
                         mul_type_nm[p_cpu->extn.mul].str);
