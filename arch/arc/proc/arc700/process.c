@@ -51,20 +51,10 @@ unsigned long volatile jiffies;
  * low exit latency (ie sit in a loop waiting for
  * somebody to say that they'd like to reschedule)
  */
-
-#define ARC_SLEEP_WHEN_IDLE
-
-#ifdef ARC_SLEEP_WHEN_IDLE
-void inline arch_idle(void)
+static void inline arch_idle(void)
 {
     __asm__ ("sleep");
 }
-#else
-void inline arch_idle(void)
-{
-}
-#endif
-
 
 void cpu_idle(void)
 {
