@@ -13,6 +13,7 @@
 
 #ifdef CONFIG_MMAP_CODE_CMN_VADDR
 
+#include <linux/mm_types.h>
 #include <linux/genalloc.h>
 #include <linux/file.h>     /* fget */
 #include <linux/fs.h>       /* inode->i_ino */
