@@ -55,6 +55,8 @@
 #include <asm/cacheflush.h>
 #include <asm/irq.h>
 
+#define arc_emac_read(addr)         arc_read_uncached_32(addr)
+#define arc_emac_write(addr, val)   arc_write_uncached_32(addr, val)
 
 /* clock speed is set while parsing parameters in setup.c */
 extern unsigned long clk_speed;
@@ -64,9 +66,6 @@ extern unsigned long clk_speed;
 
 #define AUTO_NEG_TIMEOUT 2000
 
-/* Buffer descriptors */
-#define TX_BDT_LEN	128	/* Number of recieve BD's */
-#define RX_BDT_LEN	128	/* Number of transmit BD's */
 #define SKB_PREALLOC    256	/* Number of cached SKB's */
 #define NAPI_WEIGHT 40      /* workload for NAPI */
 
@@ -253,11 +252,17 @@ static inline arc_emac_reg *const EMAC_REG(void * ap)   \
 	val &= 0xffff;              \
 }
 
-struct arc_emac_buffer_desc
-{
-		unsigned int    info;
-		void           *data;
-};
+typedef struct {
+	unsigned int    info;
+	void           *data;
+}
+arc_emac_bd_t;
+
+#define RX_BD_NUM	128	/* Number of recieve BD's */
+#define TX_BD_NUM	128	/* Number of transmit BD's */
+
+#define RX_RING_SZ  (RX_BD_NUM * sizeof(arc_emac_bd_t))
+#define TX_RING_SZ  (TX_BD_NUM * sizeof(arc_emac_bd_t))
 
 struct arc_emac_priv
 {
@@ -265,17 +270,16 @@ struct arc_emac_priv
 		/* base address of the register set for this device */
 		arc_emac_reg  *reg_base_addr;
 		spinlock_t      lock;
-		/*
-		 * rx buffer descriptor. We align descriptors to 32 so info
-		 * and data lie on the same cache line. This also satisfies
-		 * the 8 byte alignment required by the VMAC
+
+		/* align descriptors to 32 to avoid .di happening in middle of line.
+		 * This also satisfies the 8 byte alignment required by the VMAC
 		 */
-		struct arc_emac_buffer_desc rxbd[RX_BDT_LEN] __attribute__((aligned(32)));
-		/* tx buffer descriptor */
-		struct arc_emac_buffer_desc txbd[TX_BDT_LEN] __attribute__((aligned(32)));
+		arc_emac_bd_t rxbd[RX_BD_NUM] __attribute__((aligned(32)));
+		arc_emac_bd_t txbd[RX_BD_NUM] __attribute__((aligned(32)));
+
 		/* The actual socket buffers */
-		struct sk_buff *rx_skbuff[RX_BDT_LEN];
-		struct sk_buff *tx_skbuff[TX_BDT_LEN];
+		struct sk_buff *rx_skbuff[RX_BD_NUM];
+		struct sk_buff *tx_skbuff[TX_BD_NUM];
 		unsigned int    txbd_curr;
 		unsigned int    txbd_dirty;
 
@@ -398,11 +402,11 @@ static int arc_emac_clean(struct net_device *dev
      */
     i = ap->last_rx_bd;
 
-    for (loop = 0; loop < RX_BDT_LEN; loop++)
+    for (loop = 0; loop < RX_BD_NUM; loop++)
 	{
-        i = (i + 1) & (RX_BDT_LEN - 1);
+        i = (i + 1) & (RX_BD_NUM - 1);
 
-		info = arc_read_uncached_32(&ap->rxbd[i].info);
+		info = arc_emac_read(&ap->rxbd[i].info);
 
         /* BD contains a packet for CPU to grab */
         if (likely((info & OWN_MASK) == FOR_CPU))
@@ -431,7 +435,7 @@ static int arc_emac_clean(struct net_device *dev
 						printk(KERN_INFO "Out of Memory, dropping packet\n");
 
 						/* return buffer to VMAC */
-						arc_write_uncached_32(&ap->rxbd[i].info,
+						arc_emac_write(&ap->rxbd[i].info,
 							      (FOR_EMAC| (dev->mtu + VMAC_BUFFER_PAD)));
 						ap->stats.rx_dropped++;
                         continue;
@@ -449,8 +453,8 @@ static int arc_emac_clean(struct net_device *dev
 				skb_reserve(skbnew, 2); /* IP hdr align, eth is 14 bytes */
 				ap->rx_skbuff[i] = skbnew;
 
-				arc_write_uncached_32(&ap->rxbd[i].data, skbnew->data);
-				arc_write_uncached_32(&ap->rxbd[i].info,
+				arc_emac_write(&ap->rxbd[i].data, skbnew->data);
+				arc_emac_write(&ap->rxbd[i].info,
 							      (FOR_EMAC | (dev->mtu + VMAC_BUFFER_PAD)));
 
                 /* Prepare arrived pkt for delivery to stack */
@@ -497,7 +501,7 @@ extern void print_hex_dump_bytes(const char *prefix_str, int prefix_type,
 	 */
 				printk(KERN_INFO "Rx chained, Packet bigger than device MTU\n");
 				/* Return buffer to VMAC */
-				arc_write_uncached_32(&ap->rxbd[i].info,
+				arc_emac_write(&ap->rxbd[i].info,
 							      (FOR_EMAC| (dev->mtu + VMAC_BUFFER_PAD)));
 				ap->stats.rx_length_errors++;
 		    }
@@ -601,9 +605,9 @@ static int arc_emac_tx_clean(struct arc_emac_priv *ap)
 		 * correspondence of interrupts and number of packets queued
 		 * to send
 		 */
-		for (i = 0; i < TX_BDT_LEN; i++)
+		for (i = 0; i < TX_BD_NUM; i++)
 		{
-			info = arc_read_uncached_32(&ap->txbd[ap->txbd_dirty].info);
+			info = arc_emac_read(&ap->txbd[ap->txbd_dirty].info);
 
 #ifdef EMAC_STATS
 
@@ -615,7 +619,7 @@ static int arc_emac_tx_clean(struct arc_emac_priv *ap)
             }
 #endif
 			if ((info & FOR_EMAC) ||
-			    !(arc_read_uncached_32(&ap->txbd[ap->txbd_dirty].data)))
+			    !(arc_emac_read(&ap->txbd[ap->txbd_dirty].data)))
 			{
 	            return IRQ_HANDLED;
 			}
@@ -628,9 +632,9 @@ static int arc_emac_tx_clean(struct arc_emac_priv *ap)
 				/* return the sk_buff to system */
 				dev_kfree_skb_irq(skb);
 			}
-			arc_write_uncached_32(&ap->txbd[ap->txbd_dirty].data, 0x0);
-			arc_write_uncached_32(&ap->txbd[ap->txbd_dirty].info, 0x0);
-			ap->txbd_dirty = (ap->txbd_dirty + 1) % TX_BDT_LEN;
+			arc_emac_write(&ap->txbd[ap->txbd_dirty].data, 0x0);
+			arc_emac_write(&ap->txbd[ap->txbd_dirty].info, 0x0);
+			ap->txbd_dirty = (ap->txbd_dirty + 1) % TX_BD_NUM;
 		}
 
 	return IRQ_HANDLED;
@@ -641,7 +645,7 @@ int
 arc_emac_open(struct net_device * dev)
 {
 	struct arc_emac_priv *ap;
-	struct arc_emac_buffer_desc *bd;
+	arc_emac_bd_t *bd;
 	struct sk_buff *skb;
 	int             i;
 	unsigned int    temp, duplex;
@@ -729,38 +733,36 @@ arc_emac_open(struct net_device * dev)
 
 	/* Allocate and set buffers for rx BD's */
 	bd = ap->rxbd;
-	for (i = 0; i < RX_BDT_LEN; i++)
+	for (i = 0; i < RX_BD_NUM; i++)
 	{
 		skb = dev_alloc_skb(dev->mtu + VMAC_BUFFER_PAD);
 		/* IP header Alignment (14 byte Ethernet header) */
 		skb_reserve(skb, 2);
 		ap->rx_skbuff[i] = skb;
-		arc_write_uncached_32(&bd->data, skb->data);
+		arc_emac_write(&bd->data, skb->data);
 		/* VMAC owns rx descriptors */
-		arc_write_uncached_32(&bd->info, FOR_EMAC | (dev->mtu + VMAC_BUFFER_PAD));
+		arc_emac_write(&bd->info, FOR_EMAC | (dev->mtu + VMAC_BUFFER_PAD));
 		bd++;
 	}
 
     /* setup last seen to MAX, so driver starts from 0 */
-    ap->last_rx_bd = RX_BDT_LEN - 1;
+    ap->last_rx_bd = RX_BD_NUM - 1;
 
 	/* Allocate tx BD's similar to rx BD's */
 	/* All TX BD's owned by CPU */
 	bd = ap->txbd;
-	for (i = 0; i < TX_BDT_LEN; i++)
+	for (i = 0; i < TX_BD_NUM; i++)
 	{
-		arc_write_uncached_32(&bd->data, 0);
-		arc_write_uncached_32(&bd->info, 0);
+		arc_emac_write(&bd->data, 0);
+		arc_emac_write(&bd->info, 0);
 		bd++;
 	}
 	/* Initialize logical address filter */
 	EMAC_REG(ap)->lafl = 0x0;
 	EMAC_REG(ap)->lafh = 0x0;
 
-	/* Set rx BD ring pointer */
+	/* Set BD ring pointers for device side */
 	EMAC_REG(ap)->rx_ring = (unsigned int) ap->rxbd;
-
-	/* Set tx BD ring pointer */
 	EMAC_REG(ap)->tx_ring = (unsigned int) ap->txbd;
 
 	/* Set Poll rate so that it polls every 1 ms */
@@ -779,8 +781,8 @@ arc_emac_open(struct net_device * dev)
 		MDIO_MASK;	/* MDIO Complete Intereupt Mask */
 
 	/* Set CONTROL */
-	EMAC_REG(ap)->ctrl = (RX_BDT_LEN << 24) |	/* RX buffer desc table len */
-		(TX_BDT_LEN << 16) |	/* TX buffer des tabel len */
+	EMAC_REG(ap)->ctrl = (RX_BD_NUM << 24) |	/* RX buffer desc table len */
+		(TX_BD_NUM << 16) |	/* TX buffer des tabel len */
 		TXRN_MASK |	/* TX enable */
 		RXRN_MASK |	/* RX enable */
 		duplex;		/* Full Duplex enable */
@@ -900,10 +902,10 @@ arc_emac_tx(struct sk_buff * skb, struct net_device * dev)
 
 tx_next_chunk:
 
-    info = arc_read_uncached_32(&ap->txbd[ap->txbd_curr].info);
+    info = arc_emac_read(&ap->txbd[ap->txbd_curr].info);
 	if (likely((info & OWN_MASK) == FOR_CPU))
 	{
-		arc_write_uncached_32(&ap->txbd[ap->txbd_curr].data, pkt);
+		arc_emac_write(&ap->txbd[ap->txbd_curr].data, pkt);
 
         /* This case handles 2 scenarios:
          * 1. pkt fits into 1 BD (2k)
@@ -918,19 +920,19 @@ tx_next_chunk:
 			 * VMAC This should be the last thing we do. Vmac
 			 * might immediately start sending
 			 */
-			arc_write_uncached_32(&ap->txbd[ap->txbd_curr].info,
+			arc_emac_write(&ap->txbd[ap->txbd_curr].info,
 					      FOR_EMAC | bitmask | LAST_MASK | len);
 
 	        /* Set TXPOLL bit to force a poll */
 	        EMAC_REG(ap)->status |= TXPL_MASK;
 
-		    ap->txbd_curr = (ap->txbd_curr + 1) % TX_BDT_LEN;
+		    ap->txbd_curr = (ap->txbd_curr + 1) % TX_BD_NUM;
             return 0;
         }
         else {
             /* if pkt > 2k, this case handles all non last chunks */
 
-			arc_write_uncached_32(&ap->txbd[ap->txbd_curr].info,
+			arc_emac_write(&ap->txbd[ap->txbd_curr].info,
 					      FOR_EMAC | bitmask | (len & (MAX_TX_BUFFER_LEN-1)));
 
             /* clear the FIRST CHUNK bit */
@@ -939,7 +941,7 @@ tx_next_chunk:
             len -= MAX_TX_BUFFER_LEN;
         }
 
-		ap->txbd_curr = (ap->txbd_curr + 1) % TX_BDT_LEN;
+		ap->txbd_curr = (ap->txbd_curr + 1) % TX_BD_NUM;
         goto tx_next_chunk;
 
 	}
@@ -979,7 +981,6 @@ arc_emac_set_address(struct net_device * dev, void *p)
 {
 	struct sockaddr *addr = p;
 	struct arc_emac_priv *ap = netdev_priv(dev);
-    char buf[32];
 
 	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
 
@@ -1039,6 +1040,10 @@ static int __devinit arc_emac_probe(struct platform_device *pdev)
     priv = netdev_priv(dev);
 	priv->reg_base_addr = reg;
 
+    printk_init("EMAC pvt %x (%lx bytes), Rx Ring [%x], Tx Ring[%x]\n",
+        (unsigned int)priv, sizeof(struct arc_emac_priv),
+        (unsigned int)priv->rxbd,(unsigned int)priv->txbd);
+
 	/* populate our net_device structure */
     dev->netdev_ops = &arc_emac_netdev_ops;
 
@@ -1067,12 +1072,11 @@ static int __devinit arc_emac_probe(struct platform_device *pdev)
 
 static int arc_emac_remove(struct platform_device *pdev)
 {
-	struct net_device *dev;
-
-    dev = platform_get_drvdata(pdev);
+	struct net_device *dev = platform_get_drvdata(pdev);
 
     /* unregister the network device */
     unregister_netdev(dev);
+
     free_netdev(dev);
 
     return 0;
