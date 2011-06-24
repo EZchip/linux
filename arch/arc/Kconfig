@@ -256,6 +256,7 @@ endchoice
 config ARCH_ARC_LV2_INTR
         bool "Enable two levels of Interrupts high(2)low(1)"
         default n
+        select TIMER_LV2
 
 config ARCH_ARC_FPU
         bool "Enable FPU state persistence across context switch"

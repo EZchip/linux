@@ -87,9 +87,9 @@ extern void flush_icache_page(struct vm_area_struct *vma,struct page *page);
 
 #endif /*CONFIG_ARC700_USE_ICACHE*/
 
-#ifdef CONFIG_ARC700_USE_DCACHE
-
 #define ARCH_IMPLEMENTS_FLUSH_DCACHE_PAGE 1
+
+#ifdef CONFIG_ARC700_USE_DCACHE
 
 extern void flush_dcache_page(struct page *page);
 extern void flush_dcache_page_virt(unsigned long *page);

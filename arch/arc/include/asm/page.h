@@ -157,10 +157,7 @@ typedef unsigned long pgtable_t;
 #define VMALLOC_END	(PAGE_OFFSET)
 #define VMALLOC_VMADDR(x) ((unsigned long)(x))
 
-#define clear_page(page)  {   \
-    unsigned int *pg = page;  \
-    memset(pg, 0, PAGE_SIZE); \
-}
+#define clear_page(paddr)  memset((unsigned int *)(paddr), 0, PAGE_SIZE)
 
 #include <asm-generic/getorder.h>
 

@@ -103,6 +103,7 @@ unsigned short ip_compute_csum(const unsigned char *buff, int len)
 {
 	return ~do_csum(buff, len);
 }
+EXPORT_SYMBOL(ip_compute_csum);
 
 /*
  * copy from ds while checksumming, otherwise like csum_partial
