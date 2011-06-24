@@ -271,11 +271,12 @@ struct arc_emac_priv
 		arc_emac_reg  *reg_base_addr;
 		spinlock_t      lock;
 
-		/* align descriptors to 32 to avoid .di happening in middle of line.
-		 * This also satisfies the 8 byte alignment required by the VMAC
-		 */
-		arc_emac_bd_t rxbd[RX_BD_NUM] __attribute__((aligned(32)));
-		arc_emac_bd_t txbd[RX_BD_NUM] __attribute__((aligned(32)));
+        /* pointers to BD Rings */
+		arc_emac_bd_t *rxbd;
+		arc_emac_bd_t *txbd;
+
+        /* BD Ring memory - above point somewhere in here */
+        char buffer[RX_RING_SZ + RX_RING_SZ + L1_CACHE_BYTES];
 
 		/* The actual socket buffers */
 		struct sk_buff *rx_skbuff[RX_BD_NUM];
@@ -1040,9 +1041,18 @@ static int __devinit arc_emac_probe(struct platform_device *pdev)
     priv = netdev_priv(dev);
 	priv->reg_base_addr = reg;
 
+    /* setup ring pointers to first L1 cache aligned location in buffer[]
+     * which has enough gutter to accomodate the space lost to alignement
+     */
+    priv->rxbd = (arc_emac_bd_t *)L1_CACHE_ALIGN(priv->buffer);
+    priv->txbd = priv->rxbd + RX_BD_NUM;
+
     printk_init("EMAC pvt %x (%lx bytes), Rx Ring [%x], Tx Ring[%x]\n",
         (unsigned int)priv, sizeof(struct arc_emac_priv),
         (unsigned int)priv->rxbd,(unsigned int)priv->txbd);
+
+    printk_init("EMAC %x %x\n", (unsigned int)&priv->buffer[0],
+                                (unsigned int)&priv->rx_skbuff[0]);
 
 	/* populate our net_device structure */
     dev->netdev_ops = &arc_emac_netdev_ops;

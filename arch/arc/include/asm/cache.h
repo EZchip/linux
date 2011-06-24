@@ -29,6 +29,9 @@
 #define is_not_cache_aligned(p) ((unsigned long)p & (~DCACHE_LINE_MASK))
 #endif
 
+#define L1_CACHE_ALIGN(x)   ((((unsigned int)(x))+(L1_CACHE_BYTES-1)) & \
+                                ~(L1_CACHE_BYTES-1))
+
 #ifndef __ASSEMBLY__
 
 /* Uncached access macros */
