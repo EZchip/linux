@@ -7,6 +7,11 @@
  *
  * MAC driver for the ARCTangent EMAC 10100 (Rev 5)
  *
+ * vineetg: June 2011
+ *  -Issues when working with 64b cache line size
+ *      = BD rings point to aligned location in an internal buffer
+ *      = added support for cache coherent BD Ring memory
+ *
  * vineetg: May 2010
  *  -Reduced foot-print of the main ISR (handling for error cases moved out
  *      into a separate non-inline function).
@@ -55,8 +60,20 @@
 #include <asm/cacheflush.h>
 #include <asm/irq.h>
 
+#ifdef ARC_EMAC_COH_MEM
+/* The BDs are allocated in cache coherent memory - thus normal "C" code
+ * can be used to read/write them - MMU magic takes care of making them
+ * uncached
+ */
+#define arc_emac_read(addr)         *(addr)
+#define arc_emac_write(addr, val)   *(addr) = (val)
+#else
+/* BDs in normal memory - thus needed special mode of ld/st insn ".di"
+ * to make the accesses uncached
+ */
 #define arc_emac_read(addr)         arc_read_uncached_32(addr)
 #define arc_emac_write(addr, val)   arc_write_uncached_32(addr, val)
+#endif
 
 /* clock speed is set while parsing parameters in setup.c */
 extern unsigned long clk_speed;
@@ -271,12 +288,17 @@ struct arc_emac_priv
 		arc_emac_reg  *reg_base_addr;
 		spinlock_t      lock;
 
-        /* pointers to BD Rings */
+        /* pointers to BD Rings - CPU side */
 		arc_emac_bd_t *rxbd;
 		arc_emac_bd_t *txbd;
 
+#ifdef ARC_EMAC_COH_MEM
+        /* pointers to BD rings (bus addr) - Device side */
+		dma_addr_t rxbd_dma_hdl, txbd_dma_hdl;
+#else
         /* BD Ring memory - above point somewhere in here */
         char buffer[RX_RING_SZ + RX_RING_SZ + L1_CACHE_BYTES];
+#endif
 
 		/* The actual socket buffers */
 		struct sk_buff *rx_skbuff[RX_BD_NUM];
@@ -763,8 +785,13 @@ arc_emac_open(struct net_device * dev)
 	EMAC_REG(ap)->lafh = 0x0;
 
 	/* Set BD ring pointers for device side */
+#ifdef ARC_EMAC_COH_MEM
+	EMAC_REG(ap)->rx_ring = (unsigned int) ap->rxbd_dma_hdl;
+	EMAC_REG(ap)->tx_ring = (unsigned int) ap->rxbd_dma_hdl + RX_RING_SZ;
+#else
 	EMAC_REG(ap)->rx_ring = (unsigned int) ap->rxbd;
 	EMAC_REG(ap)->tx_ring = (unsigned int) ap->txbd;
+#endif
 
 	/* Set Poll rate so that it polls every 1 ms */
 	EMAC_REG(ap)->pollrate = (clk_speed / 1000000);
@@ -1041,18 +1068,40 @@ static int __devinit arc_emac_probe(struct platform_device *pdev)
     priv = netdev_priv(dev);
 	priv->reg_base_addr = reg;
 
+#ifdef ARC_EMAC_COH_MEM
+    /* alloc cache coheret memory for BD Rings - to avoid need to do
+     * explicit uncached ".di" accesses, which can potentially screwup
+     */
+	priv->rxbd = dma_alloc_coherent(&dev->dev,
+                        (RX_RING_SZ + TX_RING_SZ),
+                        &priv->rxbd_dma_hdl, GFP_KERNEL);
+
+    /* to keep things simple - we just do 1 big alloc, instead of 2
+     * seperate ones for Rx and Tx Rings resp
+     */
+    priv->txbd_dma_hdl = priv->rxbd_dma_hdl + RX_RING_SZ;
+#else
     /* setup ring pointers to first L1 cache aligned location in buffer[]
      * which has enough gutter to accomodate the space lost to alignement
      */
     priv->rxbd = (arc_emac_bd_t *)L1_CACHE_ALIGN(priv->buffer);
+#endif
+
     priv->txbd = priv->rxbd + RX_BD_NUM;
 
-    printk_init("EMAC pvt %x (%lx bytes), Rx Ring [%x], Tx Ring[%x]\n",
+    printk_init("EMAC pvt data %x (%lx bytes), Rx Ring [%x], Tx Ring[%x]\n",
         (unsigned int)priv, sizeof(struct arc_emac_priv),
         (unsigned int)priv->rxbd,(unsigned int)priv->txbd);
 
+#ifdef ARC_EMAC_COH_MEM
+    printk_init("EMAC Device addr: Rx Ring [0x%x], Tx Ring[%x]\n",
+        (unsigned int)priv->rxbd_dma_hdl,
+        (unsigned int)priv->txbd_dma_hdl);
+
+#else
     printk_init("EMAC %x %x\n", (unsigned int)&priv->buffer[0],
                                 (unsigned int)&priv->rx_skbuff[0]);
+#endif
 
 	/* populate our net_device structure */
     dev->netdev_ops = &arc_emac_netdev_ops;
@@ -1086,6 +1135,14 @@ static int arc_emac_remove(struct platform_device *pdev)
 
     /* unregister the network device */
     unregister_netdev(dev);
+
+#ifdef ARC_EMAC_COH_MEM
+    {
+        struct arc_emac_priv *priv = netdev_priv(dev);
+	    dma_free_coherent(&dev->dev, (RX_RING_SZ + TX_RING_SZ),
+                  priv->rxbd, priv->rxbd_dma_hdl);
+    }
+#endif
 
     free_netdev(dev);
 
