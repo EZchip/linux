@@ -5,6 +5,10 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * vineetg: June 2011
+ *  -"/proc/meminfo | grep PageTables" kept on increasing
+ *   Recently added pgtable dtor was not getting called.
+ *
  * vineetg: May 2011
  *  -Variable pg-sz means that Page Tables could be variable sized themselves
  *    So calculate it based on addr traversal split [pgd-bits:pte-bits:xxx]
@@ -178,7 +182,7 @@ static inline void pte_free(struct mm_struct *mm, pgtable_t ptep)
 }
 
 
-#define __pte_free_tlb(tlb, pte, addr)  tlb_remove_page(tlb, virt_to_page(pte))
+#define __pte_free_tlb(tlb, pte, addr)  pte_free((tlb)->mm, pte)
 
 extern void pgd_init(unsigned long page);
 
