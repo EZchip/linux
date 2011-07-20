@@ -302,12 +302,11 @@ EXPORT_SYMBOL_GPL(arch_pick_mmap_layout);
  *
  *******************************************************************/
 
-/* start allocating past the space for dynamic loader itself.
- * typically ldso is 0x2000_0000 to 0x2002_0000
+/* Leave some head room for non-cmn mmaps
  */
-#define ROOM_FOR_DYN_LOADER 0xF0000
-#define MMAP_CODE_SPC_START (TASK_UNMAPPED_BASE + ROOM_FOR_DYN_LOADER)
-#define MMAP_CODE_SPC_SZ    0x20000000  /* 512 MB */
+#define ROOM_FOR_NON_CMN_MAPS   0x0F0F0000
+#define MMAP_CODE_SPC_START     (TASK_UNMAPPED_BASE + ROOM_FOR_NON_CMN_MAPS)
+#define MMAP_CODE_SPC_SZ        0x20000000  /* 512 MB */
 
 /* For now track only 32 dsos */
 #define MMAP_CODE_SPC_MAX       32
@@ -536,7 +535,7 @@ int mmapcode_free_all(struct mm_struct *mm)
 
 void __init mmapcode_space_init(void)
 {
-    printk("mmap addr-space for shared code starts %lx\n",MMAP_CODE_SPC_START);
+    printk("Common mmap addr-space starts %lx\n",MMAP_CODE_SPC_START);
 
     mmapcode_addr_pool = gen_pool_create(PAGE_SHIFT, -1);
     gen_pool_add(mmapcode_addr_pool, MMAP_CODE_SPC_START, MMAP_CODE_SPC_SZ, -1);
