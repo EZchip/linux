@@ -143,8 +143,11 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
      *  dso. Anyhow the existing scheme doesn't hurt - we are not wasting any
      *  vaddr.
      */
-    if (flags & MAP_SHARED_CODE) {
 
+    if (flags & MAP_SHARED_CODE || /* Callers converted to ask for cmn mmap */
+        ((prot & PROT_EXEC) &&     /* Callers not converted */
+            !(flags & MAP_FIXED) && !(prot & PROT_WRITE)))
+    {
         if (mmapcode_alloc_vaddr(file, pgoff, PAGE_ALIGN(len), &addr_hint)
                             < 0) {
             goto out;
@@ -153,18 +156,6 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
         /* force this mmap to take the cmn-vaddr just alloc */
         flags |= MAP_FIXED;
     }
-
-    /* TODO:
-     * With uClibc ldso, mmap for code (PROT_EXEC) are always with MAP_FIXED
-     * (using a prior blanket mmap). However if MAP_FIXED is not specified,
-     * the cmn-vaddr allocator module needs to emulate MAP_FXED by allocating
-     * a chunck of cmn-vaddr - which we DONT at the moment.
-     * So a BUG_ON is added to cry for it when it is really needed.
-     * The basic condition to test is code mmaps w/o vaddr, i.e.
-     * PROT_EXEC && !MAP_FIXED.  However (PROT_EXEC && !PROT_WRITE) is a
-     * better indicator of code-mmap than PROT_EXEC alone.
-     */
-    BUG_ON((prot & PROT_EXEC) && !(flags & MAP_FIXED) && !(prot & PROT_WRITE));
 #endif
 
     vaddr = do_mmap_pgoff(file, addr_hint, len, prot, flags, pgoff);
