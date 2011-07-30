@@ -73,7 +73,7 @@ struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
 #ifdef CONFIG_ROOT_NFS
 
 // Example of NFS root booting.
-char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=172.16.0.196:/shared,nolock ip=dhcp,console=ttyS0" };
+char __initdata command_line[COMMAND_LINE_SIZE] = {"root=/dev/nfs nfsroot=10.0.0.2:/home/vineetg/ARC/arc_initramfs_nfs,nolock ip=dhcp console=ttyS0" };
 
 #elif defined(CONFIG_ARC_SERIAL_CONSOLE)
 
