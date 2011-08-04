@@ -255,31 +255,12 @@ ex_saved_reg1:
     sr  r3,[ARC_REG_TLBPD0]     ; rewrite PD0
 .endm
 
-.macro TLB_WRITE_DATA
+.macro TLB_WRITE
 
-#if (METAL_FIX || (CONFIG_ARC_MMU_VER == 1))
-    ; MMU with 2 way set assoc J-TLB, needs some help in pathetic case of
-    ; memcpy where 3 parties contend for 2 ways, ensuing a livelock.
-    ; But only for old MMU or one with Metal Fix
-    TLB_WRITE_HEURISTICS
-#else
-    ; No need for heuristics in way cals. We have newer MMU or fixed MMU
-    sr  TLBGetIndex, [ARC_REG_TLBCOMMAND]
-#endif
-
-    COMMIT_WRITE_CMD
-.endm
-
-.macro TLB_WRITE_INSTR
-
-    /* Ask MMU to get us a free Index */
+    /* Get free TLB slot: Set = computed from vaddr, way = random */
     sr  TLBGetIndex, [ARC_REG_TLBCOMMAND]
 
     /* Commit the Write */
-    COMMIT_WRITE_CMD
-.endm
-
-.macro COMMIT_WRITE_CMD
 #if (CONFIG_ARC_MMU_VER >= 2)   // introduced in v2
     sr TLBWriteNI, [ARC_REG_TLBCOMMAND]
 #else
@@ -352,7 +333,7 @@ ARC_ENTRY EV_TLBMissI
     st_s    r0, [r1]                                ; Write back PTE
 
     TLB_RELOAD
-    TLB_WRITE_INSTR
+    TLB_WRITE
     RESTORE_TEMP
     rtie
 
@@ -382,7 +363,13 @@ ARC_ENTRY EV_TLBMissD
 
 dtlb_commit_stage:
     TLB_RELOAD
-    TLB_WRITE_DATA
+#if (METAL_FIX || (CONFIG_ARC_MMU_VER == 1))
+    ; MMU with 2 way set assoc J-TLB, needs some help in pathetic case of
+    ; memcpy where 3 parties contend for 2 ways, ensuing a livelock.
+    ; But only for old MMU or one with Metal Fix
+    TLB_WRITE_HEURISTICS
+#endif
+    TLB_WRITE
     RESTORE_TEMP
     rtie
 
