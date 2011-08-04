@@ -247,7 +247,7 @@ ex_saved_reg1:
 
     ld.as r1, [r1, PTRS_PER_PTE]       ; sasid
     or    r2, r2, _PAGE_SHARED_CODE_H  ; S | V
-    bic   r3, r3, 0x1F                 ; vaddr | ---
+    bic   r3, r3, 0xFF                 ; vaddr | ---
     or    r3, r3, r1                   ; vaddr | sasid
 1:
 #endif
