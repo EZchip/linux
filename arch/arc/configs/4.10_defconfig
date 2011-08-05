@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.12
-# Fri May  6 16:55:12 2011
+# Fri Aug  5 16:57:55 2011
 #
 CONFIG_ARCH_ARC=y
 CONFIG_RWSEM_GENERIC_SPINLOCK=y
@@ -177,14 +177,18 @@ CONFIG_ARC700_CACHE_PAGES=y
 # CONFIG_ARCH_ARC_ICCM is not set
 # CONFIG_ARCH_ARC_DCCM is not set
 # CONFIG_ARC_MMU_V1 is not set
-CONFIG_ARC_MMU_V2=y
-# CONFIG_ARC_MMU_V3 is not set
+# CONFIG_ARC_MMU_V2 is not set
+CONFIG_ARC_MMU_V3=y
+CONFIG_ARC_MMU_SASID=y
 CONFIG_ARC_PAGE_SIZE_8K=y
 # CONFIG_ARC_PAGE_SIZE_16K is not set
 # CONFIG_ARC_PAGE_SIZE_4K is not set
 # CONFIG_ARCH_ARC_LV2_INTR is not set
 # CONFIG_ARCH_ARC_FPU is not set
-# CONFIG_ARC700_V_4_10 is not set
+CONFIG_ARC700_V_4_10=y
+CONFIG_ARC_HAS_LLSC=y
+CONFIG_ARC_HAS_SWAPE=y
+CONFIG_ARC_HAS_RTSC=y
 
 #
 # Board Configuration
