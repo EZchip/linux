@@ -5,6 +5,9 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * vineetg: Aug 2011
+ *  -Reintroduce duplicate PD fixup - some customer chips still have the issue
+ *
  * vineetg: May 2011
  *  -No need to flush_cache_page( ) for each call to update_mmu_cache()
  *   some of the LMBench tests improved amazingly
@@ -587,14 +590,75 @@ void __init arc_mmu_init(void)
 #endif
 }
 
-/* Duplicate TLB entry means software gone wrong
- * Old code tried to fix it, by removing one of the entires, that is wrong
- * Lets be pedantic and call it over
+/* Handling of Duplicate PD (TLB entry) in MMU.
+ * -Could be due to buggy customer tapeouts or obscure kernel bugs
+ * -MMU complaints not at the time of duplicate PD installation, but at the
+ *      time of lookup matching multiple ways.
+ * -Ideally these should never happen - but if they do - workaround by deleting
+ *      the duplicate one.
+ * -Two Knobs to influence the handling.(TODO: hook them up to debugfs)
  */
+volatile int dup_pd_verbose = 1; /* Be slient abt it or complain (default) */
+volatile int dup_pd_fix = 1;     /* Repair the error (default) or stop */
+
 void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
                   struct pt_regs *regs)
 {
-    panic("EV_MachineCheck : Duplicate PD in TLB\n");
+    int set, way, n;
+    unsigned int tlbpd0[4], tlbpd1[4];  /* assume max 4 ways */
+    unsigned int flags;
+    struct cpuinfo_arc_mmu *mmu;
+
+    mmu = &cpuinfo_arc700[0].mmu;
+
+    local_irq_save(flags);
+
+    /* re-enable the MMU */
+    write_new_aux_reg(ARC_REG_PID, MMU_ENABLE | read_new_aux_reg(ARC_REG_PID));
+
+    /* loop thru all sets of TLB */
+    for(set=0; set < mmu->sets; set++)
+    {
+        /* read out all the ways of current set */
+        for(way=0; way < mmu->ways; way++)
+        {
+            write_new_aux_reg(ARC_REG_TLBINDEX, set*mmu->ways + way);
+            write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBRead);
+            tlbpd0[way] = read_new_aux_reg(ARC_REG_TLBPD0);
+            tlbpd1[way] = read_new_aux_reg(ARC_REG_TLBPD1);
+        }
+
+        /* Scan the set for duplicate ways: needs a nested loop */
+        for(way=0; way < mmu->ways; way++)
+        {
+            /* nested loop need NOT start from 0th - that was dumb */
+            for(n=way+1; n < mmu->ways; n++)
+            {
+                if (tlbpd0[way] == tlbpd0[n] && tlbpd0[way] & _PAGE_VALID) {
+
+                    if (dup_pd_verbose) {
+                        printk("Duplicate PD's @ [%d:%d] and [%d:%d]\n",
+                                set,way,set,n);
+                        printk("TLBPD0[%u]: %08x TLBPD0[%u] : %08x\n",
+                                way,tlbpd0[way], n, tlbpd0[n]);
+                    }
+
+                    if (dup_pd_fix) {
+                        /* clear the entry @way and not @n
+                         * this is critical to our optimised nested loop
+                         */
+                        tlbpd0[way] = tlbpd1[way]=0;
+                        write_new_aux_reg(ARC_REG_TLBPD0,0);
+                        write_new_aux_reg(ARC_REG_TLBPD1,0);
+                        write_new_aux_reg(ARC_REG_TLBINDEX,set*mmu->ways+way);
+                        write_new_aux_reg(ARC_REG_TLBCOMMAND,TLBWrite);
+                    }
+                }
+            }
+        }
+    }
+
+    local_irq_restore(flags);
 }
 
 /***********************************************************************
