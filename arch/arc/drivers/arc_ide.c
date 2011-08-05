@@ -88,17 +88,17 @@ typedef volatile struct {
 #endif
 
 #ifdef CONFIG_ARC_BLK_DEV_IDEDMA
-static void * bounce_buffer = 0;
-static int timeout_count = 0;
+static void * bounce_buffer;
+static int timeout_count;
 #endif
 
 /* ARC IDE controller supports only one sg entry */
 #define ARC_IDE_NUM_SG  1
 
-/* DMA Mapping APIs return DMA address
- *  e.g. for page @ 0x80A0_0000 it returns 0x00A0_0000
- * However ARC IDE controller wants page number
- *  e.g. to pass page @ 0x80A0_0000 it requires (0x80A0_0000 / 0x8000)
+/* IDE DMA commands take buffer "page-number" and not pointer.
+ * e.g. For a kernel buf @0x80A0_0000, dma map API gives bus addr 0x00A0_0000
+ *      while IDE wants a 0x8000_0000 based pg-num, i.e. 0x80A0_0000 / 0x2000
+ * Hence these conversion macros
  */
 #define BUS_ADDR_TO_CTRL(addr)    ((addr | PAGE_OFFSET) >> PAGE_SHIFT)
 #define CTRL_TO_BUS_ADDR(addr)    ((addr << PAGE_SHIFT) - PAGE_OFFSET)
@@ -419,7 +419,7 @@ static int arc_ide_dma_end(ide_drive_t *drive)
     unsigned long dma_stat = 0;
     struct scatterlist *sg = drive->hwif->sg_table;
 
-    DBG("%s:\n", __FUNCTION__);
+    DBG("DMA End %x %d\n", sg_virt(sg), sg_dma_len(sg));
 
     controller->dma_command = 0;        /* stop DMA */
     dma_stat = controller->dma_status;  /* get DMA status */
@@ -483,20 +483,24 @@ static int arc_ide_dma_end(ide_drive_t *drive)
 
 static unsigned long grow_bounce_buffer(unsigned long size)
 {
-    static unsigned long bounce_buf_size;
+    /* allocated sz could be more than the sz requested */
+    static unsigned long alloc_buf_sz;
+    static void *alloc_buf;
 
-    DBG("DMA bounce buffer is %lu, requested %lu\n", bounce_buf_size, size);
+    DBG("DMA bounce buffer is %lu, requested %lu\n", alloc_buf_sz, size);
 
-    if (size > bounce_buf_size) {
-        free_pages((unsigned long)bounce_buffer, get_order(bounce_buf_size));
+    if (size > alloc_buf_sz) {
+        free_pages((unsigned long)alloc_buf, get_order(alloc_buf_sz));
 
-        if ((bounce_buffer = (void *)__get_dma_pages(GFP_ATOMIC,get_order(size) + 1))) {
-            bounce_buf_size = (get_order(size) + 1) * PAGE_SIZE;
-            DBG("DMA bounce buffer grown to %lu bytes at 0x%lx\n",
-                            bounce_buf_size, bounce_buffer);
+        alloc_buf = (void *)__get_dma_pages(GFP_ATOMIC,get_order(size) + 1);
+        if (alloc_buf) {
+            alloc_buf_sz = (get_order(size) + 1) * PAGE_SIZE;
+            bounce_buffer = alloc_buf;
+            DBG("DMA bounce buffer alloc [0x%lx] usable [0x%lx]\n",
+                            alloc_buf, bounce_buffer);
         }
         else {
-            bounce_buf_size = 0;
+            alloc_buf_sz = 0;
             printk("DMA bounce buffer cannot grow to size of %lu\n", size);
         }
     }
@@ -511,7 +515,7 @@ static int arc_ide_setup_dma_from_dev(ide_drive_t *drive)
     struct scatterlist *sg = hwif->sg_table;
     dma_addr_t real_dma_buf = sg_dma_address(sg);
 
-    DBG("%s:\n",__FUNCTION__);
+    DBG("<- DMA FROM %x %d\n", sg_virt(sg), sg_dma_len(sg));
 
     if (real_dma_buf % PAGE_SIZE) {  // ARC IDE doesn't like non page aligned buf
 
@@ -541,6 +545,8 @@ static int arc_ide_setup_dma_to_dev(ide_drive_t *drive)
     ide_hwif_t *hwif    = drive->hwif;
     struct scatterlist *sg = hwif->sg_table;
     dma_addr_t real_dma_buf = sg_dma_address(sg);
+
+    DBG("-> DMA TO %x %d\n",sg_virt(sg), sg_dma_len(sg));
 
     if (real_dma_buf % PAGE_SIZE) {  // ARC IDE doesn't like non page aligned buf
 
