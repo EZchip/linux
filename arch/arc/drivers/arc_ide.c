@@ -99,12 +99,17 @@ static int timeout_count;
  * e.g. For a kernel buf @0x80A0_0000, dma map API gives bus addr 0x00A0_0000
  *      while IDE wants a 0x8000_0000 based pg-num, i.e. 0x80A0_0000 / 0x2000
  * Hence these conversion macros
+ *
+ * It has a further quirk that it only works with 8k pages.
+ * In 4k page environement
+ *      -We ensure that all DMA buffers are 8k aligned
+ *      -the page-nos are also 8k based.
  */
-#define BUS_ADDR_TO_CTRL(addr)    ((addr | PAGE_OFFSET) >> PAGE_SHIFT)
-#define CTRL_TO_BUS_ADDR(addr)    ((addr << PAGE_SHIFT) - PAGE_OFFSET)
+#define BUS_ADDR_TO_CTRL(addr)    ((addr | PAGE_OFFSET) >> 13)
+#define CTRL_TO_BUS_ADDR(addr)    ((addr << 13) - PAGE_OFFSET)
 
 /* Convert controller addr back to kernel addr (not dma addr) */
-#define CTRL_TO_KERNEL(addr)    ((addr) << PAGE_SHIFT)
+#define CTRL_TO_KERNEL(addr)    ((addr) << 13)
 
 
 /* Timing parameters. These are the figures taken from Joe's
@@ -451,7 +456,7 @@ static int arc_ide_dma_end(ide_drive_t *drive)
      * won't either and hence would have required bouncing
      */
 
-    if (sg_dma_address(sg) % PAGE_SIZE) {
+    if (sg_dma_address(sg) % 8192) {
 
         if (rq_data_dir(drive->hwif->rq) == READ) {
 
@@ -487,15 +492,18 @@ static unsigned long grow_bounce_buffer(unsigned long size)
     static unsigned long alloc_buf_sz;
     static void *alloc_buf;
 
-    DBG("DMA bounce buffer is %lu, requested %lu\n", alloc_buf_sz, size);
-
     if (size > alloc_buf_sz) {
         free_pages((unsigned long)alloc_buf, get_order(alloc_buf_sz));
 
+        /* IDE DMA wants 8k aligned bufs, which poses issue with 4k MMU pages.
+         * So we allocate an extra page and align the buffer
+         * The +1, originally for for gaurd page(s), helps ensure that the driver can
+         * align 4k pages based buffer allocations to 8k.
+         */
         alloc_buf = (void *)__get_dma_pages(GFP_ATOMIC,get_order(size) + 1);
         if (alloc_buf) {
             alloc_buf_sz = (get_order(size) + 1) * PAGE_SIZE;
-            bounce_buffer = alloc_buf;
+            bounce_buffer = (void *)((unsigned int)(alloc_buf) & ~8191);
             DBG("DMA bounce buffer alloc [0x%lx] usable [0x%lx]\n",
                             alloc_buf, bounce_buffer);
         }
@@ -517,7 +525,7 @@ static int arc_ide_setup_dma_from_dev(ide_drive_t *drive)
 
     DBG("<- DMA FROM %x %d\n", sg_virt(sg), sg_dma_len(sg));
 
-    if (real_dma_buf % PAGE_SIZE) {  // ARC IDE doesn't like non page aligned buf
+    if (real_dma_buf % 8192) {  // ARC IDE doesn't like non page aligned (8k) buf
 
         DBG("%s, non page-aligned FROM DEV\n", __FUNCTION__);
 
@@ -548,7 +556,7 @@ static int arc_ide_setup_dma_to_dev(ide_drive_t *drive)
 
     DBG("-> DMA TO %x %d\n",sg_virt(sg), sg_dma_len(sg));
 
-    if (real_dma_buf % PAGE_SIZE) {  // ARC IDE doesn't like non page aligned buf
+    if (real_dma_buf % 8192) {  // ARC IDE doesn't like non page aligned (8k) buf
 
         DBG("non aligned buffer TO DEV\n");
         if (grow_bounce_buffer(sg_dma_len(sg)) == 0) {
