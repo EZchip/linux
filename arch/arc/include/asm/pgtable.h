@@ -274,14 +274,18 @@ extern pgd_t swapper_pg_dir[]__attribute__((aligned(PAGE_SIZE)));
 void update_mmu_cache(struct vm_area_struct *vma,
 				 unsigned long address, pte_t *ptep);
 
-/* Linux reserves _PAGE_PRESENT of the pte for swap implementation.
- * Our _PAGE_PRESENT is in bit 0 so we can use 5 bits 1-6 for swap type
- * and top 24 bits for swap offset ( Max 64 GB  swap area )
+/* Encode swap {type,offset} tuple into PTE
+ * We reserve 13 bits for 5-bit @type, keeping bits 12-5 zero, ensuring that
+ * both PAGE_FILE and PAGE_PRESENT are zero in a PTE holding swap "identifier"
  */
-#define __swp_type(x)		(((x).val >> 1) & 0x1f)
-#define __swp_offset(x)		((x).val >> 8)
-#define __swp_entry(type,offset)	((swp_entry_t) { ((type) << 1) | ((offset) << 8) })
+#define __swp_entry(type,offset)	((swp_entry_t) { \
+        ((type) & 0x1f) | ((offset) << 13) })
 
+/* Decode a PTE containing swap "identifier "into constituents */
+#define __swp_type(pte_lookalike)	(((pte_lookalike).val) & 0x1f)
+#define __swp_offset(pte_lookalike)	((pte_lookalike).val << 13)
+
+/* NOPs, to keep generic kernel happy */
 #define __pte_to_swp_entry(pte)	((swp_entry_t) { pte_val(pte) })
 #define __swp_entry_to_pte(x)	((pte_t) { (x).val })
 

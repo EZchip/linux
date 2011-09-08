@@ -85,7 +85,7 @@ typedef struct {
                                        usable for shared TLB entries (H) */
 
 #define _PAGE_MODIFIED      (1<<11) /* Page modified (dirty) (S) */
-#define _PAGE_FILE          (1<<11) /* page cache/ swap (S) */
+#define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 
 #define _PAGE_SHARED_CODE_H (1<<31) /* Hardware counterpart of above */
 #endif
