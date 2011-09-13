@@ -38,8 +38,8 @@
 
 #include <asm/bug.h>
 
-#define ARCH_PFN_OFFSET     (PAGE_OFFSET >> PAGE_SHIFT)
-#define pfn_valid(pfn)      (((pfn) - (PAGE_OFFSET >> PAGE_SHIFT)) < max_mapnr)
+#define ARCH_PFN_OFFSET     (CONFIG_LINUX_LINK_BASE >> PAGE_SHIFT)
+#define pfn_valid(pfn)      (((pfn) - ARCH_PFN_OFFSET) < max_mapnr)
 
 /* Beware this looks cheap but it is pointer arithmatic
  * so becomes divide by sizeof which is not power of 2
