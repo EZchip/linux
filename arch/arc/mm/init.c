@@ -34,23 +34,17 @@ void __init pagetable_init(void)
 
 void __init paging_init(void)
 {
-	/* Sameer: MAX_NR_ZONES is just 2 for us */
 	unsigned long zones_size[MAX_NR_ZONES] = { 0, 0 };
 	extern unsigned long end_mem;
 
 	pagetable_init();
 
-#if 0
-	zones_size[ZONE_DMA] = max_low_pfn;
-
-	free_area_init(zones_size);
-#else
-	zones_size[ZONE_NORMAL] =
-	    ((unsigned long)(end_mem) - CONFIG_LINUX_LINK_BASE) >> PAGE_SHIFT;
+	zones_size[ZONE_NORMAL] = (end_mem - CONFIG_LINUX_LINK_BASE) >> PAGE_SHIFT;
 
 #ifdef  CONFIG_FLATMEM
 	free_area_init_node(0, zones_size, CONFIG_LINUX_LINK_BASE >> PAGE_SHIFT, NULL);
-#endif
+#else
+#error "Fix !CONFIG_FLATMEM"
 #endif
 }
 

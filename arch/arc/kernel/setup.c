@@ -689,15 +689,29 @@ void __init setup_arch(char **cmdline_p)
      * doesn't work with >> operator, hence helper "kernel_end_addr"
      */
     kernel_end_addr = (unsigned long) &end_kernel;
+
+    /* First free page beyond kernel image */
     first_free_pfn = TO_PFN(kernel_end_addr);
 
+    /* first page of system - kernel .vector starts here */
     min_low_pfn = TO_PFN(CONFIG_LINUX_LINK_BASE);
-    max_low_pfn = max_pfn = TO_PFN(end_mem);   // for us no HIGH Mem
+
+    /* Last usable page of low mem (no HIGH_MEM yet for ARC port)
+     * -must be BASE + SIZE
+     */
+    max_low_pfn = max_pfn = TO_PFN(end_mem);
+
     num_physpages = max_low_pfn - min_low_pfn;
 
+    /* setup bootmem allocator */
     bootmap_size = init_bootmem_node(NODE_DATA(0),
-                    first_free_pfn, min_low_pfn, max_low_pfn);
+                       first_free_pfn, /* place bootmem alloc bitmap here */
+                       min_low_pfn,    /* First pg to track */
+                       max_low_pfn);   /* Last pg to track */
 
+    /* Make all mem tracked by bootmem alloc as usable,
+     * except the bootmem bitmap itself
+     */
     free_bootmem(kernel_end_addr,  end_mem - kernel_end_addr);
     reserve_bootmem(kernel_end_addr, bootmap_size, BOOTMEM_DEFAULT);
 
