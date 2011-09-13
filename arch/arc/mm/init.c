@@ -49,8 +49,7 @@ void __init paging_init(void)
 	    ((unsigned long)(end_mem) - CONFIG_LINUX_LINK_BASE) >> PAGE_SHIFT;
 
 #ifdef  CONFIG_FLATMEM
-
-	free_area_init_node(0, zones_size, __pa(PAGE_OFFSET) >> PAGE_SHIFT, NULL);
+	free_area_init_node(0, zones_size, CONFIG_LINUX_LINK_BASE >> PAGE_SHIFT, NULL);
 #endif
 #endif
 }

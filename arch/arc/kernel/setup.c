@@ -691,7 +691,7 @@ void __init setup_arch(char **cmdline_p)
     kernel_end_addr = (unsigned long) &end_kernel;
     first_free_pfn = TO_PFN(kernel_end_addr);
 
-    min_low_pfn = TO_PFN(PAGE_OFFSET);
+    min_low_pfn = TO_PFN(CONFIG_LINUX_LINK_BASE);
     max_low_pfn = max_pfn = TO_PFN(end_mem);   // for us no HIGH Mem
     num_physpages = max_low_pfn - min_low_pfn;
 
