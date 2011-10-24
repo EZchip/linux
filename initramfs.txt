@@ -137,8 +137,6 @@ slink /lib/libutil.so.0 /lib/libutil-0.9.29.so 755 0 0
 
 file /sbin/e2fsck ../arc_initramfs/sbin/e2fsck 755 0 0
 
-file /arc_bin/hlfs ../arc_initramfs/arc_bin/hlfs 755 0 0
-
 slink /sbin/adjtimex /bin/busybox 755 0 0
 slink /sbin/arp /bin/busybox 755 0 0
 slink /sbin/fdisk /bin/busybox 755 0 0
@@ -332,9 +330,6 @@ slink /bin/whoami /bin/busybox 755 0 0
 slink /bin/xargs /bin/busybox 755 0 0
 slink /bin/yes /bin/busybox 755 0 0
 
-file /usr/local/sbin/lspci ../arc_initramfs/usr/local/sbin/lspci 755 0 0
-file /usr/local/sbin/setpci ../arc_initramfs/usr/local/sbin/setpci 755 0 0
-
 slink /usr/sbin/brctl /bin/busybox 755 0 0
 slink /usr/sbin/chpasswd /bin/busybox 755 0 0
 slink /usr/sbin/chroot /bin/busybox 755 0 0
@@ -356,7 +351,6 @@ slink /usr/sbin/svlogd /bin/busybox 755 0 0
 slink /usr/sbin/telnetd /bin/busybox 755 0 0
 slink /usr/sbin/udhcpd /bin/busybox 755 0 0
 
-file /usr/share/pci.ids ../arc_initramfs/usr/share/pci.ids 755 0 0
 file /usr/share/udhcpc/default.script ../arc_initramfs/usr/share/udhcpc/default.script 755 0 0
 
 nod /dev/console 644 0 0 c 5 1
