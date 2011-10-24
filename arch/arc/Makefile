@@ -14,7 +14,6 @@ KBUILD_DEFCONFIG := aa4_defconfig
 PLATFORM := AA4
 export PLATFORM
 
-#LDFLAGS_vmlinux :=-X -T arch/$(ARCH)/kernel/vmlinux.lds
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
