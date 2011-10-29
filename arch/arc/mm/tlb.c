@@ -206,19 +206,27 @@ static void tlb_entry_erase(unsigned int vaddr_n_asid)
 static void utlb_invalidate(void)
 {
 #if (METAL_FIX || CONFIG_ARC_MMU_VER >= 2)
-    {
-        unsigned int idx;
 
-        /* make sure INDEX Reg is valid */
-        idx = read_new_aux_reg(ARC_REG_TLBINDEX);
+#if (CONFIG_ARC_MMU_VER < 3)
+    /* MMU v2 introduced the uTLB Flush command.
+     * There was however a obscure hardware bug, where uTLB flush would fail
+     *  when a prior probe for J-TLB (both totally unrelated) would return
+     *  lkup err - because the entry didnt exist in MMU.
+     *  The Workround was to set Index reg with a valid value, prior to flush.
+     *  This was fixed in MMU v3 hence not needed any more
+     */
+    unsigned int idx;
 
-        /* If not write some dummy val */
-        if (unlikely(idx & TLB_LKUP_ERR)) {
-            write_new_aux_reg(ARC_REG_TLBINDEX, 0xa);
-        }
+    /* make sure INDEX Reg is valid */
+    idx = read_new_aux_reg(ARC_REG_TLBINDEX);
 
-        write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBIVUTLB);
+    /* If not write some dummy val */
+    if (unlikely(idx & TLB_LKUP_ERR)) {
+        write_new_aux_reg(ARC_REG_TLBINDEX, 0xa);
     }
+#endif
+
+    write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBIVUTLB);
 #endif
 
 }
