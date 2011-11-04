@@ -33,6 +33,38 @@ extern void arch_dup_mmap(struct mm_struct *oldmm, struct mm_struct *mm);
 extern void arch_exit_mmap(struct mm_struct *mm);
 #endif
 
+/* ARC MMU provides 8-bit ASID (0..255) to TAG TLB entries, allowing entries
+ * with same vaddr (different tasks) to co-exit. This provides for
+ * "Fast Context Switch" i.e. no TLB flush on ctxt-switch
+ *
+ * Linux assigns each task a unique ASID. A simple round-robin allocation
+ * of H/w ASID is done using software tracker @asid_cache.
+ * When it reaches max 255, the allocation cycle starts afresh by flushing
+ * the entire TLB and wrapping ASID back to zero.
+ *
+ * For book-keeping, Linux uses a couple of data-structures:
+ *  -mm_struct has an @asid field to keep a note of task's ASID (needed at the
+ *   time of say switch_mm( )
+ *  -An array of mm structs @asid_mm_map[] for asid->mm the reverse mapping,
+ *  given an ASID, finding the mm struct associated.
+ *
+ * The round-robin allocation algorithm allows for ASID stealing.
+ * If asid tracker is at "x-1", a new req will allocate "x", even if "x" was
+ * already assigned to another (switched-out) task. Obviously the prev owner
+ * is marked with an invalid ASID to make it request for a new ASID when it
+ * gets scheduled next time. However its TLB entries (with ASID "x") could
+ * exist, which must be cleared before the same ASID is used by the new owner.
+ * Flushing them would be plausible but costly solution. Instead we force a
+ * allocation policy quirk, which ensures that a stolen ASID won't have any
+ * TLB entries associates, alleviating the need to flush.
+ * The quirk essentially is not allowing ASID allocated in prev cycle
+ * to be used past a roll-over in the next cycle.
+ * When this happens (i.e. task ASID > asid tracker), task needs to refresh
+ * its ASID, aligning it to current value of tracker. If the task doesn't get
+ * scheduled past a roll-over, hence its ASID is not yet realigned with
+ * tracker, such ASID is anyways safely reusable because it is
+ * gauranteed that TLB entries with that ASID wont exist.
+ */
 
 #define FIRST_ASID  0
 #define MAX_ASID    255 /* ARC 700 8 bit PID field in PID Aux reg */
@@ -45,8 +77,9 @@ extern struct mm_struct *asid_mm_map[ NUM_ASID + 1 ];
 
 extern int asid_cache;
 
-/* Get a new mmu context or a hardware PID/ASID to work with.
- * If PID rolls over flush cache and tlb.
+
+/* Assign a new ASID to task. If the task already has an ASID, it is
+ * relinquished.
  */
 static inline void
 get_new_mmu_context(struct mm_struct *mm)
@@ -57,28 +90,28 @@ get_new_mmu_context(struct mm_struct *mm)
     local_irq_save(flags);
 
     /* Relinquish the currently owned ASID (if any).
-     * Doing unconditionally saves a cmp-n-branch;
-     * for invalid asid, the array index is still valid
+     * Doing unconditionally saves a cmp-n-branch; for already unused
+     * ASID slot, the value was/remains NULL
      */
     asid_mm_map[mm->context.asid] = (struct mm_struct *) NULL;
 
-    /* move to new asid */
-    if ( ++asid_cache > MAX_ASID) {  /* asid roll-over */
+    /* move to new ASID */
+    if ( ++asid_cache > MAX_ASID) {  /* ASID roll-over */
         asid_cache = FIRST_ASID;
         flush_tlb_all();
     }
 
-    /* Is new ASID already owned by some-one else (we are stealing it).
+    /* Is next ASID already owned by some-one else (we are stealing it).
      * If yes, let the orig owner be aware of this fact, so that when it runs,
      * it asks for a brand new ASID. This would only happen for a long-lived
-     * task with asid from prev allocation cycle (before asid roll-over).
+     * task with ASID from prev allocation cycle (before ASID roll-over).
      *
      * This might look wrong - if we are re-using some other task's ASID,
      * won't we use it's stale TLB entries too. Actually switch_mm( ) takes
-     * care of such a case: it ensures that a task with asid from prev alloc
+     * care of such a case: it ensures that a task with ASID from prev alloc
      * cycle, when scheduled will refresh it's ASID - see switch_mm( ) below
      * The scenario of stealing here will only happen if that task didn't get
-     * a chance to refresh it's asid.
+     * a chance to refresh it's ASID - implying stale entries won't exist.
      */
     if ( (prev_owner = asid_mm_map[asid_cache]) ) {
         prev_owner->context.asid = NO_ASID;
@@ -121,32 +154,25 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
     return 0;
 }
 
-/* Switch the mm context */
+/* Prepare the MMU for task: setup PID reg with allocated ASID
+    If task doesn't have an ASID (never alloc or stolen, get a new ASID)
+*/
 static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
                              struct task_struct *tsk)
 {
     /* PGD cached in MMU reg to avoid 3 mem lookups: task->mm->pgd */
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
 
-    /* Allocate a new ASID if task doesn't have a valid one.
-     * This could happen if this task never had an asid (fresh after fork) or
-     * it's ASID was stolen - past an asid roll-over. Also in a special case,
-     * even if the ASID was valid, we allocate a new ASID, if this task is
-     * running for the first time afer an ASID rollover.
-     * This is part of simplistic asid allocation algorithm - which allows
-     * asid "stealing" - If asid-cache is at "x-1", a new req will allocate "x"
-     * evenif "x" is already allocated. The *IMP* thing is stolen asid's TLB
-     * entries are not flushed - which can cause stale TLB entry use.
-     * The problem case is: A long-lived task has asid "x", asid_cache rolls
-     * over from 255 to 0, and later this task gets scheduled - creating TLB
-     * entries with "x". A little later, while asid_cache is "x-1" a task
-     * needs a new ASID, and steals this "x" while TLB entries already exist.
-     * To avoid this, we don't allow a ASID allocated in prev cycle to be used
-     * past a roll-over.
+    /* Get a new ASID if task doesn't have a valid one. Possible when
+     *  -task never had an ASID (fresh after fork)
+     *  -it's ASID was stolen - past an ASID roll-over.
+     * - There's a third obscure scenario (if this task is running for the
+     *   first time afer an ASID rollover), where despite having a valid ASID,
+     *   we force a get for new ASID - see comments at top.
      *
      * Both the non-alloc scenario and first-use-after-rollover can be
-     * detected using the single condition below - since NO_ASID = 256
-     * while asid_cache is always a valid asid value (0-255).
+     * detected using the single condition below:  NO_ASID = 256
+     * while asid_cache is always a valid ASID value (0-255).
      */
     if (next->context.asid > asid_cache) {
         get_new_mmu_context(next);
@@ -184,7 +210,7 @@ static inline void destroy_context(struct mm_struct *mm)
  * for retiring-mm. However destroy_context( ) still needs to do that because
  * between mm_release( ) = >deactive_mm( ) and
  * mmput => .. => __mmdrop( ) => destroy_context( )
- * there is a good chance that task gets sched-out/in, making it's asid valid
+ * there is a good chance that task gets sched-out/in, making it's ASID valid
  * again (this teased me for a whole day).
  */
 #define deactivate_mm(tsk,mm)   do { } while (0)
