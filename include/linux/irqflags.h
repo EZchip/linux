@@ -80,6 +80,7 @@
 		}					\
 	} while (0)
 #else /* !CONFIG_TRACE_IRQFLAGS_SUPPORT */
+#include <asm/irqflags.h>
 /*
  * The local_irq_*() APIs are equal to the raw_local_irq*()
  * if !TRACE_IRQFLAGS.

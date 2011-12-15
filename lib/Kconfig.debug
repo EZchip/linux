@@ -964,7 +964,7 @@ config FAULT_INJECTION_STACKTRACE_FILTER
 
 config LATENCYTOP
 	bool "Latency measuring infrastructure"
-	select FRAME_POINTER if !MIPS && !PPC && !S390
+	select FRAME_POINTER if !MIPS && !PPC && !S390 && !ARCH_ARC
 	select KALLSYMS
 	select KALLSYMS_ALL
 	select STACKTRACE

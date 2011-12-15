@@ -198,4 +198,5 @@ static inline void serio_continue_rx(struct serio *serio)
 #define SERIO_DYNAPRO	0x3a
 #define SERIO_HAMPSHIRE	0x3b
 
+#define SERIO_DMC_FIT10	0x3c
 #endif

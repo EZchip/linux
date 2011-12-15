@@ -344,7 +344,8 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 	*/
 	if (total_size) {
 		total_size = ELF_PAGEALIGN(total_size);
-		map_addr = do_mmap(filep, addr, total_size, prot, type, off);
+		map_addr = do_mmap(filep, addr, total_size, prot,
+                            type|MAP_SHARED_CODE, off);
 		if (!BAD_ADDR(map_addr))
 			do_munmap(current->mm, map_addr+size, total_size-size);
 	} else

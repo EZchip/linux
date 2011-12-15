@@ -603,4 +603,16 @@ config TOUCHSCREEN_TPS6507X
 	  To compile this driver as a module, choose M here: the
 	  module will be called tps6507x_ts.
 
+config TOUCHSCREEN_DMC_FIT_10
+	tristate "DMC FIT-10 touchscreen"
+	select SERIO
+	help
+	  Say Y here if you have a DMC Co., Ltd. FIT-10 touchscreen.
+
+config TOUCHSCREEN_DMC_FIT_10_DEBUG
+       tristate "DMC FIT-10 touchscreen debug"
+       depends on TOUCHSCREEN_DMC_FIT_10
+       help
+	 Say Y here if you want to view some debug messages from driver.
+
 endif
