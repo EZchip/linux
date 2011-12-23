@@ -1262,6 +1262,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_recvmsg)
         .long   SYMBOL_NAME(sys_arc_settls)
         .long   SYMBOL_NAME(sys_arc_gettls)
+/*355*/ .long   SYMBOL_NAME(sys_perf_event_open)
 
 
 

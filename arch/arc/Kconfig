@@ -18,6 +18,9 @@ config ARCH_ARC
     select NO_IOPORT
     select HAVE_KPROBES
     select HAVE_KRETPROBES
+    select HAVE_PERF_EVENTS
+    select PERF_USE_VMALLOC
+    select GENERIC_ATOMIC64
 
 # vineetg: Mar 31st 2010
 # hack: to enable oprofile w/o TRACE_IRQFLAGS

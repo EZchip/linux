@@ -375,10 +375,11 @@
 #define __NR_recvmsg		    352
 #define __NR_arc_settls		    353
 #define __NR_arc_gettls		    354
+#define __NR_perf_event_open    355
 
 #endif	/* ! __ASSEMBLY__ */
 
-#define NR_syscalls             354
+#define NR_syscalls             355
 
 
 

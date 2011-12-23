@@ -256,5 +256,12 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
 #define smp_mb__after_atomic_inc()  barrier()
 
 #include <asm-generic/atomic-long.h>
+
+#ifdef CONFIG_GENERIC_ATOMIC64
+#include <asm-generic/atomic64.h>
+#else
+#error "implement ARC 64bit atomics"
+#endif
+
 #endif
 #endif
