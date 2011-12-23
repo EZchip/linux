@@ -34,18 +34,12 @@
 #define MMAP_DBG(fmt, args...)
 #endif
 
-/* fwd declaration */
-static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
-        unsigned long len, unsigned long prot, unsigned long flags,
-        unsigned long pgoff);
+static unsigned long __do_mmap2(struct file *, unsigned long, unsigned long,
+        unsigned long, unsigned long, unsigned long);
 
-/* Helper called by mmap syscall: (2nd level)
- * common code for old (packed struct) and new mmap2/
- */
-
-static unsigned long do_mmap2(unsigned long addr_hint, unsigned long len,
-                unsigned long prot, unsigned long flags,
-                unsigned long fd, unsigned long pgoff)
+SYSCALL_DEFINE6(mmap2, unsigned long, addr_hint, unsigned long, len,
+        unsigned long, prot, unsigned long, flags, unsigned long, fd,
+        unsigned long, pgoff)
 {
     unsigned long vaddr = -EBADF;
     struct file *file = NULL;
@@ -75,27 +69,27 @@ out:
     return vaddr;
 }
 
-/* Helper called by elf loader: (2nd level)
+/* simple helper over mmap called by elf loader
  */
 unsigned long do_mmap(struct file *file, unsigned long addr,
         unsigned long len, unsigned long prot,
         unsigned long flag, unsigned long offset)
 {
-        unsigned long ret = -EINVAL;
+    unsigned long ret = -EINVAL;
 
-        if ((offset + PAGE_ALIGN(len)) < offset)
-                goto out;
+    if ((offset + PAGE_ALIGN(len)) < offset)
+        goto out;
 
-        if ((offset & ~PAGE_MASK))
+    if ((offset & ~PAGE_MASK))
         goto out;
 
     ret = __do_mmap2(file, addr, len, prot, flag, offset >> PAGE_SHIFT);
 
 out:
-        return ret;
+    return ret;
 }
 
-/* ARC mmap core: (3rd level)
+/* ARC mmap core:
  * -does special case handling for code mmaps (CONFIG_MMAP_CODE_CMN_VADDR)
  * -calls generic vm entry-pt do_mmap_pgoff(()
  */
@@ -172,15 +166,6 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
     return vaddr;
 }
 
-/* mmp syscall entry point: (1st level)
- */
-unsigned long sys_mmap2(unsigned long addr, unsigned long len,
-              unsigned long prot, unsigned long flags,
-              unsigned long fd, unsigned long pgoff)
-{
-    return do_mmap2(addr, len, prot, flags, fd, pgoff);
-}
-
 /* cloned from stock munmap to have arch specific processing
  * This can go away once mm->unmap_area starts taking more args
  */
@@ -222,19 +207,17 @@ struct mmap_arg_struct {
 asmlinkage int old_mmap(struct mmap_arg_struct *arg)
 {
     struct mmap_arg_struct a;
-    int err = -EFAULT;
+    int err;
 
     if (copy_from_user(&a, arg, sizeof(a)))
-        goto out;
+        return -EFAULT;
 
-    err = -EINVAL;
     if (a.offset & ~PAGE_MASK)
-        goto out;
+        return -EINVAL;
 
-    err =
-        do_mmap2(a.addr, a.len, a.prot, a.flags, a.fd,
+    err = sys_mmap2(a.addr, a.len, a.prot, a.flags, a.fd,
              a.offset >> PAGE_SHIFT);
-      out:
+
     return err;
 }
 
