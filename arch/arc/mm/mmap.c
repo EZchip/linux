@@ -148,13 +148,12 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
         ((prot & PROT_EXEC) &&     /* Callers not converted */
             !(flags & MAP_FIXED) && !(prot & PROT_WRITE)))
     {
-        if (mmapcode_alloc_vaddr(file, pgoff, PAGE_ALIGN(len), &addr_hint)
-                            < 0) {
-            goto out;
-        }
+        /* if this fails (ran out of cmn vaddr slots), fall-thru to normal mmap */
+        if (mmapcode_alloc_vaddr(file, pgoff, PAGE_ALIGN(len), &addr_hint) >=  0) {
 
-        /* force this mmap to take the cmn-vaddr just alloc */
-        flags |= MAP_FIXED;
+            /* force this mmap to take the cmn-vaddr just alloc */
+            flags |= MAP_FIXED;
+        }
     }
 #endif
 
@@ -168,8 +167,6 @@ static unsigned long __do_mmap2(struct file *file, unsigned long addr_hint,
                         addr_hint, vaddr);
         }
     }
-
-out:
 #endif
 
     return vaddr;
