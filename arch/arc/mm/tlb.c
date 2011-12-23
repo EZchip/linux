@@ -264,7 +264,14 @@ void noinline local_flush_tlb_mm(struct mm_struct *mm)
     if (atomic_read(&mm->mm_users) == 0)
         return;
 
-    get_new_mmu_context(mm);
+    /* Workaround for Android weirdism:
+     * A binder VMA could end up in a task such that vma->mm != tsk->mm
+     * old code would cause h/w - s/w ASID to get out of sync
+     */
+    if (current->mm != mm)
+        destroy_context(mm);
+    else
+        get_new_mmu_context(mm);
 }
 
 /*
