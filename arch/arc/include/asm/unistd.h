@@ -376,10 +376,12 @@
 #define __NR_arc_settls		    353
 #define __NR_arc_gettls		    354
 #define __NR_perf_event_open    355
+#define __NR_rt_tgsigqueueinfo  356
+#define __NR_recvmmsg           357
 
 #endif	/* ! __ASSEMBLY__ */
 
-#define NR_syscalls             355
+#define NR_syscalls             357
 
 
 
