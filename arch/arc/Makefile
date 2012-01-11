@@ -111,6 +111,7 @@ KBUILD_IMAGE := bootpImage
 
 all:	$(KBUILD_IMAGE)
 
+boot := arch/arc/boot
 
 # Sameer: People update symlinks to machine and proc folders
 #         here. We wil need it when we'll add more processors
@@ -142,9 +143,11 @@ else
 objconvert:
 endif   #CONFIG_ARC_STACK_UNWIND
 
-zImage Image xipImage bootpImage uImage: objconvert vmlinux
+zImage Image xipImage bootpImage: objconvert vmlinux
 #	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
+uImage: objconvert vmlinux
+	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
 bootpImage: vmlinux
 #	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
