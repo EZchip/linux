@@ -12,6 +12,10 @@ ARC_ENTRY strlen
 	or	r3,r0,7
 	ld	r2,[r3,-7]
 	ld.a	r6,[r3,-3]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r2,r10 ;swape r2,r2
+	SWAPE	r6,r10 ;swape r6,r6
+#endif
 	mov	r4,0x01010101
 	; uses long immediate
 	asl_s	r1,r0,3
@@ -30,6 +34,10 @@ ARC_ENTRY strlen
 .Loop:
 	ld_s	r2,[r3,4]
 	ld.a	r6,[r3,8]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r2,r10 ;swape r2,r2
+	SWAPE	r6,r10 ;swape r6,r6
+#endif
 	; stall for load result
 	sub	r1,r2,r4
 	bic_s	r1,r1,r2

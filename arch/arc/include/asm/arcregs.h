@@ -241,22 +241,46 @@
  */
 struct bcr_identity {
     unsigned int
+#ifdef CONFIG_CPU_BIG_ENDIAN
+        chip_id:16,
+        cpu_id: 8,
+        family: 8;
+#else
         family: 8,
         cpu_id: 8,
         chip_id:16;
+#endif
 };
 
 struct bcr_mmu_1_2 {
     unsigned int
+#ifdef CONFIG_CPU_BIG_ENDIAN
+        ver     :8,
+        ways    :4,
+        sets    :4,
+        u_itlb  :8,
+        u_dtlb  :8;
+#else
         u_dtlb  :8,
         u_itlb  :8,
         sets    :4,
         ways    :4,
         ver     :8;
+#endif
 };
 
 struct bcr_mmu_3 {
     unsigned int
+#ifdef CONFIG_CPU_BIG_ENDIAN
+        ver     :8,
+        ways    :4,
+        sets    :4,
+        osm     :1,
+        reserv  :3,
+        pg_sz   :4,
+        u_itlb  :4,
+        u_dtlb  :4;
+#else
         u_dtlb  :4,
         u_itlb  :4,
         pg_sz   :4,
@@ -265,6 +289,7 @@ struct bcr_mmu_3 {
         sets    :4,
         ways    :4,
         ver     :8;
+#endif
 };
 
 
@@ -276,6 +301,17 @@ struct bcr_mmu_3 {
 struct bcr_extn {
     unsigned int
 
+#ifdef CONFIG_CPU_BIG_ENDIAN
+       
+        padding:1,
+	dvfb:1,             /* Dual Viterbi Butterfly Instrn:
+                               Exotic but not supported by 700
+                             */
+        crc:1,              /* DSP-LIB Ref Manual */
+
+        /* Prog Ref Manual */
+	ext_arith:2, mul:2, barrel:2, minmax:2, norm:2, swap:1;
+#else
         /* Prog Ref Manual */
         swap:1, norm:2, minmax:2, barrel:2, mul:2, ext_arith:2,
 
@@ -284,44 +320,80 @@ struct bcr_extn {
                                Exotic but not supported by 700
                              */
         padding:1;
+#endif
 };
 
 /* DSP Options Ref Manual */
 struct bcr_extn_mac_mul {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    int type:8, ver:8;
+#else
     int ver:8, type:8;
+#endif
 };
 
 struct bcr_extn_xymem {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned int   ram_org:2,
+                    num_banks:4, bank_sz:4, 
+                    ver:8;
+#else
     unsigned int   ver:8,
                     bank_sz:4, num_banks:4,
                     ram_org:2;
+#endif
 };
 
 struct bcr_cache {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned long pad:12, line_len:4, sz:4, config:4, ver:8;
+#else
     unsigned long ver:8, config:4, sz:4, line_len:4, pad:12;
+#endif
 };
 
 struct bcr_perip {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned long start:8, pad2:8, sz:8, pad:8;
+#else
     unsigned long pad:8, sz:8, pad2:8, start:8;
+#endif
 };
 struct bcr_iccm {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned long base:16, reserved:5, sz:3, ver:8;
+#else
     unsigned long ver:8, sz:3, reserved:5, base:16;
+#endif
 };
 
 /* DCCM Base Address Register: ARC_REG_DCCMBASE_BCR */
 struct bcr_dccm_base {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned long addr:24, ver:8;
+#else
     unsigned long ver:8, addr:24;
+#endif
 };
 
 /* DCCM RAM Configuration Register : ARC_REG_DCCM_BCR */
 struct bcr_dccm {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned long res:21, sz: 3, ver:8;
+#else
     unsigned long ver:8, sz: 3, res:21;
+#endif
 };
 
 // Both SP and DP FPU BCRs have same format
 struct bcr_fp {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned int fast:1,
+		 ver:8;
+#else
     unsigned int ver:8,
                  fast:1;
+#endif
 };
 
 struct bcr_ccm {
@@ -331,7 +403,11 @@ struct bcr_ccm {
 
 #ifdef CONFIG_ARCH_ARC800
 struct bcr_mp {
+#ifdef CONFIG_CPU_BIG_ENDIAN
+    unsigned int mp_arch:16, padding:5, sdu:1, idu:1, scu:1, ver:8;
+#else
     unsigned int ver:8, scu:1, idu:1, sdu:1, padding:5, mp_arch:16;
+#endif
 };
 #endif
 

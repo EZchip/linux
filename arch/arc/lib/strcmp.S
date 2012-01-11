@@ -24,6 +24,10 @@ ARC_ENTRY strcmp
 .Lwordloop:
 	ld.ab	r2,[r0,4]
 	ld.ab	r3,[r1,4]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r2,r10 ;swape r2,r2
+	SWAPE	r3,r10 ;swape r3,r3
+#endif
 	nop_s
 	sub	r4,r2,r12
 	bic	r4,r4,r2
