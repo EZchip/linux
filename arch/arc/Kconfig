@@ -385,6 +385,7 @@ config ARC_BLK_DEV_IDEDMA
 
 config ARC_SERIAL
         bool "ARC UART driver support"
+        depends on !SERIAL_8250
         select SERIAL_CORE
         default y
 
