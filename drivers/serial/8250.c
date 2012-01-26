@@ -411,8 +411,10 @@ static void mem_serial_out(struct uart_port *p, int offset, int value)
 	writeb(value, p->membase + offset);
 }
 
+#define REG_UART_USR	(* ( (volatile int*)(0xc0000000+0x0000007C) ) )
 static void mem32_serial_out(struct uart_port *p, int offset, int value)
 {
+	while ( (REG_UART_USR & 0x02) == 0 );
 	offset = map_8250_out_reg(p, offset) << p->regshift;
 	writel(value, p->membase + offset);
 }
@@ -1590,8 +1592,10 @@ static irqreturn_t serial8250_interrupt(int irq, void *dev_id)
 
 			end = NULL;
 		} else if (end == NULL)
+		{
+			serial8250_handle_port(up);
 			end = l;
-
+		}
 		l = l->next;
 
 		if (l == i->head && pass_counter++ > PASS_LIMIT) {
