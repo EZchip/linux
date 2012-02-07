@@ -430,7 +430,6 @@ xtemac_set_address(struct net_device * dev, void *p)
     unsigned int temp;
 
     memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
-    memcpy(mac_addr.sa_data, addr->sa_data, dev->addr_len); // store the mac address.
     printk(KERN_INFO "MAC address set to ");
     for (i = 0; i < 6; i++)
         printk("%02x:", dev->dev_addr[i]);
@@ -495,10 +494,11 @@ printk("Probing...\n");
         return -ENOMEM;
     }
 
-    dev_set_drvdata(dev,ndev);
+    SET_NETDEV_DEV(ndev, &dev->dev);
+	platform_set_drvdata(dev, ndev);
 
     ndev->irq = 6;
-    xtemac_set_address(dev,&mac_addr);
+    xtemac_set_address(ndev,&mac_addr);
     priv = netdev_priv(ndev);
     priv->ndev = ndev;
     priv->tx_skb = 0;
