@@ -106,11 +106,17 @@ config VMALLOC_SIZE
         int
         default "256" #"VMALLOC_SIZE(in MB)"
 
+config NO_DMA
+    bool
+    default n
+
 source "init/Kconfig"
 
 source "kernel/Kconfig.freezer"
 
 menu "Processor Type and features"
+
+menu "ARC CPU Core Configuration"
 
 choice
         prompt "ARC Processor"
@@ -156,8 +162,6 @@ config NR_CPUS
         depends on SMP
         default "2"
 
-
-menu "ARC CPU Core Configuration"
 
 menuconfig ARC700_CACHE
     bool "Enable Cache Support"
@@ -325,21 +329,38 @@ config SDRAM_SIZE
             The actual memory itself could be larger than this number. But for
             all software purposes, this is the amt of memory.
 
-endmenu   #Board config
+choice
+        prompt "Board Selection"
+        default ARCH_ARC_ANGEL4
 
-menu "ARC Pheripheral Support"
+config ARCH_ARC_ANGEL4
+		bool "Angel4"
+        help
+            ARC Angel4 FPGA Ref Platform (Xilinx Virtex Based)
+
+config ARCH_ARC_ML509
+        bool "ML509"
+        help
+            ARC ML509 FPGA Ref Platform (Xilinx Virtex-5 Based)
+
+config ARCH_ARC_SIM
+        bool "ISS"
+        help
+            ARC Linux can run on ARC Instruction set Simulator. While in-general
+            the kernel is agnostic of ISS vs. hardware, and supports virtual
+            UART by default, other virtual peripherals needs to be explicitly
+            selected by chosing this option.
+
+endchoice
 
 config ARC_AHB_PCI_BRIDGE
     bool "Host PCI Bridge on AA4 Board"
     default n
     depends on PCI
+    depends on ARCH_ARC_ANGEL4
     help
     To Enable a PCI device to work on AA4 Ref Board a AHB to PCI Host Bridge
     is needed.
-
-config NO_DMA
-    bool
-    default n
 
 
 config ARC_IDE
@@ -348,6 +369,7 @@ config ARC_IDE
     select IDE
     select BLK_DEV_IDE
     select BLK_DEV_IDEDISK
+    depends on ARCH_ARC_ANGEL4
 	default y
 
 config ARC_BLK_DEV_IDEDMA
@@ -359,6 +381,7 @@ config ARC_BLK_DEV_IDEDMA
 config ARC_SERIAL
         bool "ARC UART driver support"
         select SERIAL_CORE
+        depends on ARCH_ARC_ANGEL4 || ARCH_ARC_ML509 || ARCH_ARC_SIM
         default y
 
 config ARC_SERIAL_NR_PORTS
@@ -391,7 +414,7 @@ config TIMER_LV2
 config ARC_PS2
         bool "ARC PS/2 support"
         default n
-	depends on SERIO
+	    depends on SERIO && ARCH_ARC_ANGEL4
         help
         ARC FPGA Peripherals PS/2 support. Driver currently works only
         on AA4 board.
@@ -399,7 +422,7 @@ config ARC_PS2
 config ARC_PS2_DEBUG
         bool "ARC PS/2 driver debugging"
         default n
-	depends on ARC_PS2
+	    depends on ARC_PS2
         help
 	Turn on statistic collection and various debug messages to
 	simplify debugging.
@@ -411,6 +434,7 @@ config ARCTANGENT_EMAC
         select NETDEVICES
         select NET_ETHERNET
         default n
+        depends on ARCH_ARC_ANGEL4
 
 config EMAC_LV2
         bool "Configure EMAC interrupt on level 2"
@@ -424,11 +448,12 @@ config EMAC_NAPI
 
 config XILINX_TEMAC
         tristate "Use AA5 Xilinx TEMAC ?"
-        default n
+        default y
         select NET
         select INET
         select NETDEVICES
         select NET_ETHERNET
+        depends on ARCH_ARC_ML509
 
 config ISS_MAC
         tristate "Use xISS/ISS ENET simulation ?"
@@ -437,6 +462,7 @@ config ISS_MAC
         select IET
         select NETDEVICES
         select NET_ETHERNET
+        depends on ARCH_ARC_SIM
 
 config ARCPGU
         tristate "Use ARC Pixel Graphics Unit"
@@ -444,6 +470,7 @@ config ARCPGU
         select FB_CFB_FILLRECT
         select FB_CFB_COPYAREA
         select FB_CFB_IMAGEBLIT
+        depends on ARCTANGENT_EMAC
 
 config VFB_SIM
         bool "Use ISS/xISS framebuffer"
@@ -452,6 +479,8 @@ config VFB_SIM
         select FB_CFB_COPYAREA
         select FB_CFB_IMAGEBLIT
         select FB_SYS_FOPS
+        depends on ARCH_ARC_SIM
+
 config VFB_SIM_BASE
         hex "Base address of Frame Buffer in Pysical memory"
         default "0x88000000"
@@ -534,22 +563,9 @@ config SOUND_ARC_AC97
         tristate "Enable AC97 interface"
         select SOUND
         select SOUND_PRIME
+        depends on ARCH_ARC_ANGEL4 || ARCH_ARC_ML509
 
-menu "Bus options (PCI etc.)"
-
-config PCI
-	bool "PCI support"
-	default n
-	help
-	  If you have PCI, say Y, otherwise N.
-
-source "drivers/pci/Kconfig"
-source "drivers/pci/hotplug/Kconfig"
-source "drivers/pcmcia/Kconfig"
-
-endmenu     # Bus options
-
-endmenu     # Peripherals
+endmenu   #Board config
 
 
 config ARCH_ARC_CURR_IN_REG
