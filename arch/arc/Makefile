@@ -17,7 +17,7 @@ export PLATFORM
 #LDFLAGS_vmlinux :=-X -T arch/$(ARCH)/kernel/vmlinux.lds
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
-KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
+KBUILD_CFLAGS		+= -mA7 -mno-mpy -fno-common -pipe -fno-builtin \
 						-D__linux__  -fcall-used-gp -multcost=16
 
 ifdef CONFIG_ARC_HAS_LLSC

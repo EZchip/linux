@@ -38,9 +38,15 @@ extern void __bad_udelay(void);
  */
 static inline void __const_udelay(unsigned long xloops)
 {
+	unsigned long long tmp =
+		(unsigned long long)xloops * (unsigned long long)loops_per_jiffy;
+
+	xloops = tmp >> 32;
+/*
 	__asm__ ("mpyhu %0, %1, %2"
 		 : "=r" (xloops)
 		 : "r" (xloops), "r" (loops_per_jiffy));
+*/
        __delay(xloops * HZ);
 }
 
