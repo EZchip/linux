@@ -9,9 +9,16 @@
 #ifndef __ARC_ASM_CACHE_H
 #define __ARC_ASM_CACHE_H
 
-/* Hardware Config Specific Items */
+/* In case $$ not config, setup a dummy number for rest of kernel */
+#ifndef CONFIG_ARC_CACHE_LINE_SHIFT
 #define L1_CACHE_SHIFT      5
+#else
+#define L1_CACHE_SHIFT      CONFIG_ARC_CACHE_LINE_SHIFT
+#endif
+
 #define L1_CACHE_BYTES      ( 1 << L1_CACHE_SHIFT )
+#define L1_CACHE_ALIGN(x)   ((((unsigned int)(x))+(L1_CACHE_BYTES-1)) & \
+                                ~(L1_CACHE_BYTES-1))
 
 #define ICACHE_COMPILE_WAY_NUM      2
 #define DCACHE_COMPILE_WAY_NUM      4
@@ -29,8 +36,6 @@
 #define is_not_cache_aligned(p) ((unsigned long)p & (~DCACHE_LINE_MASK))
 #endif
 
-#define L1_CACHE_ALIGN(x)   ((((unsigned int)(x))+(L1_CACHE_BYTES-1)) & \
-                                ~(L1_CACHE_BYTES-1))
 
 #ifndef __ASSEMBLY__
 
