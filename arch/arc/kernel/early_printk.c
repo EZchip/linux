@@ -23,7 +23,7 @@
 // is transferred back the regular console.
 
 
-#define UART_BASE   0xc0fc1100      // UART1 base address
+#define UART_BASE   0xc0fc1000      // UART1 base address
 #define UART_BAUDL  0x18
 #define UART_BAUDH  0x1c
 #define UART_STATUS 0x14

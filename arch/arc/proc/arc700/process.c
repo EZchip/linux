@@ -134,6 +134,9 @@ void cpu_idle(void)
 void machine_restart(char *__unused)
 {
     /* Soft reset : jump to reset vector */
+printk("Restart handlers are board specific, put your restart handler code\n");
+printk("in arch/arc/proc/arc700/process.c in the machine_restart() function\n");
+
     __asm__ __volatile__("jal   0x0"::);
 }
 
