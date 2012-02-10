@@ -40,6 +40,7 @@
 #define ACTIONPOINT_HIT 0x0200
 
 /* Protection Violation Exception Cause Code Values */
+#define PROTECTION_VIOL           0x23   // Protection violation vector
 #define INST_FETCH_PROT_VIOL      0x0000
 #define LOAD_PROT_VIOL            0x0100
 #define STORE_PROT_VIOL           0x0200

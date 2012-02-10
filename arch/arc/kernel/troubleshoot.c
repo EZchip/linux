@@ -86,9 +86,9 @@ void show_fault_diagnostics(const char *str, struct pt_regs *regs,
     cause_code = ( cause_reg >> 8 ) & 0xFF;
 
     /* For DTLB Miss or ProtV, display the memory involved too */
-    if ( (cause_vec == 0x22) ||  // DTLB Miss
-         (cause_vec == 0x23) )   // ProtV
+    if (cause_vec == 0x22)  // DTLB Miss
     {
+
 		if (cause_code != 0x04 ) {	// Mislaigned access doesn't tell R/W/X
 			printk("While (%s): 0x%08lx\n",
 				((cause_code == 0x01)?"Read From":
@@ -99,6 +99,20 @@ void show_fault_diagnostics(const char *str, struct pt_regs *regs,
     else if (cause_vec == 0x20) {  /* Machine Check */
         printk("Reason: (%s)\n",
 			(cause_code == 0x0)?"Double Fault":"Other Fatal Err");
+    }
+    else if (cause_vec == 0x23) {   // Protection violation
+        printk("Reason : ");
+        if (cause_code == 0x0)
+            printk("Instruction fetch protection violation (execute from page marked non-execute)\n");
+        else if (cause_code == 0x1)
+            printk("Data read protection violation (read from page marked non-read)\n");
+        else if (cause_code == 0x2)
+            printk("Data store protection violation (write to a page marked non-write)\n");
+        else if (cause_code == 0x3)
+            printk("Data exchange protection violation\n");
+        else if (cause_code ==0x4)
+            printk("Misaligned access\n");
+
     }
 
     printk("Current task = '%s', PID = %u, ASID = %lu\n\n", tsk->comm,

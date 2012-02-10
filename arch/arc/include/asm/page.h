@@ -111,8 +111,16 @@ extern __inline__ int get_order(unsigned long size)
 
 #define VALID_PAGE(page)    ((page - mem_map) < max_mapnr)
 
+// Simon Spooner ARC
+// Config option to make stack non-executable
+
+#ifdef CONFIG_ARC_STACK_NONEXEC
+#define VM_DATA_DEFAULT_FLAGS   (VM_READ | VM_WRITE |  \
+                    VM_MAYREAD | VM_MAYWRITE )
+#else
 #define VM_DATA_DEFAULT_FLAGS   (VM_READ | VM_WRITE | VM_EXEC | \
                     VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC)
+#endif
 
 #define PAGE_BUG(page) do { \
     BUG(); \

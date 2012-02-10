@@ -457,6 +457,14 @@ config HZ
     int "Timer Frequency"
     default 100
 
+config ARC_STACK_NONEXEC
+    bool "Make stack non-executable"
+    default n
+    help
+    By default the stack and heap areas of processes have execute permissions switched on.
+    You may choose to disable execute on the default data permissions switching this option on
+    see include/asm/page.h
+
 source "kernel/Kconfig.preempt"
 
 endmenu

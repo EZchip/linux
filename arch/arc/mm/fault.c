@@ -34,6 +34,7 @@
 #include <asm/mmu_context.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
+#include <asm/traps.h>
 
 extern void die(const char *,struct pt_regs *,long,long);
 extern int fixup_exception(struct pt_regs *regs);
@@ -101,6 +102,11 @@ asmlinkage int do_page_fault(struct pt_regs *regs, int write,
      */
 good_area:
     info.si_code = SEGV_ACCERR;
+// Handle protection violation, execute on heap or stack
+
+    if (cause == ((PROTECTION_VIOL <<16) | INST_FETCH_PROT_VIOL)) {
+        goto bad_area;
+    }
 
     if (write) {
         if (!(vma->vm_flags & VM_WRITE))
