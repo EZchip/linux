@@ -87,6 +87,8 @@ config ARCH_ARC
     default y
     select HAVE_OPROFILE
     select NO_IOPORT
+    select HAVE_KPROBES
+    select HAVE_KRETPROBES
 
 # end of temporary definitions section
 

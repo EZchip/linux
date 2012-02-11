@@ -336,7 +336,7 @@ ARC_ENTRY instr_service
 
     FAKE_RET_FROM_EXCPN r9
 
-    bl  do_instruction_error
+    bl  do_insterror_or_kprobe
     j   ret_from_user_faults
 
 ; ---------------------------------------------
@@ -531,7 +531,7 @@ tracesys_exit:
 
     ; ======= (5b) Trap is due to Break-Point =========
 
-trap_is_brkpt:
+trap_with_param:
 
     ;make sure orig_r8 is a positive value
     st  NR_syscalls + 2, [sp, PT_orig_r8]
@@ -553,8 +553,8 @@ trap_is_brkpt:
     GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
     st  sp, [r10, THREAD_CALLEE_REG]
 
-    ; Call the actual break-pt handler
-    bl  do_trap_is_brkpt
+    ; Call the trap handler
+    bl  do_trap
 
     ; unwind stack to discard Callee saved Regs
     DISCARD_CALLEE_SAVED_USER
@@ -586,8 +586,8 @@ ARC_ENTRY EV_Trap
 
     ;------- (4) What caused the Trap --------------
     lr     r12, [ecr]
-    and.f  0, r12, STATUS_H_MASK
-    jnz    trap_is_brkpt
+    and.f  0, r12, ECAUSE_PARAMETER_MASK
+    jnz    trap_with_param
 
     ; ======= (5a) Trap is due to System Call ========
 

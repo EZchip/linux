@@ -43,4 +43,8 @@ ifdef CONFIG_ARC_STACK_UNWIND
 obj-y		+= unwind.o
 endif
 
+ifdef CONFIG_KPROBES
+obj-y       += kprobes.o
+endif
+
 extra-y := init_task.o vmlinux.lds

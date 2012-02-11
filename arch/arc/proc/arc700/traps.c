@@ -41,9 +41,11 @@
 #include <linux/smp.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/interrupt.h>
+#include <linux/notifier.h>
+#include <linux/kdebug.h>
 #include <asm/tlb.h>
 #include <asm/arcregs.h>
-#include <linux/interrupt.h>
 #include <asm/uaccess.h>
 #include <asm/arcregs.h>
 #include <asm/event-log.h>
@@ -200,4 +202,41 @@ asmlinkage void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
 
 return;
 
+}
+
+asmlinkage void do_trap_is_kprobe(unsigned long cause, unsigned long address,
+                                                            struct pt_regs *regs)
+{
+    notify_die(DIE_TRAP, "kprobe_trap", regs, address, cause, SIGTRAP);
+}
+
+asmlinkage void do_trap(unsigned long cause, unsigned long address,
+                  struct pt_regs *regs)
+{
+    unsigned int param = cause & 0xff;
+
+    switch(param)
+    {
+        case 1:
+            do_trap_is_brkpt(cause, address, regs);
+            break;
+
+        case 2:
+            do_trap_is_kprobe(param, address, regs);
+            break;
+
+        default:
+            break;
+    }
+}
+
+asmlinkage void do_insterror_or_kprobe(unsigned long cause,
+    unsigned long address, struct pt_regs *regs)
+{
+    /* Check if this exception is caused by kprobes */
+    if(notify_die(DIE_IERR, "kprobe_ierr", regs, address,
+                    cause, SIGILL) == NOTIFY_STOP)
+        return;
+
+    do_instruction_error(cause, address, regs);
 }

@@ -28,6 +28,8 @@
 #include <linux/mm.h>
 #include <linux/version.h>
 #include <linux/console.h>
+#include <linux/notifier.h>
+#include <linux/kprobes.h>
 
 #include <asm/hardirq.h>
 #include <asm/pgalloc.h>
@@ -38,6 +40,22 @@
 
 extern void die(const char *,struct pt_regs *,long,long);
 extern int fixup_exception(struct pt_regs *regs);
+
+static inline int notify_page_fault(struct pt_regs *regs, unsigned long cause)
+{
+    int ret = 0;
+
+#ifdef CONFIG_KPROBES
+    if (!user_mode(regs)) {
+        preempt_disable();
+        if (kprobe_running() && kprobe_fault_handler(regs, cause))
+            ret = 1;
+        preempt_enable();
+    }
+#endif
+
+    return ret;
+}
 
 asmlinkage int do_page_fault(struct pt_regs *regs, int write,
                   unsigned long address, unsigned long cause)

@@ -136,6 +136,8 @@ struct callee_regs {
 #define in_syscall(regs) \
     (((regs->orig_r8) >= 0 && (regs->orig_r8 <= NR_syscalls)) ? 1 : 0 )
 
+#define regs_return_value(regs) ((regs)->r0)
+
 #endif /* __ASSEMBLY__ */
 
 #endif /* __KERNEL__ */
