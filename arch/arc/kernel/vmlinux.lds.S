@@ -26,6 +26,7 @@ SECTIONS
     _int_vec_base_lds = .;
     .vector : {
         *(.vector)
+        . = ALIGN(PAGE_SIZE);
     }
 
     /* TODO: These might change depending on H/w */
@@ -43,11 +44,58 @@ SECTIONS
     . = ALIGN(PAGE_SIZE * 4);
 #endif
 
+/************************************************************************
+ * vineetg: Feb 2010: Responsibe for the weird arrangement of .init stuff
+ *
+ *   Instead of a more intuitive arrangement as follows
+ *
+ *   (1a) @marker _stext
+ *       .init {
+ *   (2a)    @marker _init_begin
+ *   (3a)    @marker _sinitext
+ *          *(init.text)
+ *          ...
+ *   (4a)    *(.init.ramfs) => gobbled up
+ *          ...
+ *       }
+ *
+ *   we have
+ *
+ *   (2b) @marker _init_begin  => outside of .init { }
+ *   (4b) .init.ramfs {   => seperate subsection of .init
+ *       *(.init.ramfs)
+ *       }
+ *   (1b) @marker _stext
+ *       .init {
+ *   (3b)    @marker _sinitext
+ *          *(init.text)
+ *
+ *   The reason for having a seperate subsection .init.initramfs is to
+ *   prevent objump from including it in kernel dumps
+ *
+ *   Reason for having .init.ramfs above .init is to make sure that the
+ *   binary blob is tucked away to one side, reducing the displacement
+ *   between .init.text and .text, avoiding any possible relocation errors
+ *   because of calls from .init.text to .text
+ *   Yes such calls do exit: decompress_inflate.c:gunzip( ) -> calls
+ *   zlib_inflate_workspace( )
+ *
+ ************************************************************************/
+
+        _init_begin = .;
+
+#ifdef CONFIG_BLK_DEV_INITRD
+    .init.ramfs : {
+        . = ALIGN(PAGE_SIZE);
+        __initramfs_start = .;
+            *(.init.ramfs)
+        __initramfs_end = .;
+    }
+#endif
+
     . = ALIGN(PAGE_SIZE);
     _stext = .;
     .init : {           /* Init code and data       */
-        _init_begin = .;
-
         _sinittext = .;
             INIT_TEXT
         _einittext = .;
@@ -75,23 +123,13 @@ SECTIONS
         __per_cpu_start = .;
             *(.data.percpu)
         __per_cpu_end = .;
-    }
 
-#ifdef CONFIG_BLK_DEV_INITRD
-    .init.ramfs : {
-        . = ALIGN(PAGE_SIZE);
-        __initramfs_start = .;
-            *(.init.ramfs)
-        __initramfs_end = .;
-    }
-#endif
-
-	.init.rodata : {
 		*(.init.rodata)
-	}
 
     . = ALIGN(PAGE_SIZE);
     _init_end = .;
+
+   }
 
     .text : {           /* Real text segment        */
         _text = .;      /* Text and read-only data  */
