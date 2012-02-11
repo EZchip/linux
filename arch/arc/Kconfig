@@ -90,6 +90,13 @@ config ARCH_ARC
     select HAVE_KPROBES
     select HAVE_KRETPROBES
 
+# vineetg: Mar 31st 2010
+# hack: to enable oprofile w/o TRACE_IRQFLAGS
+# Normally this is selected automatically by kbuild system
+# But is dependent on IRQTRACING when don't have yet.
+# So for now we fake it: When IRQTRACING implemented, take it off
+    select TRACING_SUPPORT
+
 # end of temporary definitions section
 
 source "init/Kconfig"

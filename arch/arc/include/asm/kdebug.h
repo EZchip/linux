@@ -5,6 +5,7 @@ enum die_val {
     DIE_UNUSED,
     DIE_TRAP,
     DIE_IERR,
+    DIE_OOPS
 };
 
 #endif

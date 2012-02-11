@@ -40,14 +40,12 @@
 #include <linux/init.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
-#include <linux/slab.h>
-#include <linux/kernel_stat.h>
 #include <linux/module.h>
 #include <linux/seq_file.h>
-#include <asm/system.h>
 #include <asm/errno.h>
-#include <asm/arcregs.h>
 #include <linux/kallsyms.h>
+#include <linux/irqflags.h>
+#include <linux/kernel_stat.h>
 
 //#define ARC_IRQ_DBG
 

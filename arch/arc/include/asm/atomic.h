@@ -20,6 +20,8 @@
 #define _ASM_ARC_ATOMIC_H
 
 #include <linux/types.h>
+#include <linux/compiler.h>
+#include <linux/irqflags.h>
 
 #define ATOMIC_INIT(i)  { (i) }
 
@@ -54,8 +56,6 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 #define atomic_ops_unlock(flags) _spin_unlock_irqrestore(&smp_atomic_ops_lock, flags)
 
 #else
-
-#include <asm/system.h>
 
 #define atomic_ops_lock(flags)      local_irq_save(flags)
 #define atomic_ops_unlock(flags)    local_irq_restore(flags)

@@ -9,21 +9,6 @@
 /******************************************************************************
  * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-/*
- *  linux/include/asm-arc/bitops.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
  * Authors: Amit Bhor, Sameer Dhavale
  */
 
@@ -31,36 +16,10 @@
 #define _ASM_BITOPS_H
 
 
-/*
- * Copyright 1994, Linus Torvalds.
- */
-
-/*
- * These have to be done with inline assembly: that way the bit-setting
- * is guaranteed to be atomic. All bit operations return 0 if the bit
- * was cleared before the operation and != 0 if it was not.
- *
- */
+#include <linux/compiler.h>
+#include <linux/irqflags.h>
 
 #ifdef CONFIG_SMP
-
-/* vineetg, May 23rd 2008. Merging SMP branch to mainline
- *
- * I didn't want to have this #define for conditionally defining bitops lock ops
- * as spinlock vs local_irq functions as build system will automatically do that
- * depending on SMP or non SMP CONFIGs. However the problem was nested dependencies
- * of hdr files. An include of linux/spinlock.h causes other header files to be
- * included which in turn reference the bitops macros defined in this file
- * before they are included.
- *
- * Hence the hack
- *
- * Another hack here is for SMP we are using the 2nd level API i.e. _spin_lock_xxx
- * rather than using the exported API spin_lock_xxx because of the same hdr file
- * include business
- *
- * Need to revisit this later on and clean up: TODO-vineetg
- */
 
 #include <linux/spinlock_types.h>
 
@@ -73,8 +32,6 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 #else
 
-//#include <linux/interrupt.h>
-#include <asm/system.h>
 
 #define bitops_lock(flags)   local_irq_save(flags)
 #define bitops_unlock(flags) local_irq_restore(flags)
@@ -83,8 +40,6 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 
 #ifdef __KERNEL__
-
-#include <linux/compiler.h>
 
 static inline void
 set_bit(unsigned long nr, volatile void * addr)
@@ -120,6 +75,8 @@ __set_bit(unsigned long nr, volatile void * addr)
        :"=&r" (temp), "=o" (*m)
        :"Ir" (nr), "m" (*m));
 }
+
+// TODO does this affect uni-processor code
 
 #define smp_mb__before_clear_bit()  barrier()
 #define smp_mb__after_clear_bit()   barrier()
