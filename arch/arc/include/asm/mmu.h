@@ -143,12 +143,4 @@ typedef struct {
 #define __S110	PAGE_SHARED_EXECUTE
 #define __S111	PAGE_SHARED_EXECUTE
 
-
-/* ARC700 specifies that addr above 0x8000_0000 are not
- * translated by the MMU (reserved for kernel)
- * Note that even if kernel is reloacted to a higer addr
- * this number MUST NOT be changed
- */
-#define ARC_UNTRANS_ADDR_START  0x80000000
-
 #endif  /* _ASM_ARC_MMU_H */

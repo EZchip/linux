@@ -68,6 +68,8 @@
  */
 #define TASK_UNMAPPED_BASE      (TASK_SIZE / 3)
 
+#ifndef __ASSEMBLY__
+
 /* For mmap randomisation and Page coloring for share code pages */
 #define HAVE_ARCH_PICK_MMAP_LAYOUT
 
@@ -160,5 +162,6 @@ extern unsigned int get_wchan(struct task_struct *p);
  */
 #define current_text_addr() ({ __label__ _l; _l: &&_l;})
 
+#endif  /* !__ASSEMBLY__ */
 #endif  /* __KERNEL__ */
 #endif  /* __ASM_ARC_PROCESSOR_H */
