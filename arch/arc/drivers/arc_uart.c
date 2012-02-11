@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2010
  *
+ * Vineetg: Aug 21st 2010
+ *  -Is uart_tx_stopped() not done in tty write path as it has already been
+ *   taken care of, in serial core
+ *
  * Vineetg: Aug 18th 2010
  *  -New Serial Core based ARC UART driver
  *  -Derived largely from blackfin driver albiet with some major tweaks
@@ -205,18 +209,17 @@ static unsigned int arc_serial_tx_empty(struct uart_port *port)
 // TODO:remove this
 int arc_cnt;
 
-/* Driver internal routine, used by both tty as well as isr
- * Called under spinlock in either cases
+/* Driver internal routine, used by both tty(serial core) as well as tx-isr
+ *  -Called under spinlock in either cases
+ *  -also tty->stopped / tty->hw_stopped has already been checked
+ *     = by uart_start( ) before calling us
+ *     = tx_ist checks that too before calling
  */
 static void arc_serial_tx_chars(struct arc_serial_port *uart)
 {
 	struct circ_buf *xmit = &uart->port.info->xmit;
     int sent=0;
     unsigned char ch;
-
-	if (uart_tx_stopped(&uart->port)) {
-		return;
-	}
 
 	if (unlikely(uart->port.x_char)) {
 		UART_RSET_DATA(uart, uart->port.x_char);
@@ -357,7 +360,11 @@ static irqreturn_t arc_serial_isr(int irq, void *dev_id)
         UART_TX_IRQ_DISABLE(uart);
 
 	    spin_lock(&uart->port.lock);
-		arc_serial_tx_chars(uart);
+
+	    if (!uart_tx_stopped(&uart->port)) {
+		    arc_serial_tx_chars(uart);
+        }
+
 	    spin_unlock(&uart->port.lock);
     }
 
