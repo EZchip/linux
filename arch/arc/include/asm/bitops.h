@@ -27,8 +27,8 @@
  * Authors: Amit Bhor, Sameer Dhavale
  */
 
-#ifndef _ARCNOMMU_BITOPS_H
-#define _ARCNOMMU_BITOPS_H
+#ifndef _ASM_BITOPS_H
+#define _ASM_BITOPS_H
 
 
 /*
@@ -83,6 +83,8 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 
 #ifdef __KERNEL__
+
+#include <linux/compiler.h>
 
 static inline void
 set_bit(unsigned long nr, volatile void * addr)
@@ -158,7 +160,7 @@ __clear_bit(unsigned long nr, volatile void * addr)
 /*
  * WARNING: non atomic version.
  */
-static __inline__ void
+static inline void
 __change_bit(unsigned long nr, volatile void * addr)
 {
   unsigned long temp;
@@ -279,7 +281,7 @@ __test_and_clear_bit(unsigned long nr, volatile void * addr)
 /*
  * WARNING: non atomic version.
  */
-static __inline__ int
+static inline int
 __test_and_change_bit(unsigned long nr, volatile void * addr)
 {
   unsigned long temp;
@@ -322,15 +324,12 @@ test_and_change_bit(unsigned long nr, volatile void * addr)
 /*
  * This routine doesn't need to be atomic.
  */
-static __inline__ int __constant_test_bit(int nr, const volatile void * addr)
+static inline int __constant_test_bit(int nr, const volatile void * addr)
 {
        return ((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
 }
 
-/* Sameer: added const type qualifier in the arguement to get rid of
-           warnings */
-
-static __inline__ int __test_bit(int nr, const volatile void * addr)
+static inline int __test_bit(int nr, const volatile void * addr)
 {
     int     * a = (int *) addr;
     int mask;
@@ -349,7 +348,7 @@ static __inline__ int __test_bit(int nr, const volatile void * addr)
  * ffz = Find First Zero in word. Undefined if no zero exists,
  * so code should check against ~0UL first..
  */
-static __inline__ unsigned long ffz(unsigned long word)
+static inline unsigned long ffz(unsigned long word)
 {
     unsigned long result = 0;
 
@@ -365,115 +364,22 @@ static __inline__ unsigned long ffz(unsigned long word)
         find_next_zero_bit((addr), (size), 0)
 
 
-/* ARC by deault is little endian */
-#ifndef __BIG_ENDIAN__
+#define ext2_set_bit(nr, addr)  \
+    __test_and_set_bit((nr), (unsigned long *)(addr))
+#define ext2_clear_bit(nr, addr) \
+    __test_and_clear_bit((nr), (addr))
 
-#define ext2_set_bit(nr, addr) __test_and_set_bit((nr), (addr))
-#define ext2_clear_bit(nr, addr) __test_and_clear_bit((nr), (addr))
-#define ext2_test_bit(nr, addr) test_bit((nr), (addr))
-#define ext2_find_first_zero_bit(addr, size) find_first_zero_bit((addr), (size))
+#define ext2_test_bit(nr, addr) \
+    test_bit((nr), (unsigned long *)(addr))
+#define ext2_find_first_zero_bit(addr, size) \
+    find_first_zero_bit((unsigned long *)(addr), (size))
 #define ext2_find_next_zero_bit(addr, size, offset) \
-                find_next_zero_bit((addr), (size), (offset))
+    find_next_zero_bit((unsigned long *)(addr), (size), (offset))
+#define ext2_find_next_bit(addr, size, offset) \
+    find_next_bit((unsigned long *)(addr), (size), (offset))
 
 #define ext2_set_bit_atomic(lock, nr, addr) test_and_set_bit((nr), (addr))
 #define ext2_clear_bit_atomic(lock, nr, addr) test_and_clear_bit((nr), (addr))
-
-#else   /* __BIG_ENDIAN__ */
-
-/* For big endian */
-extern __inline__ int ext2_set_bit(int nr, volatile void * addr)
-{
-    int     mask, retval;
-    unsigned long flags;
-    volatile unsigned char  *ADDR = (unsigned char *) addr;
-
-    ADDR += nr >> 3;
-    mask = 1 << (nr & 0x07);
-    bitops_lock(flags);
-    retval = (mask & *ADDR) != 0;
-    *ADDR |= mask;
-    bitops_unlock(flags);
-    return retval;
-}
-
-extern __inline__ int ext2_clear_bit(int nr, volatile void * addr)
-{
-    int     mask, retval;
-    unsigned long flags;
-    volatile unsigned char  *ADDR = (unsigned char *) addr;
-
-    ADDR += nr >> 3;
-    mask = 1 << (nr & 0x07);
-    bitops_lock(flags);
-    retval = (mask & *ADDR) != 0;
-    *ADDR &= ~mask;
-    bitops_unlock(flags);
-    return retval;
-}
-
-extern __inline__ int ext2_test_bit(int nr, const volatile void * addr)
-{
-    int         mask;
-    const volatile unsigned char    *ADDR = (const unsigned char *) addr;
-
-    ADDR += nr >> 3;
-    mask = 1 << (nr & 0x07);
-    return ((mask & *ADDR) != 0);
-}
-
-#define ext2_find_first_zero_bit(addr, size) \
-        ext2_find_next_zero_bit((addr), (size), 0)
-
-extern __inline__ unsigned long ext2_find_next_zero_bit(void *addr, unsigned long size, unsigned long offset)
-{
-    unsigned long *p = ((unsigned long *) addr) + (offset >> 5);
-    unsigned long result = offset & ~31UL;
-    unsigned long tmp;
-
-    if (offset >= size)
-        return size;
-    size -= result;
-    offset &= 31UL;
-    if(offset) {
-        /* We hold the little endian value in tmp, but then the
-         * shift is illegal. So we could keep a big endian value
-         * in tmp, like this:
-         *
-         * tmp = __swab32(*(p++));
-         * tmp |= ~0UL >> (32-offset);
-         *
-         * but this would decrease preformance, so we change the
-         * shift:
-         */
-        tmp = *(p++);
-        tmp |= __swab32(~0UL >> (32-offset));
-        if(size < 32)
-            goto found_first;
-        if(~tmp)
-            goto found_middle;
-        size -= 32;
-        result += 32;
-    }
-    while(size & ~31UL) {
-        if(~(tmp = *(p++)))
-            goto found_middle;
-        result += 32;
-        size -= 32;
-    }
-    if(!size)
-        return result;
-    tmp = *p;
-
-found_first:
-    /* tmp is little endian, so we would have to swab the shift,
-     * see above. But then we have to swab tmp below for ffz, so
-     * we might as well do this here.
-     */
-    return result + ffz(__swab32(tmp) | (~0UL << size));
-found_middle:
-    return result + ffz(__swab32(tmp));
-}
-#endif  /* __BIG_ENDIAN__ */
 
 /* Bitmap functions for the minix filesystem.  */
 #define minix_test_and_set_bit(nr,addr) test_and_set_bit(nr,addr)
@@ -489,8 +395,6 @@ found_middle:
  * The Hamming Weight of a number is the total number of bits set in it.
  */
 
-/* Sameer: Using generic implementations for a while */
-#include <linux/compiler.h>
 #include <asm-generic/bitops/fls.h>
 #include <asm-generic/bitops/ffs.h>
 #include <asm-generic/bitops/__fls.h>
@@ -502,4 +406,4 @@ found_middle:
 #include <asm-generic/bitops/lock.h>
 #endif /* __KERNEL__ */
 
-#endif /* _ARCNOMMU_BITOPS_H */
+#endif
