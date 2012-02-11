@@ -161,6 +161,8 @@ static inline unsigned short int csum_tcpudp_magic(unsigned long saddr,
 	return csum_fold(csum_tcpudp_nofold(saddr,daddr,len,proto,sum));
 }
 
+unsigned short ip_compute_csum(const unsigned char * buff, int len);
+
 #if 0
 /* AmitS - This is done in arch/arcnommu/lib/checksum.c */
 /*

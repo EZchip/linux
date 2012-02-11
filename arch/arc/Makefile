@@ -15,14 +15,10 @@
 # Its a rewrite from old arcch/arc/proc/arc700/Rules.make
 
 UTS_MACHINE := arc
-
-ifdef CONFIG_ARCH_ARC700
 PROCESSOR  := arc700
-endif
 
 KBUILD_DEFCONFIG := aa4_defconfig
 
-PROCESSOR  := arc700
 PLATFORM := AA4
 export PLATFORM
 
@@ -58,11 +54,6 @@ MODFLAGS	+= -mlong-calls
 KBUILD_CFLAGS	+= $(shell if [ $(call cc-version, $(CC)) -gt 0400 ] ; then echo $(call cc-option,-mno-sdata); fi ;)
 
 gcc-ver := $(call cc-version, $(CC))
-
-ifeq ($(CONFIG_ARC_MIXED_CODE),y)
-KBUILD_CFLAGS		+= -mmixed-code
-endif
-
 ifeq ($(gcc-ver), 0304)
 KBUILD_CFLAGS		+= -fno-unit-at-a-time
 endif
@@ -101,9 +92,7 @@ head-y		:= arch/arc/proc/$(PROCESSOR)/head.o \
 core-y		+= arch/arc/kernel/ arch/arc/mm/ \
 			arch/arc/proc/$(PROCESSOR)/
 
-ifdef CONFIG_OPROFILE
-core-y		+= arch/arc/oprofile/
-endif
+core-$(CONFIG_OPROFILE)		+= arch/arc/oprofile/
 
 drivers-y	+= arch/arc/drivers/
 

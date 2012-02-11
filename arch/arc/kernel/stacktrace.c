@@ -210,8 +210,9 @@ void noinline show_stacktrace(struct task_struct *tsk, struct pt_regs *regs)
 {
     printk("\nStack Trace:\n");
     arc_unwind_core(tsk, regs, verbose_dump_stack, NULL);
-    sort_snaps(1);
 }
+
+EXPORT_SYMBOL(show_stacktrace);
 
 /* Expected by sched Code */
 void show_stack(struct task_struct *tsk, unsigned long *sp)
@@ -225,7 +226,7 @@ void dump_stack(void)
     show_stacktrace(0, NULL);
 }
 
-EXPORT_SYMBOL(show_stacktrace);
+EXPORT_SYMBOL(dump_stack);
 
 /* Another API expected by schedular, shows up in "ps" as Wait Channel
  * Ofcourse just returning schedule( ) would be pointless so unwind until
