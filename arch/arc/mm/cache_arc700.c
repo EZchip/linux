@@ -1,6 +1,10 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: Mar 2010
+ *  -GCC can't generate ZOL for core cache flush loops.
+ *   Conv them into iterations based as opposed to while (start < end) types
+ *
  * Vineetg: July 2009
  *  -In I-cache flush routine we check for aliasing for every line INV.
  *   Instead now we setup routines per cache geometry and invoke them
@@ -75,12 +79,12 @@
 #include <asm/mmu_context.h>
 
 extern struct cpuinfo_arc cpuinfo_arc700[];
-static void ___flush_icache_range_no_alias(unsigned long, unsigned long);
-static void ___flush_icache_range_32k(unsigned long, unsigned long);
-static void ___flush_icache_range_64k(unsigned long, unsigned long);
+static void __arc_icache_inv_lines_no_alias(unsigned long, int);
+static void __arc_icache_inv_lines_32k(unsigned long, int);
+static void __arc_icache_inv_lines_64k(unsigned long, int);
 
 /* Holds the ptr to flush routine, dependign on size due to aliasing issues */
-static void (* ___flush_icache_rtn)(unsigned long, unsigned long);
+static void (* ___flush_icache_rtn)(unsigned long, int);
 
 char * arc_cache_mumbojumbo(int cpu_id, char *buf)
 {
@@ -175,13 +179,13 @@ void __init arc_cache_init(void)
     switch(ic->sz) {
     case 8 * 1024:
     case 16 * 1024:
-        ___flush_icache_rtn = ___flush_icache_range_no_alias;
+        ___flush_icache_rtn = __arc_icache_inv_lines_no_alias;
         break;
     case 32 * 1024:
-        ___flush_icache_rtn = ___flush_icache_range_32k;
+        ___flush_icache_rtn = __arc_icache_inv_lines_32k;
         break;
     case 64 * 1024:
-        ___flush_icache_rtn = ___flush_icache_range_64k;
+        ___flush_icache_rtn = __arc_icache_inv_lines_64k;
         break;
     default:
         panic("Unsupported I-Cache Sz\n");
@@ -255,45 +259,94 @@ sw_hw_mismatch:
 
 #ifdef CONFIG_ARC700_USE_DCACHE
 
-inline void flush_and_inv_dcache_all(void)
+/***********************************************************
+ * Machine specific helpers for Entire D-Cache or Per Line ops
+ **********************************************************/
+
+/* Operation on Entire D-Cache
+ * @cacheop = { 0x0 = DISCARD, 0x1 = WBACK, 0x3 = WBACK-N-INV }
+ * @aux_reg: Relevant Register in Cache
+ */
+static inline void __arc_dcache_entire_op(int aux_reg, int cacheop)
 {
-    unsigned long flags, dc_ctrl;
+    unsigned long flags, orig_d_ctrl = orig_d_ctrl;
 
     local_irq_save(flags);
 
-    /* Set the Invalidate mode to FLUSH BEFORE INV */
-    dc_ctrl = read_new_aux_reg(ARC_REG_DC_CTRL);
-    write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl | BIT_DC_CTRL_INV_MODE_FLUSH);
+    if (cacheop & 2) {
+        /* Dcache provides 2 cmd: FLUSH or INV
+         * INV inturn has sub-modes: DISCARD or FLUSH-BEFORE
+         * Default INV sub-mode is DISCARD, hence this check
+         */
+        orig_d_ctrl = read_new_aux_reg(ARC_REG_DC_CTRL);
+	    write_new_aux_reg(ARC_REG_DC_CTRL, orig_d_ctrl | BIT_DC_CTRL_INV_MODE_FLUSH);
+    }
 
-    /* Invoke Cache INV CMD */
-    write_new_aux_reg(ARC_REG_DC_IVDC, 0x1);
+    write_new_aux_reg(aux_reg, 0x1);
 
-    /* wait for the flush to complete, poll on the FS Bit */
-    while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
+    if (cacheop & 1) {
+        /* wait for the flush to complete, poll on the FS Bit */
+        while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
+    }
 
-    /* Set the Invalidate mode back to INV ONLY */
-	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl & ~BIT_DC_CTRL_INV_MODE_FLUSH);
+    if (cacheop & 2) {
+        /* Switch back the DISCARD ONLY Invalidate mode */
+	    write_new_aux_reg(ARC_REG_DC_CTRL,
+						orig_d_ctrl & ~BIT_DC_CTRL_INV_MODE_FLUSH);
+    }
 
     local_irq_restore(flags);
 }
 
-EXPORT_SYMBOL(flush_and_inv_dcache_all);
-
-/*
- * start, end - kernel virt addrs
+/* Per Line Operation on D-Cache
+ * Doesn't deal with type-of-op/IRQ-disabling/waiting-for-flush-to-complete
+ * It's sole purpose is to help gcc generate ZOL
  */
 
-void flush_dcache_range(unsigned long start, unsigned long end)
+static inline void __arc_dcache_per_line_op(unsigned long start, unsigned long sz, int aux_reg)
+{
+    int num_lines = sz/DCACHE_COMPILE_LINE_LEN;
+
+    /* If @start address is not cache line aligned, do so.
+     * This also means 1 extra line to be flushed
+     *
+     * However instead of doing this unconditionally, we can optimise a bit.
+     * Page sized flush ops can be assumed to begin on a cache line (if not
+     * page aligned). Thus alignment check can be avoided when @sz = PAGE_SIZE
+     * Since page wise flush ops pass a constant @sz = PAGE_SIZE, and this
+     * function is inline, gcc can do "constant propagation" and compile away
+     * the entire alignment code block.
+     *      -outer "if" will be eliminated by constant propagation
+     *     -Since outer "if" will compile time evaluate to false,
+     *      inner block will be thrown away as well
+     *
+     * However when @sz is not constant, the exta size check is superflous
+     * as we want to unconditionally do the aligment check, hence the
+     * __builtin_constant_p.
+     */
+    if ( ! __builtin_constant_p(sz) || sz != PAGE_SIZE ) {
+        if (start & ~DCACHE_LINE_MASK) {
+            start &= DCACHE_LINE_MASK;
+            num_lines++;
+        }
+    }
+
+    while (num_lines-- > 0) {
+        write_new_aux_reg(aux_reg, start);
+        start += DCACHE_COMPILE_LINE_LEN;
+    }
+}
+
+/* D-Cache : Per Line FLUSH (wback)
+ */
+
+static inline void __arc_dcache_flush_lines(unsigned long start, unsigned long sz)
 {
     unsigned long flags;
 
-    start &= DCACHE_LINE_MASK;
     local_irq_save(flags);
 
-    while (end > start) {
-        write_new_aux_reg(ARC_REG_DC_FLDL, start);
-        start = start + DCACHE_COMPILE_LINE_LEN;
-    }
+    __arc_dcache_per_line_op(start, sz, ARC_REG_DC_FLDL);
 
     /* wait for the flush to complete, poll on the FS Bit */
     while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
@@ -301,146 +354,130 @@ void flush_dcache_range(unsigned long start, unsigned long end)
     local_irq_restore(flags);
 }
 
-void flush_dcache_page(struct page *page)
+/* D-Cache : Per Line INV (discard or wback+discard)
+ */
+
+static inline void __arc_dcache_inv_lines(unsigned long start, unsigned long sz,
+                                    int flush_n_inv)
 {
-    flush_dcache_range((unsigned long)page_address(page),
-               (unsigned long)page_address(page) + PAGE_SIZE);
+    unsigned long flags, orig_d_ctrl = orig_d_ctrl;
+
+    local_irq_save(flags);
+
+    if (flush_n_inv) {
+        /* Dcache provides 2 cmd: FLUSH or INV
+         * INV inturn has sub-modes: DISCARD or FLUSH-BEFORE
+         * Default INV sub-mode is DISCARD, hence this check
+         */
+        orig_d_ctrl = read_new_aux_reg(ARC_REG_DC_CTRL);
+	    write_new_aux_reg(ARC_REG_DC_CTRL, orig_d_ctrl | BIT_DC_CTRL_INV_MODE_FLUSH);
+    }
+
+    __arc_dcache_per_line_op(start, sz, ARC_REG_DC_IVDL);
+
+
+    if (flush_n_inv) {
+        /* wait for the flush to complete, poll on the FS Bit */
+        while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
+
+        /* Switch back the DISCARD ONLY Invalidate mode */
+	    write_new_aux_reg(ARC_REG_DC_CTRL, orig_d_ctrl & ~BIT_DC_CTRL_INV_MODE_FLUSH);
+    }
+
+    local_irq_restore(flags);
 }
 
-/*
- * page is the kernel virtual addr and ARC_REG_DC_FLDL expects a phy addr
- */
-void flush_dcache_page_virt(unsigned long *page)
+/***********************************************************
+ * Exported APIs
+ **********************************************************/
+
+void inv_dcache_all()
 {
-    flush_dcache_range((unsigned long)page,
-               (unsigned long)page + PAGE_SIZE);
+    /* Throw away the contents of entrie Dcache */
+    __arc_dcache_entire_op(ARC_REG_DC_IVDC, 0x0);
+}
+
+void flush_and_inv_dcache_all(void)
+{
+    __arc_dcache_entire_op(ARC_REG_DC_IVDC, 0x3);
 }
 
 void flush_dcache_all()
 {
-    unsigned long flags;
-
-    local_irq_save(flags);
-    write_new_aux_reg(ARC_REG_DC_FLSH, 1);
-
-    /* wait for the flush to complete, poll on the FS Bit */
-    while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
-
-    local_irq_restore(flags);
+    __arc_dcache_entire_op(ARC_REG_DC_FLSH, 0x1);
 }
 
-EXPORT_SYMBOL(flush_dcache_all);
+
+void flush_dcache_range(unsigned long start, unsigned long end)
+{
+    __arc_dcache_flush_lines(start, end - start);
+}
+
+void flush_dcache_page(struct page *page)
+{
+    __arc_dcache_flush_lines((unsigned long)page_address(page), PAGE_SIZE);
+}
+
 /*
- * Fixme :: Might need to be corrected so that dma works correctly, leaving
- * for now.
- * All the addrs must be physical addrs, that means the addr
- * translation must be done before writing the addr to the cache line.
+ * page is the kernel virtual addr and ARC_REG_DC_FLDL expects a phy addr
+ * TODO: need to remove this
  */
-
-inline void flush_and_inv_dcache_range(unsigned long start, unsigned long end)
+void flush_dcache_page_virt(unsigned long *page)
 {
-    unsigned long flags, dc_ctrl;
-
-    start &= DCACHE_LINE_MASK;
-    local_irq_save(flags);
-
-    /* Set the Invalidate mode to FLUSH BEFORE INV */
-    dc_ctrl = read_new_aux_reg(ARC_REG_DC_CTRL);
-	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl | BIT_DC_CTRL_INV_MODE_FLUSH);
-
-    /* Invoke Cache INV CMD */
-    while (end > start) {
-        write_new_aux_reg(ARC_REG_DC_IVDL, start);
-        start = start + DCACHE_COMPILE_LINE_LEN;
-    }
-
-    /* wait for the flush to complete, poll on the FS Bit */
-    while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
-
-    /* Switch back the DISCARD ONLY Invalidate mode */
-	write_new_aux_reg(ARC_REG_DC_CTRL, dc_ctrl & ~BIT_DC_CTRL_INV_MODE_FLUSH);
-
-    local_irq_restore(flags);
+    __arc_dcache_flush_lines((unsigned long)page,PAGE_SIZE);
 }
 
-inline void inv_dcache_range(unsigned long start, unsigned long end)
+
+void flush_and_inv_dcache_range(unsigned long start, unsigned long end)
 {
-    unsigned long flags;
-
-    start &= DCACHE_LINE_MASK;
-    local_irq_save(flags);
-
-    /* Default Invalidate mode is already DISCARD only
-       Throw away the Dcache lines */
-    while (end > start) {
-        write_new_aux_reg(ARC_REG_DC_IVDL, start);
-        start = start + DCACHE_COMPILE_LINE_LEN;
-    }
-
-    local_irq_restore(flags);
+    __arc_dcache_inv_lines(start, end-start, 1);
 }
 
-inline void inv_dcache_all()
+void inv_dcache_range(unsigned long start, unsigned long end)
 {
-    unsigned long flags;
-
-    local_irq_save(flags);
-
-    /* Throw away the contents of entrie Dcache */
-    write_new_aux_reg(ARC_REG_DC_IVDC, 0x1);
-
-    local_irq_restore(flags);
+    __arc_dcache_inv_lines(start, end-start, 0);
 }
 
 EXPORT_SYMBOL(flush_dcache_range);
 EXPORT_SYMBOL(inv_dcache_range);
+EXPORT_SYMBOL(flush_dcache_all);
+EXPORT_SYMBOL(flush_and_inv_dcache_all);
 EXPORT_SYMBOL(flush_dcache_page);
+
 #endif
 
 #ifdef CONFIG_ARC700_USE_ICACHE
 
-void flush_icache_all()
-{
-    unsigned long flags;
-
-    local_irq_save(flags);
-
-    write_new_aux_reg(ARC_REG_IC_IVIC, 1);
-
-    /*
-     * lr will not complete till the icache inv operation is not over
-     */
-    read_new_aux_reg(ARC_REG_IC_CTRL);
-    local_irq_restore(flags);
-}
+/***********************************************************
+ * Machine specific helpers for per line I-Cache invalidate
+ * We have 3 different routines to take care of I-cache aliasing
+ * in specific configurations of ARC700
+ **********************************************************/
 
 /*
  * start, end - PHY Address
  */
 
-static void ___flush_icache_range_no_alias(unsigned long start, unsigned long end)
+static void __arc_icache_inv_lines_no_alias(unsigned long start, int num_lines)
 {
-    start &= ICACHE_LINE_MASK;
-    while (end > start) {
+    while (num_lines-- > 0) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         start += ICACHE_COMPILE_LINE_LEN;
     }
 }
 
-static void ___flush_icache_range_32k(unsigned long start, unsigned long end)
+static void __arc_icache_inv_lines_32k(unsigned long start, int num_lines)
 {
-    start &= ICACHE_LINE_MASK;
-    while (end > start) {
+    while (num_lines-- > 0) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
         start += ICACHE_COMPILE_LINE_LEN;
     }
 }
 
-static void ___flush_icache_range_64k(unsigned long start, unsigned long end)
+static void __arc_icache_inv_lines_64k(unsigned long start, int num_lines)
 {
-    start &= ICACHE_LINE_MASK;
-    while (end > start) {
+    while (num_lines-- > 0) {
         write_new_aux_reg(ARC_REG_IC_IVIL, start);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x01);
         write_new_aux_reg(ARC_REG_IC_IVIL, start | 0x10);
@@ -449,13 +486,26 @@ static void ___flush_icache_range_64k(unsigned long start, unsigned long end)
     }
 }
 
-static void __flush_icache_range(unsigned long start, unsigned long end)
+static void __arc_icache_inv_lines(unsigned long start, unsigned long sz)
 {
     unsigned long flags;
+    int num_lines = sz / ICACHE_COMPILE_LINE_LEN;
+
+    if ( ! __builtin_constant_p(sz) || sz != PAGE_SIZE ) {
+        if (start & ~ICACHE_LINE_MASK) {
+            start &= ICACHE_LINE_MASK;
+            num_lines++;
+        }
+    }
+
     local_irq_save(flags);
-    (*___flush_icache_rtn)(start, end);
+    (*___flush_icache_rtn)(start, num_lines);
     local_irq_restore(flags);
 }
+
+/***********************************************************
+ * Exported APIs
+ **********************************************************/
 
 /* This is API for making I/D Caches consistent when modifying code
  * (loadable modules, kprobes,  etc)
@@ -494,8 +544,8 @@ void flush_icache_range(unsigned long kstart, unsigned long kend)
 
     /* Kernel Paddr */
     if (kstart > PAGE_OFFSET) {
-        __flush_icache_range(kstart, kend);
-        flush_dcache_range(kstart, kend);
+        __arc_icache_inv_lines(kstart, kend-kstart);
+        __arc_dcache_flush_lines(kstart, kend-kstart);
         return;
     }
 
@@ -507,8 +557,8 @@ void flush_icache_range(unsigned long kstart, unsigned long kend)
         sz = (tot_sz >= PAGE_SIZE)? PAGE_SIZE : tot_sz;
         //printk("Flushing for virt %lx Phy %lx PAGE %lx\n", kstart, phy, pfn);
         local_irq_save(flags);
-        flush_dcache_range(phy, phy + sz);
-        __flush_icache_range(phy, phy + sz);
+        __arc_dcache_flush_lines(phy, sz);
+        __arc_icache_inv_lines(phy, sz);
         local_irq_restore(flags);
         kstart += PAGE_SIZE;
         tot_sz -= PAGE_SIZE;
@@ -527,8 +577,22 @@ void flush_icache_page(struct vm_area_struct *vma, struct page *page)
     if (!(vma->vm_flags & VM_EXEC))
         return;
 
-    __flush_icache_range((unsigned long)page_address(page),
-               (unsigned long)page_address(page) + PAGE_SIZE);
+    __arc_icache_inv_lines((unsigned long)page_address(page), PAGE_SIZE);
+}
+
+void flush_icache_all()
+{
+    unsigned long flags;
+
+    local_irq_save(flags);
+
+    write_new_aux_reg(ARC_REG_IC_IVIC, 1);
+
+    /*
+     * lr will not complete till the icache inv operation is not over
+     */
+    read_new_aux_reg(ARC_REG_IC_CTRL);
+    local_irq_restore(flags);
 }
 
 void flush_cache_all()
@@ -564,43 +628,16 @@ void flush_cache_range(struct vm_area_struct *vma, unsigned long start,
         flush_cache_all();
 }
 
-/* Sameer : I just added new second arg user_addr to match the signature
-            expected by arch-independent code. We are yet not doing with
-            the second arg which we need to do */
-
 void flush_cache_page(struct vm_area_struct *vma, unsigned long page,
               unsigned long pfn)
 {
-    struct mm_struct *mm = vma->vm_mm;
-    pgd_t *pgdp;
-    pud_t *pudp;
-    pmd_t *pmdp;
-    pte_t *ptep;
-    unsigned long paddr;
+    unsigned int start = pfn << PAGE_SHIFT;
 
-    if (mm->context.asid == NO_ASID)
-        return;
+    __arc_dcache_flush_lines(start, PAGE_SIZE);
 
-    page &= PAGE_MASK;
-    pgdp = pgd_offset(mm, page);
-    pudp = pud_offset(pgdp, page);
-    pmdp = pmd_offset(pudp, page);
-    ptep = pte_offset(pmdp, page);
+    if (vma->vm_flags & VM_EXEC)
+        __arc_icache_inv_lines(start, PAGE_SIZE);
 
-    paddr = pte_val(*ptep);
-    paddr &= ~(PAGE_SIZE - 1);
-    /* If the page isn't marked present then it couldn't possibly
-       be in the cache
-     */
-    if (!(pte_val(*ptep) & _PAGE_PRESENT))
-        return;
-
-    if ((mm == current->active_mm) && (pte_val(*ptep) & _PAGE_VALID)) {
-
-        flush_dcache_page_virt((__va(paddr)));
-        if (vma->vm_flags & VM_EXEC)
-            flush_icache_page(vma, virt_to_page(__va(paddr)));
-    }
 }
 
 #endif
