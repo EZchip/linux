@@ -1,6 +1,12 @@
 #ifndef __ASM_ARC_IRQFLAGS_H
 #define __ASM_ARC_IRQFLAGS_H
 
+/* vineetg: March 2010 : local_irq_save( ) optimisation
+ *  -Remove explicit mov of current status32 into reg, that is not needed
+ *  -Use BIC  insn instead of INVERTED + AND
+ *  -Conditionally disable interrupts (if they are not enabled, don't disable)
+*/
+
 #ifdef __KERNEL__
 
 #include <asm/arcregs.h>
@@ -18,12 +24,13 @@ static inline long _local_irq_save(void) {
     unsigned long temp, flags;
 
     __asm__ __volatile__ (
-        "lr  %0, [status32]\n\t"
-        "mov %1, %0\n\t"
-        "and %0, %0, %2\n\t"
-        "flag %0\n\t"
-        :"=&r" (temp), "=r" (flags)
-        :"n" (~(STATUS_E1_MASK | STATUS_E2_MASK))
+        "lr  %1, [status32]\n\t"
+        "bic %0, %1, %2\n\t"    // a BIC b = a AND ~b, (now 4 byte vs. 8)
+        "and.f 0, %1, %2  \n\t"
+        "flag.nz %0\n\t"
+        :"=r" (temp), "=r" (flags)
+        :"n" ((STATUS_E1_MASK | STATUS_E2_MASK))
+        :"cc"
     );
 
     return flags;
@@ -54,7 +61,7 @@ static inline void local_irq_disable(void) {
 
     __asm__ __volatile__ (
         "lr  %0, [status32]\n\t"
-        "and %0, %0, %1\n\t"
+        "and %0, %0, %1\n\t" // {AND a,a,u7} is already (BIC not req)
         "flag %0\n\t"
         :"=&r" (temp)
         :"n" (~(STATUS_E1_MASK | STATUS_E2_MASK))
