@@ -42,15 +42,21 @@ pmd_populate(struct mm_struct *mm, pmd_t *pmd, pgtable_t ptep)
 
 extern __inline__ pgd_t *get_pgd_slow(void)
 {
-        pgd_t *ret = (pgd_t *)__get_free_page(GFP_KERNEL);
+    int num, num2;
+    pgd_t *ret = (pgd_t *)__get_free_page(GFP_KERNEL);
 
-        if (ret) {
-                memset(ret, 0, USER_PTRS_PER_PGD * sizeof(pgd_t));
-                memcpy(ret + USER_PTRS_PER_PGD, swapper_pg_dir +
-                            USER_PTRS_PER_PGD,
-               (PTRS_PER_PGD - USER_PTRS_PER_PGD) * sizeof(pgd_t));
-        }
-        return ret;
+    if (ret) {
+        num = USER_PTRS_PER_PGD + USER_KERNEL_GUTTER/PGDIR_SIZE;
+        memset(ret, 0, num * sizeof(pgd_t));
+
+        num2 = VMALLOC_SIZE/PGDIR_SIZE;
+        memcpy(ret + num, swapper_pg_dir + num, num2 * sizeof(pgd_t));
+
+        memset(ret + num + num2, 0,
+               (PTRS_PER_PGD - num - num2) * sizeof(pgd_t));
+
+    }
+    return ret;
 }
 
 extern __inline__ void free_pgd_slow(pgd_t *pgd)
@@ -77,7 +83,16 @@ pte_alloc_one(struct mm_struct *mm, unsigned long address)
     if (pte_pg)
     {
         void *pte_phy = page_address(pte_pg);
-        clear_page(pte_phy);
+
+         __asm__ __volatile__(
+                  "mov     lp_count,%1\n"
+                  "lp      1f\n"
+                  "st.ab     0, [%0, 4]\n"
+                  "st.ab     0, [%0, 4]\n"
+                  "1:\n"
+                  :"+r"(pte_phy)
+                  :"r"(PTRS_PER_PTE/2) // 2 for 2 insn above
+                  :"lp_count");
     }
 
     return pte_pg;
