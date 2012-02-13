@@ -26,18 +26,16 @@
 
 #include <linux/highmem.h>
 
-static inline void pmd_populate_kernel(struct mm_struct *mm, pmd_t *pmd,
-	pte_t *pte)
+static inline void
+pmd_populate_kernel(struct mm_struct *mm, pmd_t *pmd, pte_t *pte)
 {
-/* 	set_pmd(pmd, __pmd((unsigned long)pte)); */
-        pmd_set(pmd, (pte_t *)pte);
+	pmd_set(pmd, (pte_t *)pte);
 }
 
-static inline void pmd_populate(struct mm_struct *mm, pmd_t *pmd,
-	struct page *pte)
+static inline void
+pmd_populate(struct mm_struct *mm, pmd_t *pmd, struct page *ptep)
 {
-        pmd_set(pmd, (pte_t *)(unsigned long)page_address(pte));
-/* 	set_pmd(pmd, __pmd((unsigned long)page_address(pte))); */
+    pmd_set(pmd, (pte_t *)(unsigned long)page_address(ptep));
 }
 
 extern struct pgtable_cache_struct {
@@ -53,11 +51,6 @@ extern struct pgtable_cache_struct {
 
 #define PTE_ORDER 0
 
-/* #define pmd_populate(mm,pmd,pte) pmd_set(pmd,pte) */
-/*
- * Allocate and free page tables.
- */
-
 extern __inline__ pgd_t *get_pgd_slow(void)
 {
         pgd_t *ret = (pgd_t *)__get_free_page(GFP_KERNEL);
@@ -65,8 +58,8 @@ extern __inline__ pgd_t *get_pgd_slow(void)
         if (ret) {
                 memset(ret, 0, USER_PTRS_PER_PGD * sizeof(pgd_t));
                 memcpy(ret + USER_PTRS_PER_PGD, swapper_pg_dir +
-							USER_PTRS_PER_PGD,
-		       (PTRS_PER_PGD - USER_PTRS_PER_PGD) * sizeof(pgd_t));
+                            USER_PTRS_PER_PGD,
+               (PTRS_PER_PGD - USER_PTRS_PER_PGD) * sizeof(pgd_t));
         }
         return ret;
 }
@@ -96,71 +89,44 @@ extern __inline__ void free_pgd_fast(pgd_t *pgd)
         pgtable_cache_size++;
 }
 
-/* Sameer: New function required for 2.6 */
-static inline pte_t *pte_alloc_one_kernel(struct mm_struct *mm,
-	unsigned long address)
+static inline pte_t *
+pte_alloc_one_kernel(struct mm_struct *mm, unsigned long address)
 {
-	pte_t *pte;
+    pte_t *pte;
 
-	pte = (pte_t *) __get_free_pages(GFP_KERNEL|__GFP_REPEAT|__GFP_ZERO, PTE_ORDER);
+    pte = (pte_t *) __get_free_pages(GFP_KERNEL|__GFP_REPEAT|__GFP_ZERO, PTE_ORDER);
 
-	return pte;
+    return pte;
 }
 
-static inline struct page *pte_alloc_one(struct mm_struct *mm,
-	unsigned long address)
+static inline struct page *
+pte_alloc_one(struct mm_struct *mm, unsigned long address)
 {
-	struct page *pte;
+    struct page *pte_pg;
 
-	pte = alloc_pages(GFP_KERNEL | __GFP_REPEAT, PTE_ORDER);
-	if (pte)
-	  {
-	    void *page = page_address(pte);
-	    clear_page(page);
-	  }
-/* 		clear_highpage(pte); */
+    pte_pg = alloc_pages(GFP_KERNEL | __GFP_REPEAT, PTE_ORDER);
+    if (pte_pg)
+    {
+        void *pte_phy = page_address(pte_pg);
+        clear_page(pte_phy);
+    }
 
-	return pte;
-}
-
-static inline pte_t *pte_alloc_one_fast(struct mm_struct *mm, unsigned long address)
-{
-        unsigned long *ret;
-
-        if((ret = (unsigned long *)pte_quicklist) != NULL) {
-                pte_quicklist = (unsigned long *)(*ret);
-                ret[0] = ret[1];
-                pgtable_cache_size--;
-        }
-        return (pte_t *)ret;
-}
-
-static __inline__ void pte_free_fast(pte_t *pte)
-{
-        *(unsigned long *)pte = (unsigned long) pte_quicklist;
-        pte_quicklist = (unsigned long *) pte;
-        pgtable_cache_size++;
-}
-
-static __inline__ void pte_free_slow(pte_t *pte)
-{
-        free_page((unsigned long)pte);
+    return pte_pg;
 }
 
 static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 {
-	free_pages((unsigned long)pte, PTE_ORDER);
+    free_pages((unsigned long)pte, PTE_ORDER);  // takes phy addr
 }
 
-static inline void pte_free(struct mm_struct *mm, struct page *pte)
+static inline void pte_free(struct mm_struct *mm, struct page *ptep)
 {
-	__free_page(pte);
+    __free_page(ptep);
 }
 
 
-/* #define pte_free(pte)      pte_free_slow(pte) */
 #define pgd_free(mm, pgd)      free_pgd_slow(pgd)
-#define pgd_alloc(mm)      get_pgd_fast()
+#define pgd_alloc(mm)          get_pgd_fast()
 
 /*
  * We don't have any real pmd's, and this code never triggers because
@@ -177,16 +143,15 @@ static inline void pte_free(struct mm_struct *mm, struct page *pte)
 /* other stuff */
 
 /* Sameer: courtesy MIPS port */
-#define __pmd_free_tlb(tlb,x)		do { } while (0)
+#define __pmd_free_tlb(tlb,x)       do { } while (0)
 
-#define __pte_free_tlb(tlb,pte)		tlb_remove_page((tlb),(pte))
+#define __pte_free_tlb(tlb,pte)     tlb_remove_page((tlb),(pte))
 
 extern int do_check_pgt_cache(int, int);
 extern void pgd_init(unsigned long page);
 
-/* Sameer: Does it still need to stay here? */
-#define check_pgt_cache()	do { } while (0)
+#define check_pgt_cache()   do { } while (0)
 
 #define pmd_pgtable(pmd) pmd_page(pmd)
 
-#endif	/* _ASM_ARC_PGALLOC_H */
+#endif  /* _ASM_ARC_PGALLOC_H */
