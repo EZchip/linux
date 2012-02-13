@@ -2,6 +2,10 @@
  * Copyright ARC International (www.arc.com) 2010-2011
  *
  * vineetg: April 2010
+ *  -PGD entry no longer contains any flags. If empty it is 0, otherwise has
+ *   Pg-Tbl ptr. Thus pmd_present(), pmd_valid(), pmd_set( ) become simpler
+ *
+ * vineetg: April 2010
  *  -Switched form 8:11:13 split for page tabel lookup to 11:8:13
  *  -this speeds up page table allocation itself as we now have to memset 1K
  *    instead of 8k per page table.
@@ -163,20 +167,18 @@ static inline void flush_tlb_pgtables(struct mm_struct *mm,
 
 /* 	{ return (pmd_val(pmd) & PAGE_MASK); } */
 static inline void pmd_set(pmd_t * pmdp, pte_t * ptep)
-	{ pmd_val(*pmdp) = (_PAGE_TABLE | (unsigned long) ptep); }
+{
+    pmd_val(*pmdp) = (unsigned long) ptep;
+}
 
 #define pte_none(x)	(!pte_val(x))
 #define pte_present(x)	(pte_val(x) & _PAGE_PRESENT)
 /* #define pte_clear(xp)	do { pte_val(*(xp)) = 0; } while (0) */
 
 #define pte_clear(mm,addr,ptep)	set_pte_at((mm),(addr),(ptep), __pte(0))
-
-#define pmd_none(x)	(!pmd_val(x))
-/* by removing the _PAGE__KERNEL bit from the comparision, the same pmd_bad
- * works for both _PAGE_TABLE and _KERNPG_TABLE pmd entries.
- */
-#define	pmd_bad(x)	((pmd_val(x) & ~PAGE_MASK) != _PAGE_TABLE)
-#define pmd_present(x)	(pmd_val(x) & _PAGE_PRESENT)
+#define pmd_none(x)	    (!pmd_val(x))
+#define	pmd_bad(x)      ((pmd_val(x) & ~PAGE_MASK))
+#define pmd_present(x)	(pmd_val(x))
 #define pmd_clear(xp)	do { pmd_val(*(xp)) = 0; } while (0)
 
 
