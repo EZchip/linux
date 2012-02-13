@@ -38,6 +38,26 @@
 
 #include <linux/highmem.h>
 
+/* @sz is bytes, but gauranteed to be multiple of 4
+ * Similarly @ptr is alo word aligned
+ */
+static void inline memset_aligned(void *ptr, unsigned int sz)
+{
+    void *tmp = ptr;
+
+    __asm__ __volatile__(
+                  "mov     lp_count,%1\n"
+                  "lp      1f\n"
+                  "st.ab     0, [%0, 4]\n"
+                  "st.ab     0, [%0, 4]\n"
+                  "1:\n"
+                  :"+r"(tmp)
+                  :"ir"(sz/4/2) // 4: bytes to word
+                                // 2: instances of st.ab in loop
+                  :"lp_count");
+
+}
+
 static inline void
 pmd_populate_kernel(struct mm_struct *mm, pmd_t *pmd, pte_t *pte)
 {
@@ -59,12 +79,12 @@ extern __inline__ pgd_t *get_pgd_slow(void)
 
     if (ret) {
         num = USER_PTRS_PER_PGD + USER_KERNEL_GUTTER/PGDIR_SIZE;
-        memset(ret, 0, num * sizeof(pgd_t));
+        memset_aligned(ret, num * sizeof(pgd_t));
 
         num2 = VMALLOC_SIZE/PGDIR_SIZE;
         memcpy(ret + num, swapper_pg_dir + num, num2 * sizeof(pgd_t));
 
-        memset(ret + num + num2, 0,
+        memset_aligned(ret + num + num2,
                (PTRS_PER_PGD - num - num2) * sizeof(pgd_t));
 
     }
@@ -85,7 +105,8 @@ pte_alloc_one_kernel(struct mm_struct *mm, unsigned long address)
 {
     pte_t *pte;
 
-    pte = (pte_t *) __get_free_pages(GFP_KERNEL|__GFP_REPEAT|__GFP_ZERO, PTE_ORDER);
+    pte = (pte_t *) __get_free_pages(GFP_KERNEL|__GFP_REPEAT|__GFP_ZERO,
+									PTE_ORDER);
 
     return pte;
 }
@@ -98,20 +119,7 @@ pte_alloc_one(struct mm_struct *mm, unsigned long address)
     pte_pg = __get_free_pages(GFP_KERNEL | __GFP_REPEAT, PTE_ORDER);
     if (pte_pg)
     {
-		/* Note: "C" @tmp needed to avoid post-incremnted pte_pg
-		 *       from being returned to caller
-		 */
-		void *tmp = pte_pg;
-
-         __asm__ __volatile__(
-                  "mov     lp_count,%1\n"
-                  "lp      1f\n"
-                  "st.ab     0, [%0, 4]\n"
-                  "st.ab     0, [%0, 4]\n"
-                  "1:\n"
-                  :"+r"(tmp)
-                  :"r"(PTRS_PER_PTE/2) // 2 for 2 insn above
-                  :"lp_count");
+		memset_aligned((void *)pte_pg, PTRS_PER_PTE * 4);
     }
 
     return pte_pg;
