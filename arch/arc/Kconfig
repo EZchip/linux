@@ -71,6 +71,10 @@ config GENERIC_TIME
         bool
         default y
 
+config GENERIC_FIND_FIRST_BIT
+        bool
+        default y
+
 config GENERIC_FIND_NEXT_BIT
         bool
         default y

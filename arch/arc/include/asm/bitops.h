@@ -1,6 +1,12 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ * vineetg: March 2010
+ *  -optimised ARC versions of ffz, ffs, fls
+ *  -fls in particular is now loopless based on ARC norm insn
+ *  - Also all such functions made "const" for gcc to enable CSE/LICM
+ *  -find_first(_|_zero)_bit no longer express in terms of find_next(_|_zero)_bit
+ *
  * Vineetg: July 2009 (EXT2 bitops API optimisation)
  *	-Atomic API no longer call spin_lock as we are Uni-processor
  *	-Non Atomix API no longer disables interrupts
@@ -409,16 +415,10 @@ static inline int __attribute__((const)) __fls(unsigned long x)
     else return fls(x) - 1;
 }
 
-
-
-#define find_first_zero_bit(addr, size) \
-        find_next_zero_bit((addr), (size), 0)
-
-
 #define ext2_set_bit(nr, addr)  \
     __test_and_set_bit((nr), (unsigned long *)(addr))
 #define ext2_clear_bit(nr, addr) \
-    __test_and_clear_bit((nr), (addr))
+    __test_and_clear_bit((nr), (unsigned long *)(addr))
 
 #define ext2_test_bit(nr, addr) \
     test_bit((nr), (unsigned long *)(addr))
@@ -429,15 +429,12 @@ static inline int __attribute__((const)) __fls(unsigned long x)
 #define ext2_find_next_bit(addr, size, offset) \
     find_next_bit((unsigned long *)(addr), (size), (offset))
 
-#define ext2_set_bit_atomic(lock, nr, addr) test_and_set_bit((nr), (addr))
-#define ext2_clear_bit_atomic(lock, nr, addr) test_and_clear_bit((nr), (addr))
+#define ext2_set_bit_atomic(lock, nr, addr) \
+    test_and_set_bit((nr), (unsigned long *)(addr))
+#define ext2_clear_bit_atomic(lock, nr, addr) \
+    test_and_clear_bit((nr), (unsigned long *)(addr))
 
-/* Bitmap functions for the minix filesystem.  */
-#define minix_test_and_set_bit(nr,addr) test_and_set_bit(nr,addr)
-#define minix_set_bit(nr,addr) set_bit(nr,addr)
-#define minix_test_and_clear_bit(nr,addr) test_and_clear_bit(nr,addr)
-#define minix_test_bit(nr,addr) test_bit(nr,addr)
-#define minix_find_first_zero_bit(addr,size) find_first_zero_bit(addr,size)
+#include <asm-generic/bitops/minix.h>
 
 /**
  * hweightN - returns the hamming weight of a N-bit word
@@ -448,9 +445,17 @@ static inline int __attribute__((const)) __fls(unsigned long x)
 
 #include <asm-generic/bitops/hweight.h>
 #include <asm-generic/bitops/fls64.h>
-#include <asm-generic/bitops/find.h>
 #include <asm-generic/bitops/sched.h>
 #include <asm-generic/bitops/lock.h>
+
+/* DON'T include generic find.h
+ * It over-rides simpler find_first_bit(addr, size) with complicated
+ * find_next_bit((addr), (size), 0)
+ */
+//#include <asm-generic/bitops/find.h>
+
+
+
 #endif /* __KERNEL__ */
 
 #endif
