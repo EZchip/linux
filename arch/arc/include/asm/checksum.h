@@ -5,6 +5,13 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * Joern Rennecke  <joern.rennecke@embecosm.com>: Jan 2012
+ *  -Insn Scheduling improvements to csum core routines.
+ *      = csum_fold( ) largely derived from ARM version.
+ *      = ip_fast_cum( ) to have module scheduling
+ *  -gcc 4.4.x broke networking. Alias analysis needed to be primed.
+ *   worked around by adding memory clobber to ip_fast_csum( )
+ *
  * vineetg: May 2010
  *  -Rewrote ip_fast_cscum( ) and csum_fold( ) with fast inline asm
  */
@@ -52,65 +59,46 @@ extern unsigned int csum_partial_copy_from_user(const char *src, char *dst,
 
 /*
  *	Fold a partial checksum
+ *
+ *  The 2 swords comprising the 32bit sum are added, any carry to 16th bit
+ *  added back and final sword result inverted.
  */
-static inline __sum16 csum_fold(__wsum sum)
+static inline __sum16 csum_fold(__wsum s)
 {
-    unsigned int lower, upper;
-    __sum16 folded;
-
-    /* The 32 bit sum is broken into two 16 bit halves which are then added
-     * We test if this results in a carry (bit 16 set), in which case it is
-     * added back. This is slightly optimal than unconditionally adding the
-     * upper bits of 16 bit sum (in anticipation of carry) back to sum
-     *
-     * Also as per the csum algorithm, after adding the carry back to sum,
-     * the carry portion needs to be discarded before doing the invert.
-     * However we leave the discard to end, when gcc for the purpose of
-     * returning a sword, anyways downconverts the word to s-word, discarding
-     * that portion
-     */
-    __asm__ __volatile__(
-        "bmsk   %0, %3, 15  \n"  // break 32 bit @sum into two 16 bit words
-        "lsr    %1, %3, 16  \n"
-        "add    %0, %0, %1  \n"  // add them together
-        "btst   %0, 16      \n"  // was there a carry in 16 bit sum
-        "add.nz %0, %0, 1   \n"  // if yes, add it back to sum
-                                 // extw needed - deferred (see below)
-        "not    %2, %0      \n"  // csum req a final invert of sum
-        :"=&r"(lower), "=&r" (upper), "=r" (folded)
-        :"r" (sum)
-        :"cc"
-    );
-
-   /* This implies extw insn, which down-conv 32-bit word to 16 bit word,
-    * for the 16 bit return semantics. It also takes care of discarding
-    * the carry portion of 16 bit sum, which we avoided purposefully
-    * in the inline asm above
-    */
-    return folded;
+  unsigned r = s << 16 | s >> 16; /* ror */
+  s = ~s;
+  s -= r;
+  return s >> 16;
 }
 
 /*
  *	This is a version of ip_compute_csum() optimized for IP headers,
  *	which always checksum on 4 octet boundaries.
  */
-static inline __sum16 ip_fast_csum(void *iph, unsigned int ihl)
+static inline __sum16 ip_fast_csum(const void *iph, unsigned int ihl)
 {
-    void *ptr = iph;
-    unsigned int sum, tmp;
+    const void *ptr = iph;
+    unsigned int tmp, tmp2, sum;
 
-    __asm__ __volatile__(
-        "ld.ab   %0, [%2, 4]        \n\t"
-        "sub.f   lp_count, %3, 1    \n\t"
-        "lpnz  1f                   \n\t"
-        "ld.ab   %1, [%2, 4]        \n\t"
-        "adc.f   %0, %0, %1         \n\t"
-        "1:                         \n\t"
-        "adc     %0, %0, 0          \n\t"
-        :"=&r"(sum), "=r"(tmp), "+r"(ptr)
-        :"r"(ihl)
-        :"cc"
-    );
+    __asm__ (
+		"ld.ab  %0, [%3, 4]		\n\t"
+		"ld.ab  %2, [%3, 4]		\n\t"
+		"sub    %1, %4, 2		\n\t"
+		"lsr.f  lp_count, %1, 1	\n\t"
+		"bcc    0f				\n\t"
+		"add.f  %0, %0, %2		\n\t"
+		"ld.ab  %2, [%3, 4]		\n"
+	"0:  lp     1f				\n\t"
+		"ld.ab  %1, [%3, 4]		\n\t"
+		"adc.f  %0, %0, %2		\n\t"
+		"ld.ab  %2, [%3, 4]		\n\t"
+		"adc.f  %0, %0, %1		\n"
+	"1:  adc.f  %0, %0, %2		\n\t"
+
+		"add.cs %0,%0,1			\n\t"
+		: "=&r"(sum), "=r"(tmp), "=&r" (tmp2), "+&r"(ptr)
+		: "r" (ihl)
+		: "cc", "lp_count", "memory");
 
     return csum_fold(sum);
 }
