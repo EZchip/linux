@@ -1,6 +1,11 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2010-2011
  *
+ *  vineetg: Feb 2011
+ *      -strace -i was not printing the PC of trap insn but one after.
+ *       The reason being, stop_pc was passing EFA for only break-pt traps ;
+ *       this needs to be done for sys-call traps as well.
+ *
  *  vineetg: Jan 2010
  *      -Enabling dynamic printk for fun
  *      -str to id conversion for ptrace requests and reg names
@@ -163,7 +168,14 @@ getreg(unsigned int offset,struct task_struct *child)
     }
     else if(offset == offsetof(struct user_regs_struct,stop_pc))
     {
-        if(in_brkpt_trap(ptregs))
+        /* break-pts and syscalls uses trap_s/swi insn repsectively which
+           commits the next-pc before executing the trap. Thus ERET - copy
+           of PC at that time can't be used, instead EFA - fault addr
+           needs to be read.
+           strace -i requires stop_pc as well, but this involves a syscall
+           thus added check for syscall as well.
+         */
+        if(in_brkpt_trap(ptregs) || (in_syscall(ptregs)))
         {
             DBG(" stop_pc (Syscall) ********  \n");
             data = child->thread.fault_address;
