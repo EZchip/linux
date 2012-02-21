@@ -29,9 +29,6 @@
 /* #define METAL_FIX  1 */
 #define METAL_FIX  0
 
-#define TLB_SIZE 256                    // Num of TLB Entries in ARC700 MMU
-#define ENTIRE_TLB_MAP  (TLB_SIZE * PAGE_SIZE)  // addr space mapped by TLB
-
 #define TLB_LKUP_ERR    0x80000000      // Error code if Probe Fails
 #define MMU_VER_2       2
 #define MMU_VER_3       3

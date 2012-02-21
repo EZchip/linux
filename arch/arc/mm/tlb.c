@@ -1,6 +1,9 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2007-2009
  *
+ * vineetg: April 2011 : Preparing for MMU V3
+ *  -MMU v2/v3 BCRs decoded differently
+ *  -Remove TLB_SIZE hardcoding as it's variable now: 256 or 512
  *
  * Vineetg: Sept 10th 2008
  *  -Changes related to MMU v2 (Rel 4.8)
@@ -142,8 +145,7 @@ struct mm_struct *asid_mm_map[NUM_ASID + 1];
 /* Needed to avoid Cache aliasing */
 unsigned int ARC_shmlba;
 
-void print_asid_mismatch(int fast_or_slow_path);
-unsigned int tlb_entry_erase(unsigned int vaddr_n_asid);
+static struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[0].mmu;
 
 
 /*=========================================================================
@@ -239,7 +241,7 @@ void local_flush_tlb_all(void)
     write_new_aux_reg(ARC_REG_TLBPD1, 0);
     write_new_aux_reg(ARC_REG_TLBPD0, 0);
 
-    for (entry = 0; entry < TLB_SIZE; entry++) {
+    for (entry = 0; entry < mmu->num_tlb; entry++) {
         /* write this entry to the TLB */
         write_new_aux_reg(ARC_REG_TLBINDEX, entry);
         write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBWrite);
@@ -272,11 +274,14 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
     //struct mm_struct *mm;
     unsigned long flags, idx;
 
-    /* If range @start to @end is more than what entire TLB can map
-     * (unlikely though), its better to move to a new ASID rather than
-     * searching for individual entries and then shooting them down
+    /* If range @start to @end is more than 32 TLB entries deep,
+     * its better to move to a new ASID rather than searching for
+     * individual entries and then shooting them down
+     *
+     * The calc above is rough, doesn;t account for unaligned parts,
+     * since this is heuristics based anyways
      */
-    if (likely((end - start) < ENTIRE_TLB_MAP)) {
+    if (likely((end - start) < PAGE_SIZE * 32)) {
 
         start &= PAGE_MASK;
         end += PAGE_SIZE - 1;
@@ -308,11 +313,9 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
     unsigned long flags, idx;
 
-    /* If range @start to @end is more than what entire TLB can map
-     * (unlikely though), its better to unconditionally clear entire TLB
-     * rather than searching for entry and then shooting them down
-     */
-    if (likely((end - start) < ENTIRE_TLB_MAP)) {
+    /* exactly same as above, except for TLB entry not taking ASID */
+
+    if (likely((end - start) < PAGE_SIZE * 32)) {
         start &= PAGE_MASK;
         end += PAGE_SIZE - 1;
         end &= PAGE_MASK;
@@ -328,7 +331,6 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
         local_irq_restore(flags);
     }
     else {
-        //printk("kernel size > TLB_SIZE: Flushing entire TLB\n");
         local_flush_tlb_all();
     }
 }
@@ -346,10 +348,6 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
      * checking the ASID and using it flush the TLB entry
      */
     local_irq_save(flags);
-
-    // TODO see if the generated code is difft if we use a temp ptr
-    // mm = vma->vm_mm instead of deferenencing twice
-    // Compiler can be smart enough to do this on its own
 
     if (vma->vm_mm->context.asid != NO_ASID) {
         tlb_entry_erase((page & PAGE_MASK) | (vma->vm_mm->context.asid & 0xff));
@@ -525,7 +523,6 @@ void __init arc_mmu_init(void)
     int i;
     static int one_time_init;
     char str[512];
-    struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[0].mmu;
 
     printk(arc_mmu_mumbojumbo(0, str));
 
@@ -734,7 +731,7 @@ void print_tlb_at_mmu_idx(int idx)
     decode_tlb(&tlb);
 }
 
-ARC_TLB_T arr[256];
+ARC_TLB_T arr[512];
 ARC_TLB_T micro[12];
 
 /*
