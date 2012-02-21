@@ -12,4 +12,3 @@ $ make clean
 $ make bootpImage
 
 
-# Note : On a certain Ubuntu machine here in the ARC labs we have seen that the first time after a "make clean" the "make bootpImage" fails.  If you see this, don't worry, simply do another make clean and make bootpImage and all will be fine.
