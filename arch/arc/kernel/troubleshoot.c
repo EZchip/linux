@@ -194,7 +194,7 @@ void show_kernel_fault_diag(const char *str, struct pt_regs *regs,
     show_regs(regs);
 
     // Show kernel stack trace if this Fatality happened in kernel mode
-    if (!(regs->status32 & STATUS_U_MASK))
+    if (!user_mode(regs))
         show_stacktrace(current, regs);
 
     sort_snaps(1);

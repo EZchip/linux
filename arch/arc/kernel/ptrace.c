@@ -61,8 +61,7 @@ getreg(unsigned int offset,struct task_struct *child)
 
     if(offset ==(int) OFFSET(struct user_regs_struct,stop_pc))
     {
-        /* orig_r8 contains either syscall num or NR_syscalls+1 incase of an exception */
-        if(ptregs->orig_r8 > NR_syscalls + 1)
+        if(in_brkpt_trap(ptregs))
         {
             DBG("Reading stop_pc(efa) %08lx\n",child->thread.fault_address);
             return child->thread.fault_address;

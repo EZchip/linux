@@ -32,22 +32,7 @@
  */
 
 #include <linux/sched.h>
-#include <linux/kernel.h>
-#include <linux/string.h>
-#include <linux/errno.h>
-#include <linux/ptrace.h>
-#include <linux/timer.h>
-#include <linux/mm.h>
-#include <linux/smp.h>
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/interrupt.h>
-#include <linux/notifier.h>
 #include <linux/kdebug.h>
-#include <asm/tlb.h>
-#include <asm/arcregs.h>
-#include <asm/uaccess.h>
-#include <asm/arcregs.h>
 #include <asm/event-log.h>
 
 extern int fixup_exception(struct pt_regs *regs);
@@ -75,7 +60,7 @@ void die(const char *str, struct pt_regs *regs, unsigned long address,
 static int noinline do_fatal_exception(unsigned long cause, char *str,
         struct pt_regs *regs, siginfo_t * info)
 {
-    if (regs->status32 & STATUS_U_MASK) {
+    if (user_mode(regs)) {
         struct task_struct *tsk = current;
 
         tsk->thread.fault_address = (unsigned int)info->si_addr;

@@ -264,7 +264,7 @@ int copy_thread(unsigned long clone_flags,
      * BUG_ON(regs != task_pt_regs(current));
      */
 
-    if (regs->status32 & STATUS_U_MASK)
+    if (user_mode(regs))
         BUG_ON(regs != task_pt_regs(current));
 
     /****************************************************************
@@ -286,7 +286,7 @@ int copy_thread(unsigned long clone_flags,
     /* IF the parent is a kernel thread then we change the stack pointer
      * of the child its kernel stack
      */
-    if (!(regs->status32 & STATUS_U_MASK)) {
+    if (!user_mode(regs)) {
         /* Arc gcc stack adjustment */
         child_ptregs->sp = (unsigned long)task_thread_info(p) +(THREAD_SIZE - 4);
     } else
@@ -310,7 +310,7 @@ int copy_thread(unsigned long clone_flags,
     /* Don't copy for kernel threads because we didn't even save
      *  them in first place
      */
-    if ((regs->status32 & STATUS_U_MASK)) {
+    if (user_mode(regs)) {
         parent_cregs = ((struct callee_regs *)regs) - 1;
         *child_cregs = *parent_cregs;
     }
@@ -407,9 +407,7 @@ void arc_elf_core_copy_regs(elf_gregset_t *pr_reg, struct pt_regs *regs)
     memcpy(elfregs, calleeregs, sizeof(struct callee_regs));
     elfregs += sizeof(struct callee_regs);
 
-    /* orig_r8 -1 for int1 and -2 for int2 and NR_SYSCALLS + 1
-       is for a non-trap_s exception */
-    if (regs->orig_r8 > NR_syscalls + 1) {
+    if(in_brkpt_trap(regs)) {
 #ifdef CORE_DEBUG
         printk("1 Writing stop_pc(efa) %08lx\n", tsk->thread.fault_address);
 #endif

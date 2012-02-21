@@ -130,11 +130,14 @@ struct callee_regs {
 #define profile_pc(regs) instruction_pointer(regs)
 
 /* return 1 if user mode or 0 if kernel mode */
-#define user_mode(regs) ((regs->status32 & STATUS_U_MASK) == STATUS_U_MASK)
+#define user_mode(regs) (regs->status32 & STATUS_U_MASK)
 
 /* return 1 if in syscall, 0 if Intr or Exception */
 #define in_syscall(regs) \
     (((regs->orig_r8) >= 0 && (regs->orig_r8 <= NR_syscalls)) ? 1 : 0 )
+
+#define in_brkpt_trap(regs) \
+    (((regs->orig_r8) == (NR_syscalls + 2)) ? 1 : 0 )
 
 #define regs_return_value(regs) ((regs)->r0)
 #define user_stack_pointer(regs)\

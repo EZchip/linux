@@ -6,9 +6,6 @@
 # Addition of S3C4530 by Arcturus Networks Inc.
 #
 
-.S.o:
-	$(CC) -D__ASSEMBLY__ $(AFLAGS) -c $< -o $*.o
-
 obj-y += entry.o process.o signal.o traps.o
 
 #----------------------------------------------------------------------

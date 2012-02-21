@@ -372,6 +372,7 @@
     st.a    \marker, [sp, -4]	/* orig_r8:
                                     syscalls   -> 1 to NR_SYSCALLS
                                     Exceptions -> NR_SYSCALLS + 1
+                                    Break-point-> NR_SYSCALLS + 2
                                  */
     st.a    r0, [sp, -4]    /* orig_r0, needed only for sys calls */
     SAVE_CALLER_SAVED
