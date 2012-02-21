@@ -569,6 +569,70 @@ void __init tlb_init(void)
 #endif
 }
 
+asmlinkage void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
+                  struct pt_regs *regs)
+{
+
+
+// Modification by Simon Spooner of ARC
+// The machine check exception could possibly be caused by duplicate
+// entries getting into the JTLB due to a bug in the hardware that in
+// very rare circumstances could allow duplicates.
+// If the machine check was caused by a rogue PD in the TLB, delete it and carry on.
+// Note that the MMU is switched off during this type of MachineCheck.
+// If you don't switch it back on before exiting, then you go off into la la land.
+
+    unsigned int tlbpd0[TLB_SIZE];
+    unsigned int tlbpd1[TLB_SIZE];
+    unsigned int n,z;
+
+#ifdef CONFIG_ARC_TLB_DBG
+    printk("EV_MachineCheck : Duplicate PD in TLB.  Attempting to correct\n");
+#endif
+
+    write_new_aux_reg(ARC_REG_PID, MMU_ENABLE | read_new_aux_reg(ARC_REG_PID));
+
+    for(n=0;n<TLB_SIZE;n++)
+    {
+        write_new_aux_reg(ARC_REG_TLBINDEX,n);
+        write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBRead);
+        tlbpd0[n] = read_new_aux_reg(ARC_REG_TLBPD0);
+        tlbpd1[n] = read_new_aux_reg(ARC_REG_TLBPD1);
+    }
+
+
+   for(n=0;n<TLB_SIZE;n++)
+   {
+       for(z=0;z<TLB_SIZE;z++)
+       {
+           if(tlbpd0[z] & 0x400) // PD is valid.
+           {
+               if( (tlbpd0[z] == tlbpd0[n]) && (z!=n))  // Duplicate TLB
+               {
+
+#ifdef CONFIG_ARC_TLB_DBG
+                   printk("Duplicate PD's @ %u and %u\n", n,z);
+                   printk("TLBPD0[%u] : %08x TLBPD0[%u] : %08x\n",n,tlbpd0[n], z, tlbpd0[z]);
+                   printk("Removing one of the duplicates\n");
+#endif
+
+                   tlbpd0[n]=0;
+                   tlbpd1[n]=0;
+
+                   write_new_aux_reg(ARC_REG_TLBPD0,0);
+                   write_new_aux_reg(ARC_REG_TLBPD1,0);
+                   write_new_aux_reg(ARC_REG_TLBINDEX,n);
+                   write_new_aux_reg(ARC_REG_TLBCOMMAND,TLBWrite);
+
+               }
+           }
+       }
+    }
+
+return;
+
+}
+
 /***********************************************************************
  * Diagnostic Routines
  *  -Called from Low Level TLB Hanlders if things don;t look good
