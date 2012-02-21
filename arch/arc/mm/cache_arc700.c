@@ -149,18 +149,16 @@ void  a7_probe_cache(void)
     temp = read_new_aux_reg(ARC_REG_I_CACHE_BUILD_REG);
     p_i_bcr = (struct bcr_cache *)&temp;
 
-#ifdef CONFIG_ARC700_USE_ICACHE
 #ifndef CONFIG_XILINX_TEMAC
     /* Confirm some of I-cache params which Linux assumes */
     if ( ( p_i_bcr->type != 0x3 ) ||      /* 2 way set assoc */
          ( p_i_bcr->line_len != 0x2 ) )   /* 32 byte line length */
         goto sw_hw_mismatch;
 #endif
-#endif
 
+#ifdef CONFIG_ARC700_USE_ICACHE
     /* Convert encoded size to real value */
     sz = arc_cache_meta.i_sz = CALC_CACHE_SZ(p_i_bcr->sz);
-
     switch(sz) {
     case 8 * 1024:
     case 16 * 1024:
@@ -175,7 +173,7 @@ void  a7_probe_cache(void)
     default:
         panic("Unsupported I-Cache Sz\n");
     }
-
+#endif
     /* check whether Icache way size greater than PAGE_SIZE as it
      * cause Aliasing Issues and requires special handling
      */

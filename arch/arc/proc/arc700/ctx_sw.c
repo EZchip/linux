@@ -94,7 +94,11 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
     // function epilogie
 
     :"=r" (tmp)
+#ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     :"n" (TASK_THREAD + THREAD_KSP),"n"(TASK_THREAD + THREAD_USER_R25),
+#else
+    :"n" (TASK_THREAD + THREAD_KSP),"n"(TASK_THREAD ),
+#endif
      "r" (next), "r"(prev)
     :"r9" , "blink"
     );

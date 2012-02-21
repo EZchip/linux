@@ -111,8 +111,8 @@ static unsigned int noinline arc_unwind_core(struct task_struct *tsk,
 }
 
 #else
-static unsigned int arc_unwind_core(struct task_struct *tsk, struct pt_regs *regs,
-    int (*fn)(unsigned int))
+static unsigned int arc_unwind_core(struct task_struct *tsk,
+    struct pt_regs *regs, int (*fn)(unsigned int, void *),void *arg)
 {
     /* On ARC, only Dward based unwinder works. fp based backtracing is
      * not possible (-fno-omit-frame-pointer) because of the way function
@@ -120,6 +120,7 @@ static unsigned int arc_unwind_core(struct task_struct *tsk, struct pt_regs *reg
      * way around
      */
     printk("CONFIG_ARC_STACK_UNWIND needs to be enabled\n");
+    return 0;
 }
 #endif
 
