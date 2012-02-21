@@ -4,6 +4,10 @@
  * vineetg: April 2011 : Preparing for MMU V3
  *  -MMU v2/v3 BCRs decoded differently
  *  -Remove TLB_SIZE hardcoding as it's variable now: 256 or 512
+ *  -tlb_entry_erase( ) can be void
+ *  -local_flush_tlb_range( ):
+ *      = need not "ceil" @end
+ *      = walks MMU only if range spans < 32 entries, as opposed to 256
  *
  * Vineetg: Sept 10th 2008
  *  -Changes related to MMU v2 (Rel 4.8)
@@ -163,7 +167,7 @@ static struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[0].mmu;
  * The procedure is to look it up in the MMU. If found, ERASE it by
  *  issuing a TlbWrite CMD with PD0 = PD1 = 0
  ****************************************************************************/
-unsigned int tlb_entry_erase(unsigned int vaddr_n_asid)
+static void tlb_entry_erase(unsigned int vaddr_n_asid)
 {
     unsigned int idx;
 
@@ -172,12 +176,11 @@ unsigned int tlb_entry_erase(unsigned int vaddr_n_asid)
     write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBProbe);
     idx = read_new_aux_reg(ARC_REG_TLBINDEX);
 
-    /* if found, zero it out */
+    /* No error means entry found, zero it out */
     if (likely(!(idx & TLB_LKUP_ERR))) {
         write_new_aux_reg(ARC_REG_TLBPD1, 0);
         write_new_aux_reg(ARC_REG_TLBPD0, 0);
         write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBWrite);
-        return 1;
     }
     else {  /* Some sort of Error */
 
@@ -186,11 +189,10 @@ unsigned int tlb_entry_erase(unsigned int vaddr_n_asid)
             // TODO we need to handle this case too
             printk("#### unhandled Duplicate flush for %x\n", vaddr_n_asid);
         }
-
-        // else entry not found so continue
+        else {
+            /* else entry not found so nothing to do */
+        }
     }
-
-    return 0;
 }
 
 /****************************************************************************
@@ -214,7 +216,7 @@ static void utlb_invalidate(void)
         idx = read_new_aux_reg(ARC_REG_TLBINDEX);
 
         /* If not write some dummy val */
-        if ( idx & TLB_LKUP_ERR ) {
+        if (unlikely(idx & TLB_LKUP_ERR)) {
             write_new_aux_reg(ARC_REG_TLBINDEX, 0xa);
         }
 
@@ -228,10 +230,10 @@ static void utlb_invalidate(void)
  * Un-conditionally (without lookup) erase the entire MMU contents
  */
 
-void local_flush_tlb_all(void)
+void noinline local_flush_tlb_all(void)
 {
     unsigned long flags;
-    int entry;
+    unsigned int entry;
 
     take_snap(SNAP_TLB_FLUSH_ALL, 0, 0);
 
@@ -270,9 +272,7 @@ void noinline local_flush_tlb_mm(struct mm_struct *mm)
 void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
                unsigned long end)
 {
-    // TODO see if the generated code is difft if we use a temp ptr
-    //struct mm_struct *mm;
-    unsigned long flags, idx;
+    unsigned long flags;
 
     /* If range @start to @end is more than 32 TLB entries deep,
      * its better to move to a new ASID rather than searching for
@@ -283,18 +283,17 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
      */
     if (likely((end - start) < PAGE_SIZE * 32)) {
 
-        start &= PAGE_MASK;
-        end += PAGE_SIZE - 1;
-        end &= PAGE_MASK;
-
-        /* Note that it is critical that interrupts are DISABLED between
-         * checking the ASID and using it flush the TLB entry
+        /* @start moved to page start: this alone suffices for checking loop
+         * end condition below, w/o need for aligning @end to page end
+         * e.g. 2000 to 4001 will anyhow loop twice
          */
+        start &= PAGE_MASK;
+
         local_irq_save(flags);
 
         if (vma->vm_mm->context.asid != NO_ASID) {
             while (start < end) {
-                idx = tlb_entry_erase(start | (vma->vm_mm->context.asid & 0xff));
+                tlb_entry_erase(start | (vma->vm_mm->context.asid & 0xff));
                 start += PAGE_SIZE;
             }
         }
@@ -311,18 +310,16 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 
 void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
-    unsigned long flags, idx;
+    unsigned long flags;
 
     /* exactly same as above, except for TLB entry not taking ASID */
 
     if (likely((end - start) < PAGE_SIZE * 32)) {
         start &= PAGE_MASK;
-        end += PAGE_SIZE - 1;
-        end &= PAGE_MASK;
 
         local_irq_save(flags);
         while (start < end) {
-            idx = tlb_entry_erase(start);
+            tlb_entry_erase(start);
             start += PAGE_SIZE;
         }
 
@@ -378,12 +375,15 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
      * Diagnostic Code to verify if sw and hw ASIDs are in lockstep
      */
     {
-        int pid_sw;
+        unsigned int pid_sw, pid_hw;
+
+        void print_asid_mismatch(int is_fast_path);
 
         pid_sw = vma->vm_mm->context.asid;
+        pid_hw = read_new_aux_reg(ARC_REG_PID) & 0xff;
 
         if (address < 0x70000000 &&
-            ((pid != pid_sw) || (pid_sw == NO_ASID)))
+            ((pid_hw != pid_sw) || (pid_sw == NO_ASID)))
         {
             print_asid_mismatch(0);
         }
@@ -417,9 +417,9 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
     /* If Not already present get a free slot from MMU.
      * Otherwise, Probe would have located the entry and set INDEX Reg
      * with existing location. This will cause Write CMD to over-write
-     * existign entry with new PD0 and PD1
+     * existing entry with new PD0 and PD1
      */
-    if (idx & TLB_LKUP_ERR) {
+    if (likely(idx & TLB_LKUP_ERR)) {
         write_new_aux_reg(ARC_REG_TLBCOMMAND, TLBGetIndex);
     }
 
@@ -450,11 +450,15 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t pte)
 
 void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress, pte_t pte)
 {
-    unsigned long pfn = pte_pfn(pte);
+    /* XXX: This definitely seems useless */
+    // BUG_ON(!pfn_valid(pte_pfn(pte)));
 
-    if(!pfn_valid(pfn))
-        return;
-
+    /* XXX: This is useful - but only once during execve - check why?
+     *  handle_mm_fault()
+     *      __get_user_pages
+     *          copy_strings()
+     *              do_execve()
+     */
     if (current->active_mm != vma->vm_mm)
         return;
 
