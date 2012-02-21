@@ -1,9 +1,17 @@
 /******************************************************************************
  * Copyright ARC International (www.arc.com) 2009-2010
  *
+ * TBD:
+ *  -remove the low level wrappers for execve/rt_sigreturn/sigaltstack
+ *   needed before task_pt_regs was invented. This saves a branch per call
+ *   and more importantly allows clean invocation of post-syscall ptrace hook
+ *
  * vineetg Feb 2011 (ptrace low level code fixes)
  *  -traced syscall return code (r0) was not saved into pt_regs for restoring
  *   into user reg-file when traded task rets to user space.
+ *  -syscalls needing arch-wrappers (mainly for passing sp as pt_regs)
+ *   were not invoking post-syscall trace hook (jumping directly into
+ *   ret_from_system_call)
  *
  * vineetg: Nov 2010:
  *  -Vector table jumps (@8 bytes) converted into branches (@4 bytes)
@@ -821,7 +829,13 @@ ARC_ENTRY sys_execve_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r3, sp
     bl  SYMBOL_NAME(sys_execve)
-    b ret_from_system_call
+
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
+
+    bz ret_from_system_call
+    b  tracesys_exit
 
 ARC_ENTRY sys_fork_wrapper
     ; copy pointer to pt_regs as a parameter
@@ -829,7 +843,14 @@ ARC_ENTRY sys_fork_wrapper
     SAVE_CALLEE_SAVED_USER
     bl  SYMBOL_NAME(sys_fork)
     DISCARD_CALLEE_SAVED_USER
-    b ret_from_system_call
+
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
+
+    bz ret_from_system_call
+    b  tracesys_exit
+
 
 ARC_ENTRY sys_vfork_wrapper
     ; copy pointer to pt_regs as a parameter
@@ -837,7 +858,13 @@ ARC_ENTRY sys_vfork_wrapper
     SAVE_CALLEE_SAVED_USER
     bl  SYMBOL_NAME(sys_vfork)
     DISCARD_CALLEE_SAVED_USER
-    b ret_from_system_call
+
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
+
+    bz ret_from_system_call
+    b  tracesys_exit
 
 ARC_ENTRY sys_clone_wrapper
     ; clone sys-call takes 2 mandatary args: @flags and @child-stack
@@ -849,25 +876,49 @@ ARC_ENTRY sys_clone_wrapper
     SAVE_CALLEE_SAVED_USER
     bl  SYMBOL_NAME(sys_clone)
     DISCARD_CALLEE_SAVED_USER
-    b ret_from_system_call
+
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
+
+    bz ret_from_system_call
+    b  tracesys_exit
 
 ARC_ENTRY sys_rt_sigreturn_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
     bl  SYMBOL_NAME(sys_rt_sigreturn)
-    b ret_from_system_call
+
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
+
+    bz ret_from_system_call
+    b  tracesys_exit
 
 ARC_ENTRY sys_sigreturn_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r0, sp
     bl  SYMBOL_NAME(sys_sigreturn)
-    b ret_from_system_call
+
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
+
+    bz ret_from_system_call
+    b  tracesys_exit
 
 ARC_ENTRY sys_sigaltstack_wrapper
     ; copy pointer to pt_regs as a parameter
     mov  r2, sp
     bl  SYMBOL_NAME(sys_sigaltstack)
-    b ret_from_system_call
+
+    GET_CURR_THR_INFO_FROM_SP   r9
+    ld  r10, [r9, THREAD_INFO_FLAGS]
+    and.f   0, r10, _TIF_SYSCALL_TRACE
+
+    bz ret_from_system_call
+    b  tracesys_exit
 
 ;################### Sys Call Table ##########################
 
