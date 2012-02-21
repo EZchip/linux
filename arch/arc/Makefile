@@ -17,7 +17,7 @@ export PLATFORM
 GZFLAGS		:=-9
 KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
-						-D__linux__  -fcall-used-gp -multcost=16
+						-D__linux__  -fcall-used-gp
 
 # preprocessor macros due to following: __Xlock __Xswape __Xrtsc
 ifdef CONFIG_ARC_HAS_LLSC
@@ -76,10 +76,24 @@ ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS		+= -DNONINLINE_USR_CPY -DNONINLINE_MEMSET
 endif
 
+
+ifndef CONFIG_ARC_USE_HW_MPY
+KBUILD_CFLAGS	+= -mno-mpy
+# newlib for ARC700 assumes MPY to be always present, which is generally true
+# However, if someone really doesn't want MPY, we need to use the 600 ver
+# which coupled with -mno-mpy will use mpy emulation
+ARC_LIBGCC		:= -marc600
+# Also need to hint gcc that mpy would be extremely costly
+KBUILD_CFLAGS   += -multcost=30
+else
+KBUILD_CFLAGS	+= -multcost=16
+ARC_LIBGCC		:= -mA7
+endif
+
 #setup AFLAGS from CFLAGS when we are done with all the CFLAGS
 KBUILD_AFLAGS		+= $(KBUILD_CFLAGS)
 
-LIBGCC		:= $(shell $(CC) $(KBUILD_CFLAGS) --print-libgcc-file-name)
+LIBGCC		:= $(shell $(CC) $(ARC_LIBGCC) --print-libgcc-file-name)
 
 TEXTADDR	 = 0x80002000
 

@@ -212,6 +212,14 @@ config ARCH_ARC_DCCM
         Single Cycle RAMS to store Fast Path Data
         default n
 
+config ARC_USE_HW_MPY
+		bool "Use Hardware Multiplier (Normal or Faster XMAC)"
+        default y
+        help
+        Influences how gcc generates code for MPY operations.
+        If enabled, MPYxx insns are generated, provided by Standard/XMAC
+        Multipler. Otherwise software multipy lib is used
+
 choice
         prompt "ARC700 MMU Version"
         default ARC_MMU_V3 if ARC700_V_4_10

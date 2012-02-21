@@ -7,6 +7,10 @@
  *
  * Delay routines using pre computed loops_per_jiffy value.
  *
+ * vineetg: Feb 2012
+ * 	-Rewrote in "C" to avoid dealing with availability of H/w MPY
+ * 	-Also reduced the num of MPY operations from 3 to 2
+ *
  * Amit Bhor: Codito Technologies 2004
  */
 
@@ -27,30 +31,36 @@ extern __inline__ void __delay(unsigned long loops)
 extern void __bad_udelay(void);
 
 /*
- * Division by multiplication: you don't have to worry about loss of
- * precision.
+ * Normal Math for computing loops in "N" usecs
+ * 	-we have precomputed @loops_per_jiffy
+ *	-1 sec has HZ jiffies
+ * loops per "N" usecs = ((loops_per_jiffy * HZ / 1000000) * N)
  *
- * Use only for very small delays ( < 1 msec).  Should probably use a
- * lookup table, really, as the multiplications take much too long with
- * short delays.  This is a "reasonable" implementation, though (and the
- * first constant multiplications gets optimized away if the delay is
- * a constant)
+ * Approximate Division by multiplication:
+ *  -Mathematically if we multiply and divide a number by same value the
+ *   result remains unchanged:  In this case, we use 2^32
+ *  -> (loops_per_N_usec * 2^32 ) / 2^32
+ *  -> (((loops_per_jiffy * HZ / 1000000) * N) * 2^32) / 2^32
+ *  -> (loops_per_jiffy * HZ * N * 4295) / 2^32
+ *
+ *  -Divide by 2^32 is very simply right shift by 32
+ *  -We simply need to ensure that the multiply per above eqn happens in
+ *   64-bit precision (if CPU doesn't support it - gcc can emaulate it)
  */
-static inline void __const_udelay(unsigned long xloops)
-{
-	__asm__ ("mpyhu %0, %1, %2"
-		 : "=r" (xloops)
-		 : "r" (xloops), "r" (loops_per_jiffy));
-       __delay(xloops * HZ);
-}
 
 static inline void __udelay(unsigned long usecs)
 {
-	__const_udelay(usecs * 4295);	/* 2**32 / 1000000 */
+	unsigned long loops;
+
+	/* (long long) cast ensures 64 bit MPY - real or emulated
+	 * HZ * 4295 is pre-evaluated by gcc - hence only 2 mpy ops
+	 */
+	loops = ((long long)(usecs * 4295 * HZ) *
+				(long long)(loops_per_jiffy)) >> 32;
+
+	__delay(loops);
 }
 
-#define udelay(n) (__builtin_constant_p(n) ? \
-	((n) > 20000 ? __bad_udelay() : __const_udelay((n) * 4295)) : \
-	__udelay(n))
+#define udelay(n) ((n) > 20000 ? __bad_udelay() : __udelay(n))
 
 #endif	/* __ASM_ARC_UDELAY_H */
