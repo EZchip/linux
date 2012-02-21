@@ -486,6 +486,11 @@ ARC_ENTRY EV_Extension
 ;######################### System Call Tracing #########################
 
 tracesys:
+    ; save EFA in case tracer wants the PC of traced task
+    ; using ERET won't work since next-PC has already committed
+    lr  r12, [efa]
+    GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r11
+    st  r12, [r11, THREAD_FAULT_ADDR]
 
     ; PRE Sys Call Ptrace hook
     bl  SYMBOL_NAME(syscall_trace)
@@ -593,7 +598,7 @@ ARC_ENTRY EV_Trap
     and.f   0, r10, _TIF_SYSCALL_TRACE
 
     ; If yes, call the system call with the pre and post tracing hooks
-    jnz tracesys  ; this never comes back
+    bnz tracesys  ; this never comes back
 
     ;============ This is normal System Call case ==========
     ; Sys-call num shd not exceed the total system calls avail
