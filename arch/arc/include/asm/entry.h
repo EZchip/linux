@@ -321,6 +321,10 @@
      */
     add2 r9, r9, (THREAD_SIZE - 4)/4   // 0ne word GUTTER
 
+#ifdef PT_REGS_CANARY
+    st    0xabcdabcd, [r9, 0]
+#endif
+
     /* Save Pre Intr/Exception User SP on kernel stack */
     st.a    sp, [r9, -4]
 
@@ -394,6 +398,11 @@
     st.a    r9, [sp, -4]
     lr  r9, [erbta]
     st.a    r9, [sp, -4]
+
+#ifdef PT_REGS_CANARY
+    mov   r9, 0xdeadbeef
+    st    r9, [sp, -4]
+#endif
 
     /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
@@ -482,6 +491,10 @@
     lr  r9, [bta_l1]
     st.a    r9, [sp, -4]
 
+#ifdef PT_REGS_CANARY
+    mov   r9, 0xdeadbee1
+    st    r9, [sp, -4]
+#endif
     /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
 .endm
@@ -512,6 +525,12 @@
     st.a    r9, [sp, -4]
     lr  r9, [bta_l2]
     st.a    r9, [sp, -4]
+
+#ifdef PT_REGS_CANARY
+    mov   r9, 0xdeadbee2
+    st    r9, [sp, -4]
+#endif
+
     /* move up by 1 word to "create" pt_regs->"stack_place_holder" */
     sub sp, sp, 4
 .endm
