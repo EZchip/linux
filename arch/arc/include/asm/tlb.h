@@ -82,6 +82,11 @@ void __init read_decode_mmu_bcr(void);
 
 #define __tlb_remove_tlb_entry(tlb, ptep, address) do { } while (0)
 
+static inline void enter_lazy_tlb(struct mm_struct *mm,
+                    struct task_struct *tsk)
+{
+}
+
 #include <linux/pagemap.h>
 #include <asm-generic/tlb.h>
 

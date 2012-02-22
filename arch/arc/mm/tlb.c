@@ -559,7 +559,7 @@ void __init arc_mmu_init(void)
 
     local_flush_tlb_all();
 
-    /* enable the TLB, set 31st bit in pid register */
+    /* Enable the MMU */
     write_new_aux_reg(ARC_REG_PID, MMU_ENABLE);
 
 #ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch

@@ -46,7 +46,6 @@ extern void arch_exit_mmap(struct mm_struct *mm);
 #define FIRST_ASID  0
 #define MAX_ASID    255 /* ARC 700 8 bit PID field in PID Aux reg */
 #define NUM_ASID    ((MAX_ASID - FIRST_ASID) + 1 )
-#define ASID_MASK   MAX_ASID
 /* We use this to indicate that no ASID has been allocated to a mmu context */
 #define NO_ASID     (MAX_ASID + 1)
 
@@ -54,11 +53,6 @@ extern void arch_exit_mmap(struct mm_struct *mm);
 extern struct mm_struct *asid_mm_map[ NUM_ASID + 1 ];
 
 extern volatile int asid_cache;
-
-static inline void enter_lazy_tlb(struct mm_struct *mm,
-                    struct task_struct *tsk)
-{
-}
 
 /* Get a new mmu context or a hardware PID/ASID to work with.
  * If PID rolls over flush cache and tlb.
@@ -133,7 +127,7 @@ get_new_mmu_context(struct mm_struct *mm, int retiring_mm)
 
 #endif
 
-    write_new_aux_reg(ARC_REG_PID, (new_asid | MMU_ENABLE));
+    write_new_aux_reg(ARC_REG_PID, new_asid|MMU_ENABLE);
 
 finish_up:
     local_irq_restore(flags);
@@ -157,21 +151,17 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
                              struct task_struct *tsk)
 {
-
-    if ( next->context.asid > asid_cache) {
-        get_new_mmu_context(next, 0);
-    }
-    else {
-        write_new_aux_reg(ARC_REG_PID, (next->context.asid & 0xff) | MMU_ENABLE);
-    }
-
-#ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch
-
-    /* We keep the current processes PGD base ptr in the SCRATCH_DATA0
-     * auxilliary reg for quick access in exception handlers.
+    /* top level Page Directory cached in MMU register, to avoid
+     * task->mm->pgd in TLB miss handlers
      */
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
-#endif
+
+    if (next->context.asid > asid_cache) {
+        get_new_mmu_context(next, 0);
+    }
+
+    BUG_ON(next->context.asid > MAX_ASID);
+    write_new_aux_reg(ARC_REG_PID, (next->context.asid & 0xff) | MMU_ENABLE);
 
 }
 
@@ -181,7 +171,6 @@ static inline void destroy_context(struct mm_struct *mm)
 
     asid_mm_map[asid] = NULL;
     mm->context.asid = NO_ASID;
-
 }
 
 #define deactivate_mm(tsk,mm)   do { } while (0)
@@ -189,12 +178,10 @@ static inline void destroy_context(struct mm_struct *mm)
 static inline void
 activate_mm (struct mm_struct *prev, struct mm_struct *next)
 {
-  /* Unconditionally get a new ASID */
-  get_new_mmu_context(next, 0);
+    write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
 
-#ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch
-
-  write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
-#endif
+    /* Unconditionally get a new ASID */
+    get_new_mmu_context(next, 0);
 }
+
 #endif  /* __ASM_ARC_MMU_CONTEXT_H */
