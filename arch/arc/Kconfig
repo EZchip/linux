@@ -432,6 +432,14 @@ config ARC_PS2_DEBUG
 	Turn on statistic collection and various debug messages to
 	simplify debugging.
 
+config NPSHE1_LAN
+        tristate "NPShe1 LAN support"
+        select NET
+        select INET
+        select NETDEVICES
+        select NET_ETHERNET
+        default y
+        
 config ARCTANGENT_EMAC
         tristate "ARCTangent EMAC support"
         select NET

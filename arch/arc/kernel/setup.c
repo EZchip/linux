@@ -68,7 +68,7 @@ struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
 
 unsigned long end_mem = CONFIG_SDRAM_SIZE + CONFIG_LINUX_LINK_BASE;
 unsigned long clk_speed = CONFIG_ARC700_CLK;
-struct sockaddr mac_addr = {0, {0x64,0x66,0x46,0x88,0x63,0x33 } };
+struct sockaddr mac_addr = {0, {0x00,0xc0,0x00,0x99,0xaa,0xFE } };
 
 #ifdef CONFIG_ROOT_NFS
 
@@ -527,7 +527,7 @@ __tagtable(ATAG_SERIAL, parse_tag_serial);
 static int __init parse_tag_vmac(struct tag *tag)
 {
     int i;
-    printk_init("ATAG_VMAC: vmac address = %d:%d:%d:%d:%d:%d\n",
+    printk_init("ATAG_VMAC: vmac address = %02x:%02x:%02x:%02x:%02x:%02x\n",
            tag->u.vmac.addr[0], tag->u.vmac.addr[1], tag->u.vmac.addr[2],
            tag->u.vmac.addr[3], tag->u.vmac.addr[4], tag->u.vmac.addr[5]);
 
