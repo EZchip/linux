@@ -129,7 +129,7 @@ int __init read_arc_build_cfg_regs(void)
     int cpu = smp_processor_id();
     struct cpuinfo_arc *p_cpu = &cpuinfo_arc700[cpu];
 
-    READ_BCR(AUX_IDENTITY, p_cpu->cpu);
+    READ_BCR(AUX_IDENTITY, p_cpu->core);
 
     p_cpu->timers = read_new_aux_reg(ARC_REG_TIMERS_BCR);
     p_cpu->vec_base = read_new_aux_reg(AUX_INTR_VEC_BASE);
@@ -195,7 +195,8 @@ char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
     cpuinfo_data_t cpu_fam_nm [] = {
         { 0x10, "ARCTangent A5", 0x1F },
         { 0x20, "ARC 600", 0x2F },
-        { 0x30, "ARC 700", 0x3F },
+        { 0x30, "ARC 700", 0x33 },
+        { 0x34, "ARC 700 R4.10", 0x34 },
         { 0x0, NULL }
     };
     int i, num=0;
@@ -204,11 +205,11 @@ char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
 
 
     for ( i = 0; cpu_fam_nm[i].id != 0; i++) {
-        if ( (p_cpu->cpu.family >=  cpu_fam_nm[i].id ) &&
-             (p_cpu->cpu.family <=  cpu_fam_nm[i].up_range) )
+        if ( (p_cpu->core.family >= cpu_fam_nm[i].id ) &&
+             (p_cpu->core.family <= cpu_fam_nm[i].up_range) )
         {
-            num += sprintf(buf, "\n Processor Family: %s, Core ID: %d\n",
-                    cpu_fam_nm[i].str, p_cpu->cpu.cpu_id);
+            num += sprintf(buf, "\nProcessor Family: %s [0x%x]\n",
+                    cpu_fam_nm[i].str, p_cpu->core.family);
             break;
         }
     }
@@ -259,19 +260,21 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
     FIX_PTR(p_cpu);
 
-
 #define IS_AVAIL1(var)   ((var)? "Present" :"N/A")
 #define IS_AVAIL3(var)   ((var)? "" :"N/A")
 
     num += sprintf(buf+num, "Extensions:\n");
 
-    num += sprintf(buf+num, "Multiplier: %s",
+    if (p_cpu->core.family == 0x34)
+        num += sprintf(buf+num, "   Insns: LLOCK/SCOND, SWAPE, RTSC\n");
+
+    num += sprintf(buf+num, "   MPY: %s",
                         mul_type_nm[p_cpu->extn.mul].str);
 
-    num += sprintf(buf+num, "   MAC Multiplier: %s\n",
+    num += sprintf(buf+num, "   MAC MPY: %s\n",
                         mac_mul_nm[p_cpu->extn_mac_mul.type].str);
 
-    num += sprintf(buf+num, "DCCM: %s", IS_AVAIL3(p_cpu->dccm.sz));
+    num += sprintf(buf+num, "   DCCM: %s", IS_AVAIL3(p_cpu->dccm.sz));
     if (p_cpu->dccm.sz)
         num += sprintf(buf+num, "@ %x, %d KB ",
                         p_cpu->dccm.base_addr, TO_KB(p_cpu->dccm.sz));
@@ -281,17 +284,17 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
         num += sprintf(buf+num, "@ %x, %d KB",
                         p_cpu->iccm.base_addr, TO_KB(p_cpu->iccm.sz));
 
-    num += sprintf(buf+num, "\nCRC  Instrn: %s,", IS_AVAIL1(p_cpu->extn.crc));
-    num += sprintf(buf+num, "   SWAP Instrn: %s", IS_AVAIL1(p_cpu->extn.swap));
+    num += sprintf(buf+num, "\n   CRC: %s,", IS_AVAIL1(p_cpu->extn.crc));
+    num += sprintf(buf+num, "   SWAP: %s", IS_AVAIL1(p_cpu->extn.swap));
 
 #define IS_AVAIL2(var)   ((var == 0x2)? "Present" :"N/A")
 
-    num += sprintf(buf+num, "   NORM Instrn: %s\n", IS_AVAIL2(p_cpu->extn.norm));
-    num += sprintf(buf+num, "Min-Max Instrn: %s,", IS_AVAIL2(p_cpu->extn.minmax));
-    num += sprintf(buf+num, "   Barrel Shift Rotate Instrn: %s\n",
+    num += sprintf(buf+num, "   NORM: %s\n", IS_AVAIL2(p_cpu->extn.norm));
+    num += sprintf(buf+num, "   Min-Max: %s,", IS_AVAIL2(p_cpu->extn.minmax));
+    num += sprintf(buf+num, "   Barrel Shifter: %s\n",
                         IS_AVAIL2(p_cpu->extn.barrel));
 
-    num += sprintf(buf+num, "Ext Arith Instrn: %s\n",
+    num += sprintf(buf+num, "   Ext Arith Insn: %s\n",
                         IS_AVAIL2(p_cpu->extn.ext_arith));
 
 #ifdef CONFIG_ARCH_ARC800
@@ -303,18 +306,16 @@ char * arc_extn_mumbojumbo(int cpu_id, char *buf)
                     IS_AVAIL1(p_cpu->mp.idu), IS_AVAIL1(p_cpu->mp.sdu));
 #endif
 
-    if (p_cpu->fp.ver || p_cpu->dpfp.ver) {
-        num += sprintf(buf+num, "Floating Point Extension:\n");
+    num += sprintf(buf+num, "Floating Point Extension: %s",
+        (p_cpu->fp.ver || p_cpu->dpfp.ver)? "\n":"N/A\n");
 
-        if (p_cpu->fp.ver) {
-            num += sprintf(buf+num, "   Single Prec v[%d] %s\n",
+    if (p_cpu->fp.ver) {
+        num += sprintf(buf+num, "   Single Prec v[%d] %s\n",
                             (p_cpu->fp.ver), p_cpu->fp.fast ? "(fast)":"");
-        }
-
-        if (p_cpu->dpfp.ver) {
-            num += sprintf(buf+num, "   Dbl Prec v[%d] %s\n",
+    }
+    if (p_cpu->dpfp.ver) {
+        num += sprintf(buf+num, "   Dbl Prec v[%d] %s\n",
                             (p_cpu->fp.ver), p_cpu->fp.fast ? "(fast)":"");
-        }
     }
 
     return buf;

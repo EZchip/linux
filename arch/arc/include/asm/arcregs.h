@@ -359,7 +359,7 @@ struct cpuinfo_arc_mmu {
 struct cpuinfo_arc {
     struct cpuinfo_arc_cache icache, dcache;
     struct cpuinfo_arc_mmu mmu;
-    struct bcr_identity cpu;
+    struct bcr_identity core;
     unsigned int timers;
     unsigned int vec_base;
     unsigned int perip_base;
