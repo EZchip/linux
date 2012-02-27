@@ -10,7 +10,7 @@
  *   needed before task_pt_regs was invented. This saves a branch per call
  *   and more importantly allows clean invocation of post-syscall ptrace hook
  *
- * vineetg Feb 2011 (ptrace low level code fixes)
+ * vineetg: Feb 2011 (ptrace low level code fixes)
  *  -traced syscall return code (r0) was not saved into pt_regs for restoring
  *   into user reg-file when traded task rets to user space.
  *  -syscalls needing arch-wrappers (mainly for passing sp as pt_regs)

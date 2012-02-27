@@ -73,8 +73,7 @@ static int noinline do_fatal_exception(unsigned long cause, char *str,
 }
 
 #define DO_ERROR_INFO(signr, str, name, sicode) \
-asmlinkage int name(unsigned long cause, unsigned long address, \
-             struct pt_regs *regs) \
+int name(unsigned long cause, unsigned long address, struct pt_regs *regs) \
 { \
     siginfo_t info;\
     info.si_signo = signr;\
