@@ -288,36 +288,42 @@ void __init arc_cache_init(void)
  * Machine specific helpers for Entire D-Cache or Per Line ops
  **********************************************************/
 
+#define OP_INV          0x1
+#define OP_FLUSH        0x2
+#define OP_FLUSH_N_INV  0x3
+
 /* Operation on Entire D-Cache
- * @cacheop = { 0x0 = DISCARD, 0x1 = WBACK, 0x3 = WBACK-N-INV }
+ * @cacheop = {OP_INV, OP_FLUSH, OP_FLUSH_N_INV}
  * @aux_reg: Relevant Register in Cache
+ * Note that constant propagation ensures all the checks are gone
+ *  in generated code, while havign a signle core routine to maintain
  */
-static inline void __arc_dcache_entire_op(int aux_reg, int cacheop)
+static inline void __arc_dcache_entire_op(const int aux_reg, const int cacheop)
 {
-    unsigned long flags, orig_d_ctrl = orig_d_ctrl;
+    unsigned long flags, tmp = tmp;
 
     local_irq_save(flags);
 
-    if (cacheop & 2) {
+    if (cacheop == OP_FLUSH_N_INV) {
         /* Dcache provides 2 cmd: FLUSH or INV
          * INV inturn has sub-modes: DISCARD or FLUSH-BEFORE
-         * Default INV sub-mode is DISCARD, hence this check
+         * flush-n-inv is achieved by INV cmd but with IM=1
+         * Default INV sub-mode is DISCARD, which needs to be wiggled here
          */
-        orig_d_ctrl = read_new_aux_reg(ARC_REG_DC_CTRL);
-	    write_new_aux_reg(ARC_REG_DC_CTRL, orig_d_ctrl | BIT_DC_CTRL_INV_MODE_FLUSH);
+        tmp = read_new_aux_reg(ARC_REG_DC_CTRL);
+        write_new_aux_reg(ARC_REG_DC_CTRL, tmp|BIT_DC_CTRL_INV_MODE_FLUSH);
     }
 
     write_new_aux_reg(aux_reg, 0x1);
 
-    if (cacheop & 1) {
-        /* wait for the flush to complete, poll on the FS Bit */
-        while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS) ;
+    if (cacheop & OP_FLUSH) {
+        /* wait for writeback to complete */
+        while (read_new_aux_reg(ARC_REG_DC_CTRL) & BIT_DC_CTRL_FLUSH_STATUS);
     }
 
-    if (cacheop & 2) {
+    if (cacheop == OP_FLUSH_N_INV) {
         /* Switch back the DISCARD ONLY Invalidate mode */
-	    write_new_aux_reg(ARC_REG_DC_CTRL,
-						orig_d_ctrl & ~BIT_DC_CTRL_INV_MODE_FLUSH);
+        write_new_aux_reg(ARC_REG_DC_CTRL, tmp & ~BIT_DC_CTRL_INV_MODE_FLUSH);
     }
 
     local_irq_restore(flags);
@@ -418,17 +424,17 @@ static inline void __arc_dcache_inv_lines(unsigned long start, unsigned long sz,
 void inv_dcache_all()
 {
     /* Throw away the contents of entrie Dcache */
-    __arc_dcache_entire_op(ARC_REG_DC_IVDC, 0x0);
+    __arc_dcache_entire_op(ARC_REG_DC_IVDC, OP_INV);
 }
 
 void flush_and_inv_dcache_all(void)
 {
-    __arc_dcache_entire_op(ARC_REG_DC_IVDC, 0x3);
+    __arc_dcache_entire_op(ARC_REG_DC_IVDC, OP_FLUSH_N_INV);
 }
 
 void flush_dcache_all()
 {
-    __arc_dcache_entire_op(ARC_REG_DC_FLSH, 0x1);
+    __arc_dcache_entire_op(ARC_REG_DC_FLSH, OP_FLUSH);
 }
 
 
@@ -789,7 +795,7 @@ void flush_icache_all()
     local_irq_restore(flags);
 }
 
-void flush_cache_all()
+void noinline flush_cache_all()
 {
     unsigned long flags;
 
