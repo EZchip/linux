@@ -15,22 +15,7 @@
 
 #define ATOMIC_INIT(i)  { (i) }
 
-
-/*
-    On ARC, the only atomic operation provided is exchange operation. To provide
-    the software workaround for other atomic operations (inc, dec, add ....) we
-    disable interrupts in the UP and use spin lock in the MP.
-
-    In case of UP, the spin lock api saves the flags and disables the interrupts
-    so that all the hardware resuources are available to the current process
-
-    In case of MP, spin lock api saves the flags, disables the interrupts and
-    acquires the global lock (spin lock) which is atomic operation, and then
-    modify the atomic_t variable - (during which) the process may be context
-    switched, but the access to the atomic variable is still exclusively held
-    the process.
-*/
-
+#if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
 #ifdef CONFIG_SMP
 
@@ -40,28 +25,10 @@ extern spinlock_t smp_atomic_ops_lock;
 extern unsigned long    _spin_lock_irqsave(spinlock_t *lock);
 extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
-
-// TODO-vineetg need to cleanup and user Linux exported APIs instead of 2nd level ones
 #define atomic_ops_lock(flags)   flags = _spin_lock_irqsave(&smp_atomic_ops_lock)
 #define atomic_ops_unlock(flags) _spin_unlock_irqrestore(&smp_atomic_ops_lock, flags)
 
-#else
-
-#define atomic_ops_lock(flags)      local_irq_save(flags)
-#define atomic_ops_unlock(flags)    local_irq_restore(flags)
-
-#endif
-
-
-#ifdef __KERNEL__
-
-/* FIXME :: not atomic on load store architecture ?
- * i think it wont matter. */
-#define atomic_read(v)  ((v)->counter)
-
-#ifdef CONFIG_SMP
-
-static __inline__ void atomic_set(volatile atomic_t *v, int i)
+static inline void atomic_set(volatile atomic_t *v, int i)
 {
     unsigned long flags;
 
@@ -69,15 +36,18 @@ static __inline__ void atomic_set(volatile atomic_t *v, int i)
     v->counter = i;
     atomic_ops_unlock(flags);
 }
-
 #else
+
+#define atomic_ops_lock(flags)      local_irq_save(flags)
+#define atomic_ops_unlock(flags)    local_irq_restore(flags)
 
 #define atomic_set(v,i) (((v)->counter) = (i))
 
 #endif
 
+#define atomic_read(v)  ((v)->counter)
 
-static __inline__ void atomic_add(int i, volatile atomic_t *v)
+static inline void atomic_add(int i, volatile atomic_t *v)
 {
     unsigned long flags;
 
@@ -86,7 +56,7 @@ static __inline__ void atomic_add(int i, volatile atomic_t *v)
     atomic_ops_unlock(flags);
 }
 
-static __inline__ void atomic_sub(int i, volatile atomic_t *v)
+static inline void atomic_sub(int i, volatile atomic_t *v)
 {
     unsigned long flags;
 
@@ -95,7 +65,7 @@ static __inline__ void atomic_sub(int i, volatile atomic_t *v)
     atomic_ops_unlock(flags);
 }
 
-static __inline__ int atomic_add_return(int i, volatile atomic_t *v)
+static inline int atomic_add_return(int i, volatile atomic_t *v)
 {
     unsigned long flags ;
     unsigned long temp;
@@ -109,7 +79,7 @@ static __inline__ int atomic_add_return(int i, volatile atomic_t *v)
     return temp;
 }
 
-static __inline__ int atomic_sub_return(int i, volatile atomic_t *v)
+static inline int atomic_sub_return(int i, volatile atomic_t *v)
 {
     unsigned long flags;
     unsigned long temp;
@@ -123,57 +93,7 @@ static __inline__ int atomic_sub_return(int i, volatile atomic_t *v)
     return temp;
 }
 
-static __inline__ void atomic_inc(volatile atomic_t *v)
-{
-    unsigned long flags;
-
-    atomic_ops_lock(flags);
-    v->counter += 1;
-    atomic_ops_unlock(flags);
-}
-
-static __inline__ void atomic_dec(volatile atomic_t *v)
-{
-    unsigned long flags;
-
-    atomic_ops_lock(flags);
-    v->counter -= 1;
-    atomic_ops_unlock(flags);
-}
-
-static __inline__ int atomic_dec_and_test(volatile atomic_t *v)
-{
-    unsigned long flags;
-    int result;
-    unsigned long temp;
-
-    atomic_ops_lock(flags);
-    temp = v->counter;
-    temp -= 1;
-    result = (temp == 0);
-    v->counter = temp;
-    atomic_ops_unlock(flags);
-
-    return result;
-}
-
-static __inline__ int atomic_add_negative(int i, volatile atomic_t *v)
-{
-    unsigned long flags;
-    int result;
-    unsigned long temp;
-
-    atomic_ops_lock(flags);
-    temp = v->counter;
-    temp += i;
-    result = (temp < 0);
-    v->counter = temp;
-    atomic_ops_unlock(flags);
-
-    return result;
-}
-
-static __inline__ void atomic_clear_mask(unsigned long mask, unsigned long *addr)
+static inline void atomic_clear_mask(unsigned long mask, unsigned long *addr)
 {
     unsigned long flags;
 
@@ -182,21 +102,22 @@ static __inline__ void atomic_clear_mask(unsigned long mask, unsigned long *addr
     atomic_ops_unlock(flags);
 }
 
-#define atomic_cmpxchg(v, o, n) ((int)cmpxchg(&((v)->counter), (o), (n)))
-
-static __inline__ unsigned long
-cmpxchg(volatile int *p, int old, int new)
+/* unlike other APIS, cmpxchg is same as atomix_cmpxchg because
+ * because the sematics of cmpxchg itself is to be atomic
+ */
+static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
 {
     unsigned long flags;
     int prev;
 
     atomic_ops_lock(flags);
-    if ((prev = *p) == old)
+    if ((prev = *p) == expected)
         *p = new;
     atomic_ops_unlock(flags);
     return(prev);
 }
 
+#define atomic_cmpxchg(v, o, n) ((int)cmpxchg(&((v)->counter), (o), (n)))
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))
 
 /**
@@ -219,10 +140,16 @@ cmpxchg(volatile int *p, int old, int new)
 
 #define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
 
+#define atomic_inc(v)		atomic_add(1, v)
+#define atomic_dec(v)		atomic_sub(1, v)
+
 #define atomic_inc_and_test(v)  (atomic_add_return(1, v) == 0)
-#define atomic_dec_return(v)    atomic_sub_return(1, (v))
+#define atomic_dec_and_test(v)	(atomic_sub_return(1, v) == 0)
 #define atomic_inc_return(v)    atomic_add_return(1, (v))
+#define atomic_dec_return(v)    atomic_sub_return(1, (v))
 #define atomic_sub_and_test(i,v)  (atomic_sub_return(i, v) == 0)
+
+#define atomic_add_negative(i,v) (atomic_add_return(i, v) < 0)
 
 #define smp_mb__before_atomic_dec() barrier()
 #define smp_mb__after_atomic_dec()  barrier()

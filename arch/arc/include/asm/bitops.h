@@ -58,12 +58,7 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 #if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
-// TODO does this affect uni-processor code
-#define smp_mb__before_clear_bit()  barrier()
-#define smp_mb__after_clear_bit()   barrier()
-
-static inline void
-set_bit(unsigned long nr, volatile unsigned long * m)
+static inline void set_bit(unsigned long nr, volatile unsigned long *m)
 {
     unsigned long temp, flags;
     m += nr >> 5;
@@ -80,20 +75,7 @@ set_bit(unsigned long nr, volatile unsigned long * m)
     bitops_unlock(flags);
 }
 
-static inline void
-__set_bit(unsigned long nr, volatile unsigned long * m)
-{
-    unsigned long temp;
-    m += nr >> 5;
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    temp = *m;
-    *m = temp | (1UL << nr);
-}
-
-static inline void
-clear_bit(unsigned long nr, volatile unsigned long * m)
+static inline void clear_bit(unsigned long nr, volatile unsigned long *m)
 {
     unsigned long temp, flags;
     m += nr >> 5;
@@ -110,21 +92,7 @@ clear_bit(unsigned long nr, volatile unsigned long * m)
     bitops_unlock(flags);
 }
 
-
-static inline void
-__clear_bit(unsigned long nr, volatile unsigned long * m)
-{
-    unsigned long temp;
-    m += nr >> 5;
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    temp = *m;
-    *m = temp & ~(1UL << (nr & 0x1f));
-}
-
-static inline void
-change_bit(unsigned long nr, volatile unsigned long * m)
+static inline void change_bit(unsigned long nr, volatile unsigned long *m)
 {
     unsigned long temp, flags;
     m += nr >> 5;
@@ -141,17 +109,6 @@ change_bit(unsigned long nr, volatile unsigned long * m)
     bitops_unlock(flags);
 }
 
-static inline void
-__change_bit(unsigned long nr, volatile unsigned long * m)
-{
-    unsigned long temp;
-    m += nr >> 5;
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    temp = *m;
-    *m = temp ^ (1UL << (nr & 0x1f));
-}
 
 static inline int
 test_and_set_bit(unsigned long nr, volatile unsigned long *m)
@@ -177,22 +134,9 @@ test_and_set_bit(unsigned long nr, volatile unsigned long *m)
     return (old & (1 << nr)) != 0;
 }
 
-static inline int
-__test_and_set_bit(unsigned long nr, volatile unsigned long * m)
-{
-    unsigned long old;
-    m += nr >> 5;
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    old = *m;
-    *m = old | (1 << nr);
-
-    return (old & (1 << nr)) != 0;
-}
 
 static inline int
-test_and_clear_bit(unsigned long nr, volatile unsigned long * m)
+test_and_clear_bit(unsigned long nr, volatile unsigned long *m)
 {
     unsigned long temp, old, flags;
     m += nr >> 5;
@@ -214,22 +158,9 @@ test_and_clear_bit(unsigned long nr, volatile unsigned long * m)
     return (old & (1 << nr)) != 0;
 }
 
-static inline int
-__test_and_clear_bit(unsigned long nr, volatile unsigned long * m)
-{
-    unsigned long old;
-    m += nr >> 5;
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    old = *m;
-    *m = old & ~(1UL << (nr & 0x1f));
-
-    return (old & (1 << nr)) != 0;
-}
 
 static inline int
-test_and_change_bit(unsigned long nr, volatile unsigned long * m)
+test_and_change_bit(unsigned long nr, volatile unsigned long *m)
 {
     unsigned long temp, old, flags;
     m += nr >> 5;
@@ -251,8 +182,73 @@ test_and_change_bit(unsigned long nr, volatile unsigned long * m)
     return (old & (1 << nr)) != 0;
 }
 
+/***************************************
+ * Non atomic variants
+ **************************************/
+
+static inline void __set_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned long temp;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    temp = *m;
+    *m = temp | (1UL << nr);
+}
+
+static inline void __clear_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned long temp;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    temp = *m;
+    *m = temp & ~(1UL << (nr & 0x1f));
+}
+
+static inline void __change_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned long temp;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    temp = *m;
+    *m = temp ^ (1UL << (nr & 0x1f));
+}
+
 static inline int
-__test_and_change_bit(unsigned long nr, volatile unsigned long * m)
+__test_and_set_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned long old;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    old = *m;
+    *m = old | (1 << nr);
+
+    return (old & (1 << nr)) != 0;
+}
+
+static inline int
+__test_and_clear_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned long old;
+    m += nr >> 5;
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    old = *m;
+    *m = old & ~(1UL << (nr & 0x1f));
+
+    return (old & (1 << nr)) != 0;
+}
+
+static inline int
+__test_and_change_bit(unsigned long nr, volatile unsigned long *m)
 {
     unsigned long old;
     m += nr >> 5;
@@ -268,18 +264,21 @@ __test_and_change_bit(unsigned long nr, volatile unsigned long * m)
 /*
  * This routine doesn't need to be atomic.
  */
-static inline int __constant_test_bit(unsigned int nr, const volatile unsigned long * addr)
+static inline int
+__constant_test_bit(unsigned int nr, const volatile unsigned long * addr)
 {
-    return ((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
+    return ((1UL << (nr & 31)) &
+                (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
 }
 
-static inline int __test_bit(unsigned int nr, const volatile unsigned long * addr)
+static inline int
+__test_bit(unsigned int nr, const volatile unsigned long * addr)
 {
     unsigned long mask;
 
     addr += nr >> 5;
 
-    // take adv of ARC700 feature which only considers 5 bits in bit-fiddling insn
+    /* ARC700 only considers 5 bits in bit-fiddling insn */
     mask = 1 << nr;
 
     return ((mask & *addr) != 0);
@@ -398,6 +397,10 @@ static inline int __attribute__((const)) __fls(unsigned long x)
     if (!x) return 0;
     else return fls(x) - 1;
 }
+
+// TODO does this affect uni-processor code
+#define smp_mb__before_clear_bit()  barrier()
+#define smp_mb__after_clear_bit()   barrier()
 
 #define ext2_set_bit(nr, addr)  \
     __test_and_set_bit((nr), (unsigned long *)(addr))
