@@ -20,6 +20,11 @@ KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
 						-D__linux__  -fcall-used-gp -multcost=16
 
+# preprocessor macros due to following: __Xlock __Xswape __Xrtsc
+ifdef CONFIG_ARC700_V_4_10
+KBUILD_CFLAGS		+= -mlock -mswape -mrtsc
+endif
+
 # Idea is to use -O3 for our builds (Default kernel makefile uses -O2)
 # However doing that unconditionally here breaks -Os:
 #    our -O3 over-rides -Os set by top-level-makefile

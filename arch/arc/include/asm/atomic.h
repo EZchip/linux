@@ -47,6 +47,102 @@ static inline void atomic_set(volatile atomic_t *v, int i)
 
 #define atomic_read(v)  ((v)->counter)
 
+#if defined(ARC_HAS_LLSC)
+
+static inline void atomic_add(int i, volatile atomic_t *v)
+{
+    unsigned int temp;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   add     %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)       /* Early clobber, to prevent reg reuse */
+    : "r" (&v->counter),  "Ir" (i)
+    : "cc");
+}
+
+static inline void atomic_sub(int i, volatile atomic_t *v)
+{
+    unsigned int temp;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   sub     %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)
+    : "r" (&v->counter),  "Ir" (i)
+    : "cc");
+}
+
+/* add and also return the new value */
+static inline int atomic_add_return(int i, volatile atomic_t *v)
+{
+    unsigned int temp;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   add     %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)
+    : "r" (&v->counter),  "Ir" (i)
+    : "cc");
+
+    return temp;
+}
+
+static inline int atomic_sub_return(int i, volatile atomic_t *v)
+{
+    unsigned int temp;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   sub     %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)
+    : "r" (&v->counter),  "Ir" (i)
+    : "cc");
+
+    return temp;
+}
+
+static inline void atomic_clear_mask(unsigned long mask, unsigned long *addr)
+{
+    unsigned int temp;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   bic     %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)
+    : "r" (addr),  "Ir" (mask)
+    : "cc");
+}
+
+static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
+{
+    unsigned long prev;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   brne    %0, %2, 2f  \n"
+    "   scond   %3, [%1]    \n"
+    "   bnz     1b          \n"
+    "2:                     \n"
+    : "=&r" (prev)
+    : "r" (p),  "Ir" (expected), "Ir" (new)
+    : "cc");
+
+    return prev;
+}
+
+#else
+
 static inline void atomic_add(int i, volatile atomic_t *v)
 {
     unsigned long flags;
@@ -116,6 +212,8 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
     atomic_ops_unlock(flags);
     return(prev);
 }
+
+#endif  /* ARC_HAS_LLSC */
 
 #define atomic_cmpxchg(v, o, n) ((int)cmpxchg(&((v)->counter), (o), (n)))
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))

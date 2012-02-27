@@ -58,6 +58,121 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 
 #if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
+#if defined(ARC_HAS_LLSC)
+
+static inline void set_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned int temp;
+
+    m += nr >> 5;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   bset    %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)
+    : "r" (m), "Ir" (nr)
+    : "cc");
+}
+
+static inline void clear_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned int temp;
+
+    m += nr >> 5;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   bclr    %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)
+    : "r" (m), "Ir" (nr)
+    : "cc");
+}
+
+static inline void change_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned int temp;
+
+    m += nr >> 5;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%1]    \n"
+    "   bxor    %0, %0, %2  \n"
+    "   scond   %0, [%1]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (temp)
+    : "r" (m), "Ir" (nr)
+    : "cc");
+}
+
+static inline int
+test_and_set_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned long old, temp;
+
+    m += nr >> 5;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%2]    \n"
+    "   bset    %1, %0, %3  \n"
+    "   scond   %1, [%2]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (old), "=&r" (temp)
+    : "r" (m), "Ir" (nr)
+    : "cc");
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    return (old & (1 << nr)) != 0;
+}
+
+static inline int
+test_and_clear_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned int old, temp;
+
+    m += nr >> 5;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%2]    \n"
+    "   bclr    %1, %0, %3  \n"
+    "   scond   %1, [%2]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (old), "=&r" (temp)
+    : "r" (m), "Ir" (nr)
+    : "cc");
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    return (old & (1 << nr)) != 0;
+}
+
+static inline int
+test_and_change_bit(unsigned long nr, volatile unsigned long *m)
+{
+    unsigned int old, temp;
+
+    m += nr >> 5;
+
+    __asm__ __volatile__(
+    "1: llock   %0, [%2]    \n"
+    "   bxor    %1, %0, %3  \n"
+    "   scond   %1, [%2]    \n"
+    "   bnz     1b          \n"
+    : "=&r" (old), "=&r" (temp)
+    : "r" (m), "Ir" (nr)
+    : "cc");
+
+    if (__builtin_constant_p(nr)) nr &= 0x1f;
+
+    return (old & (1 << nr)) != 0;
+}
+
+#else
+
 static inline void set_bit(unsigned long nr, volatile unsigned long *m)
 {
     unsigned long temp, flags;
@@ -181,6 +296,8 @@ test_and_change_bit(unsigned long nr, volatile unsigned long *m)
 
     return (old & (1 << nr)) != 0;
 }
+
+#endif /* ARC_HAS_LLSC */
 
 /***************************************
  * Non atomic variants

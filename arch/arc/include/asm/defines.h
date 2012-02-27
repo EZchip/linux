@@ -11,13 +11,26 @@
 
 #if defined(CONFIG_ARC_MMU_V1)
 #define CONFIG_ARC_MMU_VER 1
-
 #elif defined(CONFIG_ARC_MMU_V2)
 #define CONFIG_ARC_MMU_VER 2
-
 #elif defined(CONFIG_ARC_MMU_V3)
 #define CONFIG_ARC_MMU_VER 3
+#endif
 
+/* Support for Load-locked/Store Conditional
+ *  for doing fast Read-Modify-Write on uni-processor systems
+ */
+#if defined(CONFIG_ARC700_V_4_10) && defined(__Xlock)
+#define ARC_HAS_LLSC
+#else
+#undef ARC_HAS_LLSC
+#endif
+
+/* Support for single cycle Endian Swap insn */
+#if defined(CONFIG_ARC700_V_4_10) && defined(__Xswape)
+#define ARC_HAS_SWAPE
+#else
+#undef ARC_HAS_SWAPE
 #endif
 
 #endif  /* __ARC_ASM_DEFINES_H__ */

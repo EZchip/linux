@@ -18,7 +18,22 @@
 
 #include <linux/types.h>
 
-/* Byte Swap Implementation Toggle for ARC
+/* Native single cycle endian swap insn */
+#ifdef ARC_HAS_SWAPE
+
+#define __arch_swab32(x)  		\
+({								\
+	unsigned int tmp=x;			\
+	__asm__  (					\
+		"swape	%0, %1\n\t"		\
+		:"=r" (tmp)				\
+		:"r" (tmp));			\
+	tmp;						\
+})
+
+#else
+
+/* Several ways of Endian-Swap Emulation for ARC
  * 0: kernel generic
  * 1: ARC optimised "C"
  * 2: ARC Custom instruction
@@ -72,7 +87,9 @@
 	tmp;						\
 })
 
-#endif
+#endif /* ARC_BSWAP_TYPE=zzz */
+
+#endif /* ARC_HAS_SWAPE */
 
 #if !defined(__STRICT_ANSI__) || defined(__KERNEL__)
 #  define __BYTEORDER_HAS_U64__
