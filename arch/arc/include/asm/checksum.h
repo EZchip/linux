@@ -75,8 +75,8 @@ static inline __sum16 csum_fold(__wsum sum)
         "add    %0, %0, %1  \n"  // add them together
         "btst   %0, 16      \n"  // was there a carry in 16 bit sum
         "add.nz %0, %0, 1   \n"  // if yes, add it back to sum
-                                 // ideally extw needed, but we can optim it
-        "not    %2, %0      \n"  // cscum req a final invert of sum
+                                 // extw needed - deferred (see below)
+        "not    %2, %0      \n"  // csum req a final invert of sum
         :"=&r"(lower), "=&r" (upper), "=r" (folded)
         :"r" (sum)
         :"cc"
