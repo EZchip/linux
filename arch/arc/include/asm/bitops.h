@@ -72,7 +72,7 @@ static inline void set_bit(unsigned long nr, volatile unsigned long *m)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)
-    : "r" (m), "Ir" (nr)
+    : "r" (m), "ir" (nr)
     : "cc");
 }
 
@@ -88,7 +88,7 @@ static inline void clear_bit(unsigned long nr, volatile unsigned long *m)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)
-    : "r" (m), "Ir" (nr)
+    : "r" (m), "ir" (nr)
     : "cc");
 }
 
@@ -104,7 +104,7 @@ static inline void change_bit(unsigned long nr, volatile unsigned long *m)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)
-    : "r" (m), "Ir" (nr)
+    : "r" (m), "ir" (nr)
     : "cc");
 }
 
@@ -121,7 +121,7 @@ test_and_set_bit(unsigned long nr, volatile unsigned long *m)
     "   scond   %1, [%2]    \n"
     "   bnz     1b          \n"
     : "=&r" (old), "=&r" (temp)
-    : "r" (m), "Ir" (nr)
+    : "r" (m), "ir" (nr)
     : "cc");
 
     if (__builtin_constant_p(nr)) nr &= 0x1f;
@@ -142,7 +142,7 @@ test_and_clear_bit(unsigned long nr, volatile unsigned long *m)
     "   scond   %1, [%2]    \n"
     "   bnz     1b          \n"
     : "=&r" (old), "=&r" (temp)
-    : "r" (m), "Ir" (nr)
+    : "r" (m), "ir" (nr)
     : "cc");
 
     if (__builtin_constant_p(nr)) nr &= 0x1f;
@@ -163,7 +163,7 @@ test_and_change_bit(unsigned long nr, volatile unsigned long *m)
     "   scond   %1, [%2]    \n"
     "   bnz     1b          \n"
     : "=&r" (old), "=&r" (temp)
-    : "r" (m), "Ir" (nr)
+    : "r" (m), "ir" (nr)
     : "cc");
 
     if (__builtin_constant_p(nr)) nr &= 0x1f;
@@ -185,7 +185,7 @@ static inline void set_bit(unsigned long nr, volatile unsigned long *m)
     "   bset %0,%0,%2\n\t"
     "   st%U1 %0,%1\n\t"
     :"=&r" (temp), "=o" (*m)
-    :"Ir" (nr), "m" (*m));
+    :"ir" (nr), "m" (*m));
 
     bitops_unlock(flags);
 }
@@ -202,7 +202,7 @@ static inline void clear_bit(unsigned long nr, volatile unsigned long *m)
        "    bclr %0,%0,%2\n\t"
        "    st%U1 %0,%1\n\t"
        :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
+       :"ir" (nr), "m" (*m));
 
     bitops_unlock(flags);
 }
@@ -219,7 +219,7 @@ static inline void change_bit(unsigned long nr, volatile unsigned long *m)
        "    bxor %0,%0,%2\n\t"
        "    st%U1 %0,%1\n\t"
        :"=&r" (temp), "=o" (*m)
-       :"Ir" (nr), "m" (*m));
+       :"ir" (nr), "m" (*m));
 
     bitops_unlock(flags);
 }
@@ -240,7 +240,7 @@ test_and_set_bit(unsigned long nr, volatile unsigned long *m)
        "    bset  %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
        :"=r" (temp), "=o" (*m)
-       :"Ir" (nr), "r"(old));
+       :"ir" (nr), "r"(old));
 
     bitops_unlock(flags);
 
@@ -264,7 +264,7 @@ test_and_clear_bit(unsigned long nr, volatile unsigned long *m)
        "    bclr  %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
        :"=r" (temp), "=o" (*m)
-       :"Ir" (nr), "r"(old));
+       :"ir" (nr), "r"(old));
 
     bitops_unlock(flags);
 
@@ -288,7 +288,7 @@ test_and_change_bit(unsigned long nr, volatile unsigned long *m)
        "    bxor %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
        :"=r" (temp), "=o" (*m)
-       :"Ir" (nr), "r"(old));
+       :"ir" (nr), "r"(old));
 
     bitops_unlock(flags);
 

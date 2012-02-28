@@ -28,7 +28,7 @@ extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
 #define atomic_ops_lock(flags)   flags = _spin_lock_irqsave(&smp_atomic_ops_lock)
 #define atomic_ops_unlock(flags) _spin_unlock_irqrestore(&smp_atomic_ops_lock, flags)
 
-static inline void atomic_set(volatile atomic_t *v, int i)
+static inline void atomic_set(atomic_t *v, int i)
 {
     unsigned long flags;
 
@@ -49,7 +49,7 @@ static inline void atomic_set(volatile atomic_t *v, int i)
 
 #if defined(ARC_HAS_LLSC)
 
-static inline void atomic_add(int i, volatile atomic_t *v)
+static inline void atomic_add(int i, atomic_t *v)
 {
     unsigned int temp;
 
@@ -59,11 +59,11 @@ static inline void atomic_add(int i, volatile atomic_t *v)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)       /* Early clobber, to prevent reg reuse */
-    : "r" (&v->counter),  "Ir" (i)
+    : "r" (&v->counter),  "ir" (i)
     : "cc");
 }
 
-static inline void atomic_sub(int i, volatile atomic_t *v)
+static inline void atomic_sub(int i, atomic_t *v)
 {
     unsigned int temp;
 
@@ -73,12 +73,12 @@ static inline void atomic_sub(int i, volatile atomic_t *v)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)
-    : "r" (&v->counter),  "Ir" (i)
+    : "r" (&v->counter),  "ir" (i)
     : "cc");
 }
 
 /* add and also return the new value */
-static inline int atomic_add_return(int i, volatile atomic_t *v)
+static inline int atomic_add_return(int i, atomic_t *v)
 {
     unsigned int temp;
 
@@ -88,13 +88,13 @@ static inline int atomic_add_return(int i, volatile atomic_t *v)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)
-    : "r" (&v->counter),  "Ir" (i)
+    : "r" (&v->counter),  "ir" (i)
     : "cc");
 
     return temp;
 }
 
-static inline int atomic_sub_return(int i, volatile atomic_t *v)
+static inline int atomic_sub_return(int i, atomic_t *v)
 {
     unsigned int temp;
 
@@ -104,7 +104,7 @@ static inline int atomic_sub_return(int i, volatile atomic_t *v)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)
-    : "r" (&v->counter),  "Ir" (i)
+    : "r" (&v->counter),  "ir" (i)
     : "cc");
 
     return temp;
@@ -120,7 +120,7 @@ static inline void atomic_clear_mask(unsigned long mask, unsigned long *addr)
     "   scond   %0, [%1]    \n"
     "   bnz     1b          \n"
     : "=&r" (temp)
-    : "r" (addr),  "Ir" (mask)
+    : "r" (addr),  "ir" (mask)
     : "cc");
 }
 
@@ -135,7 +135,7 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
     "   bnz     1b          \n"
     "2:                     \n"
     : "=&r" (prev)
-    : "r" (p),  "Ir" (expected), "Ir" (new)
+    : "r" (p),  "ir" (expected), "ir" (new)
     : "cc");
 
     return prev;
@@ -143,7 +143,7 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
 
 #else
 
-static inline void atomic_add(int i, volatile atomic_t *v)
+static inline void atomic_add(int i, atomic_t *v)
 {
     unsigned long flags;
 
@@ -152,7 +152,7 @@ static inline void atomic_add(int i, volatile atomic_t *v)
     atomic_ops_unlock(flags);
 }
 
-static inline void atomic_sub(int i, volatile atomic_t *v)
+static inline void atomic_sub(int i, atomic_t *v)
 {
     unsigned long flags;
 
@@ -161,7 +161,7 @@ static inline void atomic_sub(int i, volatile atomic_t *v)
     atomic_ops_unlock(flags);
 }
 
-static inline int atomic_add_return(int i, volatile atomic_t *v)
+static inline int atomic_add_return(int i, atomic_t *v)
 {
     unsigned long flags ;
     unsigned long temp;
@@ -175,7 +175,7 @@ static inline int atomic_add_return(int i, volatile atomic_t *v)
     return temp;
 }
 
-static inline int atomic_sub_return(int i, volatile atomic_t *v)
+static inline int atomic_sub_return(int i, atomic_t *v)
 {
     unsigned long flags;
     unsigned long temp;
