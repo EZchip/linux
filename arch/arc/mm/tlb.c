@@ -538,7 +538,7 @@ char * arc_mmu_mumbojumbo(int cpu_id, char *buf)
 
     num += sprintf(buf+num, "ARC700 MMU Ver [%x]\n",p_mmu->ver);
 
-    num += sprintf(buf+num, "   PAGE SIZE %x\n",p_mmu->pg_sz);
+    num += sprintf(buf+num, "   PAGE SIZE %dk\n",TO_KB(p_mmu->pg_sz));
     num += sprintf(buf+num, "   JTLB %d x %d = %d entries\n",
                         p_mmu->sets, p_mmu->ways, p_mmu->num_tlb);
     num += sprintf(buf+num, "   uDTLB %d entr, uITLB %d entr\n",
@@ -567,6 +567,10 @@ void __init arc_mmu_init(void)
     if (mmu->ver != CONFIG_ARC_MMU_VER) {
         panic("MMU ver %d doesn't match kernel built for %d...\n",
             mmu->ver, CONFIG_ARC_MMU_VER);
+    }
+
+    if (mmu->pg_sz != PAGE_SIZE) {
+        panic("MMU pg size != PAGE_SIZE (%luk)\n",TO_KB(PAGE_SIZE));
     }
 
     /* Setup data structures for ASID management */

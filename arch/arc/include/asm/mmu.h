@@ -77,6 +77,7 @@ typedef struct {
 #define _PAGE_VALID         (1<<11) /* Page is valid (H) */
 #define _PAGE_PRESENT       _PAGE_VALID  /* Page present in memory (S)*/
 #define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
+#define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
 
 #else
 
@@ -94,15 +95,15 @@ typedef struct {
 #define _PAGE_GLOBAL        (1<<8)  /* Page is global (H) */
 #define _PAGE_VALID         (1<<9)  /* Page is valid (H) */
 #define _PAGE_PRESENT       _PAGE_VALID /* Page present in memory (S)*/
-#define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
-
-#endif
-
-// XXX: This must be MMU-v3 only, but for ISS testing, keeping out
 #define _PAGE_SHARED_CODE   (1<<10) /* Shared Code page with cmn vaddr
                                        usable for shared TLB entries (H) */
-#define _PAGE_SHARED_CODE_H (1<<31)
+
+#define _PAGE_MODIFIED      (1<<12) /* Page modified (dirty) (S) */
 #define _PAGE_FILE          (1<<12) /* page cache/ swap (S) */
+
+#define _PAGE_SHARED_CODE_H (1<<31) /* Hardware counterpart of above */
+#endif
+
 
 /* Kernel allowed all permissions for all pages */
 #define _KERNEL_PAGE_PERMS  (_PAGE_K_EXECUTE | _PAGE_K_WRITE | _PAGE_K_READ)
