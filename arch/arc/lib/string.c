@@ -1,13 +1,10 @@
-/*****************************************************************
- * STRING LIBRARY
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- * vineetg: January 2010 (Rewrite of function variant of memset)
- *  -All the code in inline asm as opposed to mix of "C"/asm
- *
- * ARC International
- * Simon Spooner
- * Oct 2nd 2008
-******************************************************************/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
 
 #include <linux/string.h>
 #include <linux/module.h>

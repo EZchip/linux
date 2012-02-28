@@ -1,36 +1,14 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * vineetg: March 2009
  *  -Implemented task_pt_regs( )
  *
- *
- *
- *****************************************************************************/
-
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arc/processor.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors : Amit Bhor, Sameer Dhavale
- * Ashwin Chaugule <ashwin.chaugule@codito.com>
- * Added additional cpuinfo for /proc/cpuinfo
+ * Amit Bhor, Sameer Dhavale, Ashwin Chaugule: Codito Technologies 2004
  */
 
 #ifndef __ASM_ARC_PROCESSOR_H

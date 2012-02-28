@@ -1,7 +1,9 @@
 #
-# Makefile for the Linux ARC-specific parts of the memory manager.
+# Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
 #
-# Copyright (C) 2003, ARC International
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
 #
 
 USE_STANDARD_AS_RULE := true

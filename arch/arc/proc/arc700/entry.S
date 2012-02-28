@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * TBD:
  *  -remove the low level wrappers for execve/rt_sigreturn/sigaltstack
@@ -91,27 +95,7 @@
  *    - Access of _current_task wrapped inside a macro so that if hardware
  *       team agrees for a dedicated reg, no other code is touched
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- * arch/arc/kernel/entry.S
- *
- * Copyright (C)
- *
- * This program is free software you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Author(s) : Amit Bhor, Rahul Trivedi, Kanika Nema, Sameer Dhavale
+ * Amit Bhor, Rahul Trivedi, Kanika Nema, Sameer Dhavale : Codito Tech 2004
  */
 
 /*
@@ -128,7 +112,6 @@
       Interrupt link register (ilink2)    r30
       Branch link register (blink)        r31
       ------------------------------------------------------------------
-
 */
 
     .cpu A7

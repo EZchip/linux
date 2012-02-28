@@ -1,11 +1,10 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- * Vineetg: July 2009
- *  -Switched from generic Atomic Dec based Mutex to Exchange based mutex
- *   because ARC700 has a atomic reg <---> mem exchange instruction
- *   Atomic dec requires disabling IRQs for ld/sub/st sequence
- *
- *****************************************************************************/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+//
 //#include <asm-generic/mutex-dec.h>
 #include <asm-generic/mutex-xchg.h>

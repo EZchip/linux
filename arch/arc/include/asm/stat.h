@@ -1,23 +1,11 @@
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
 /*
- *  linux/include/asm-arc/stat.h
- *
- *  Copyright (C)
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- * Authors : Amit Bhor, Sameer Dhavale
+ * Amit Bhor, Sameer Dhavale: Codito Technologies 2004
  */
 
 #ifndef _ASM_ARC_STAT_H

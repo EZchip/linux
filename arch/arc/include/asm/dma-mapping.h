@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Feb 2008
  *  -Seperated DMA <=>  PHY into Platform specific files
@@ -10,8 +14,7 @@
  * Vineetg: Jan 2009
  *  -Brand new DMA Mapping API implementation
  *  -Borrowed a lot from ARM/MIPS
- *
- *****************************************************************************/
+ */
 
 #ifndef ASMARC_DMA_MAPPING_H
 #define ASMARC_DMA_MAPPING_H

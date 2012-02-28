@@ -1,35 +1,15 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
- *
- *
- *
- *
- * vineetg: March 2009
- *  -Cleaned up copy_thread( ), made it use task_pt_regs( )
- *  -It used to leave a margin of 8 bytes which was confusing
- *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- *****************************************************************************/
-
-/*
- *  linux/arch/arc/kernel/process.c
- *  Based on from the m68k port
+ * vineetg: March 2009
+ *  -Cleaned up copy_thread( ), made it use task_pt_regs( )
+ *  -It used to leave a margin of 8 bytes which was confusing
  *
- *  Copyright (C)
- *
- *  Authors : Amit Bhor, Kanika Nema
- */
-
-/*
- * This file handles the architecture-dependent parts of process handling..
+ * Amit Bhor, Kanika Nema: Codito Technologies 2004
  */
 
 #include <linux/errno.h>

@@ -1,6 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * vineetg: March 2010
  *  -Rewrote atomic/non-atomic test_and_(set|clear|change)_bit and
@@ -20,11 +23,7 @@
  *	-Atomic API no longer call spin_lock as we are Uni-processor
  *	-Non Atomix API no longer disables interrupts
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- * Authors: Amit Bhor, Sameer Dhavale
+ * Amit Bhor, Sameer Dhavale: Codito Technologies 2004
  */
 
 #ifndef _ASM_BITOPS_H

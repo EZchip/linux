@@ -1,32 +1,15 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Dec 1st 2008:
  *  -waitpid no longer needed in syscall Table as uClibc implements it
  *   using wait4 syscall. As a result we no loner need __ARCH_WANT_SYS_WAITPID
  *
- *****************************************************************************/
-
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arcnommu/unistd.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors: Amit Bhor
+ * Amit Bhor: Codito Technologies 2004
  */
 
 #ifndef _ASM_ARC_UNISTD_H

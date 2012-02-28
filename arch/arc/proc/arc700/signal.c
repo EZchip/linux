@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * vineetg: June 2010:
  *  =Reducing gen code footprint of do_signal which is getting bloated up
@@ -16,7 +20,7 @@
  *  -do_signal() no loner needs oldset, required by OLD sys_sigsuspend
  *  -sys_rt_sigsuspend() now comes from generic code, so discard arch implemen
  *  -sys_sigsuspend() no longer needs to fudge ptregs, hence that arg removed
- *  -sys_sigsuspend() no longer loops doing do_signal(), it sets TIF_xxx and leaves
+ *  -sys_sigsuspend() no longer loops for do_signal(), sets TIF_xxx and leaves
  *   the job to do_signal()
  *
  * vineetg: July 2009
@@ -54,21 +58,9 @@
  *   on resuming user mode, signal handler branches off to BTA of orig JMP
  *  -FIX: clear the DE bit from status32 in setup_frame( )
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/* arch/arc/proc/arc700/signal.c
- *
- * Author(s) :  Rahul Trivedi, Kanika Nema
+ * Rahul Trivedi, Kanika Nema: Codito Technologies 2004
  */
+
 #include <linux/signal.h>
 #include <linux/ptrace.h>
 #include <linux/unistd.h>

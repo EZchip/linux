@@ -1,10 +1,11 @@
-/**
- * @file init.c
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- * @remark Copyright 2002 OProfile authors
- * @remark Read the file COPYING
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
- * @author John Levon <levon@movementarian.org>
+ * Based on orig code from @author John Levon <levon@movementarian.org>
  */
 
 #include <linux/kernel.h>

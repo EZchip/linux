@@ -1,14 +1,15 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2008
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Jan 2009
  *  -This sucker of code revisited probably first time in ages
  *  -Config Space accessors provided by GRPCI need not do local_irq_save( )
  *      etc since PCI Core invokes them under "pci_lock" spin_lock_irqsave( )
- *  -
- *
- *****************************************************************************/
+ */
 /*
  * arc700_pci.c: GRPCI controller support
  *
@@ -48,7 +49,6 @@
  * Bits and pieces from MicroSPARC-IIep PCI controller support & MIPS PCI layer.
  */
 
-//#include <linux/config.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/init.h>

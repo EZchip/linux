@@ -1,14 +1,11 @@
 /*
- * Copyright (C) 1995-2003 Russell King
- *               2001-2002 Keith Owens
- *
- * Generate definitions needed by assembly language modules.
- * This code generates raw asm output which is post-processed to extract
- * and format the required data.
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
+ *
+ * Derived largely from ARM port
  */
 
 #include <linux/sched.h>

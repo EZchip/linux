@@ -1,30 +1,14 @@
 /*
- * BRIEF MODULE DESCRIPTION
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
  *	ARC Pixel Graphics Unit framebuffer driver.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of	the GNU General	Public License as published by the
- * Free Software Foundation; either version 2 of the License, or (at your
- * option) any later version.
- *
- * THIS	SOFTWARE IS PROVIDED``AS IS'' AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.	 IN
- * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
- * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
- * USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
- * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * You should have received a copy of the	 GNU General Public License along
- * with this program; if not, write	 to the Free Software Foundation, Inc.,
- * 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * Copyright 2004-2006 ARC International
- *
- * The ARC PGU allows the user to send two video outputs to one display
+ */
+
+/* The ARC PGU allows the user to send two video outputs to one display
  * simultaneously. From the hardware perspective, there is a main display
  * and a secondary overlay display. The main display can be run in RGB555 or
  * YUV 4:2:0 (aka YV12) modes, the overlay display in RGBA4444, RGBA5551 and
@@ -32,7 +16,6 @@
  * both displays are running, the contents of the overlay buffer are alpha
  * blended in hardware onto the contents of the primary buffer as the display
  * is rendered.
- *
  */
 
 #include <linux/module.h>

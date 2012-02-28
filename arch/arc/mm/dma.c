@@ -1,27 +1,25 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Jan 2009
  *  -DMA API functions
  *  -Centralised DMA-Cache sync
  *  -Detect buggy drivers which cause unaligned Cache Ops
  *
- *****************************************************************************/
-/*******************************************************************
  * Consistent DMA Mappings:
  *  -Reqmt is to allocate memory such that writes by CPU or device are
  *   visible to other party without explcit Cache Flush.
- *
  *  -On ARC, hardware doesnt provide explicit DMA Coherent Memory
  *   There is no Cache snooping for DMA transactions
- *
  *  -CPU does provide a NO-CACHE bit in TLB allowing pages to be non-cached
  *   However kernel executes in untranslated space, so it doesnt exercise
  *   MMU. Thus to allocate Consistent memory we allocate a chunk of
  *   Kernel Virtual Memory, allocate contiguous free pages, and map them
- *
- *******************************************************************/
+ */
 
 #ifdef CONFIG_HAS_DMA
 

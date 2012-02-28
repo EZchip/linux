@@ -1,5 +1,11 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * TLB Exception Handling Code for A700
  *
  * vineetg: April 2011 :
  *  -MMU v1: moved out legacy code into a seperate file
@@ -27,28 +33,8 @@
  *
  * Vineetg: March 25th Bug #92690
  *  -Added Debug Code to check if sw-ASID == hw-ASID
- *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
 
-/*
- *  arch/arc/mm/tlbex.S
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors: Rahul Trivedi, Amit Bhor
- *
- * TLB Exception Handling Code for A700
+ * Rahul Trivedi, Amit Bhor: Codito Technologies 2004
  */
 
     .cpu A7

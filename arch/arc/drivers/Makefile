@@ -4,8 +4,6 @@
 #
 
 
-#O_TARGET	:= peripherals.o
-
 #obj-$(CONFIG_ARC_SERIAL) += arc700_serial.obsolete.o
 obj-$(CONFIG_ARC_SERIAL) += arc_uart.o
 obj-$(CONFIG_ARC_PS2) += arc_ps2.o
@@ -20,5 +18,3 @@ obj-$(CONFIG_ISS_MAC) += iss_enet.o
 ifeq ($(PLATFORM),AA4)
 obj-$(CONFIG_ARC_AHB_PCI_BRIDGE) += arc700_pci.o
 endif
-
-#include $(TOPDIR)/Rules.make

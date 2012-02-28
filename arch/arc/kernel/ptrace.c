@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2010-2011
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *  vineetg: Jan 2010
  *      -Enabling dynamic printk for fun
@@ -9,22 +13,7 @@
  *       fetcing it (say using dwarf unwinder)
  *      -Using generic_ptrace_(peek|poke)data
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/* arch/arcnommu/kernel/ptrace.c
- *
- * Copyright (C)
- *
- * Author(s) : Soam Vasani, Kanika Nema
+ * Soam Vasani, Kanika Nema: Codito Technologies 2004
  */
 
 #include <linux/kernel.h>

@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Rajeshwarr: Apr 2009
  *  -Removed the ARC specific code from generic ide layer
@@ -16,19 +20,6 @@
  *
  * Rajeshwarr: Dec 2008
  *  -Tons of cleanup in moving from 2.6.19 to 2.6.26
- *
- *****************************************************************************/
-/*
- *  arch/arc/drivers/arc_ide.c
- *
- *  ARC IDE Interface 'chipset' functions
- *
- *  This program is free software; you can redistribute it and/or
- *  modify it under the terms of the GNU General Public License
- *  as published by the Free Software Foundation; either version
- *  2 of the License, or (at your option) any later version.
- *
- *  Copyright 2005-2007 ARC International
  */
 
 #include <linux/init.h>

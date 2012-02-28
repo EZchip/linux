@@ -1,32 +1,16 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Oct 2009
  *  No need for ARC specific thread_info allocator (kmalloc/free). This is
  *  anyways one page allocation, thus slab alloc can be short-circuited and
  *  the generic version (get_free_page) would be loads better.
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com)
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arc/thread_info.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *  Authors: Sameer Dhavale
+ * Sameer Dhavale: Codito Technologies 2004
  */
 
 /*

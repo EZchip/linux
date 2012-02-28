@@ -1,14 +1,9 @@
 #
+# Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
 #
-# This file is subject to the terms and conditions of the GNU General Public
-# License.  See the file "COPYING" in the main directory of this archive
-# for more details.
-#
-# Copyright (C) 2003 by ARC International
-#
-# arch/arc/Makefile
-#
-# Author : Sameer Dhavale
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
 #
 
 UTS_MACHINE := arc
@@ -110,12 +105,9 @@ boot := arch/arc/boot
 #         here. We wil need it when we'll add more processors
 #         or boards.
 
-archprepare: maketools arch/arc/include/asm/board
+archprepare: arch/arc/include/asm/board
 
-PHONY += maketools FORCE
-
-maketools: include/linux/version.h FORCE
-	$(Q)$(MAKE) $(build)=arch/$(ARCH)/tools
+PHONY += FORCE
 
 define arc-create-symlink
 	@echo 'SYMLINK arch/arc/include/asm/board -> ${src}/arch/arc/include/asm/board-$(PLATFORM)'; \

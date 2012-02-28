@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2008-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *  Rajeshwarr: June 2009
  *    -Tidy up the Bootmem Allocator setup
@@ -18,18 +22,7 @@
  *    -cpuinfo_arc700 is now an array of NR_CPUS; contains MP info as well
  *    -/proc/cpuinfo iterator fixed so that show_cpuinfo() gets
  *        correct CPU-id to display CPU specific info
- *
- *****************************************************************************/
-
-/*****************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
+ */
 
 #include <linux/fs.h>
 #include <linux/sched.h>

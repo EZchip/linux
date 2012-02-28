@@ -1,9 +1,10 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- *  Miscll Diagnostics and Troubleshooting routines
- *
- *****************************************************************************/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ */
+
 #include <linux/ptrace.h>
 #include <linux/module.h>
 #include <linux/mm.h>

@@ -1,9 +1,11 @@
 /*
- *  linux/arch/arc/mm/iomap.c
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- * Map IO port and PCI memory spaces so that {read,write}[bwl] can
- * be used to access this memory.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  */
+
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/ioport.h>

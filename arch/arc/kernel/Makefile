@@ -1,19 +1,13 @@
 #
-# Makefile for the linux kernel.
+# Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
 #
-# Note! Dependencies are done automagically by 'make dep', which also
-# removes any old dependencies. DON'T put your own dependencies here
-# unless it's something special (ie not a .c file).
-#
-# Copyright (C) 2003, ARC International
-#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
 
 obj-$(CONFIG_MODULES)   += arcksyms.o module.o
-# Object file lists.
 
-#
 # Pass UTS_MACHINE for user_regset definition
-#
 CFLAGS_ptrace.o		+= -DUTS_MACHINE='"$(UTS_MACHINE)"'
 
 obj-y		+= arcksyms.o ptrace.o sys_arc.o setup.o irq.o

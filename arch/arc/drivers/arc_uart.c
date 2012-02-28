@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Aug 21st 2010
  *  -Is uart_tx_stopped() not done in tty write path as it has already been
@@ -12,8 +16,7 @@
  * TODO:
  *  -check if sysreq works
  *  -suspend/resume, although it is non-hotpluggable
- *
- *****************************************************************************/
+ */
 
 #if defined(CONFIG_ARC_SERIAL_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
 #define SUPPORT_SYSRQ

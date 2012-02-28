@@ -1,5 +1,9 @@
-/*************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *  vineetg Jan 2009
  *      -Converted strcpy to strncpy
@@ -28,8 +32,7 @@
  *
  *      -Done primarily to chase the Random Segmentation Faults
  *          when we switched from gcc3.4 to gcc4.2
- *
- *************************************************************************/
+ */
 
 #include <linux/sort.h>
 #include <linux/sched.h>

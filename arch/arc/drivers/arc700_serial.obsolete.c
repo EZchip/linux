@@ -1,5 +1,11 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Driver for console on serial interface for the ArcAngel4 board.
  *
  * vineetg: Nov 2009
  *  -Rewrote the driver register access macros so that multiple accesses
@@ -12,24 +18,6 @@
  *
  * Vineetg: Sept 3rd 2008:
  *  -Added Interrupt Safe raw printing routine
- *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- * drivers/char/arcserial.c
- *
- * (C) 2003, ARC International
-
- * Driver for console on serial interface for the ArcAngel4 board.
  */
 
 #include <linux/module.h>

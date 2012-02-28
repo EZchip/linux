@@ -1,34 +1,16 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
- *
- *
- *
- *
- * Vineetg: June 10th 2008
- *   --Added show_callee_regs to display CALLEE REGS
- *   --Added show_fault_diagnostics as a common function to display all
- *     the REGS, trigger event logging etc
- *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- *****************************************************************************/
-
-/*
- * Copyright (C)
+ * Vineetg: June 10th 2008
+ *  -Added show_callee_regs to display CALLEE REGS
+ *  -Added show_fault_diagnostics as a common function to display all
+ *     the REGS, trigger event logging etc
  *
- * This program is free software you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Author(s) : Rahul Trivedi
- * Exception handlers for the arc700
+ * Rahul Trivedi: Codito Technologies 2004
  */
 
 #include <linux/sched.h>

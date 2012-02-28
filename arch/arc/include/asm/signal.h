@@ -1,23 +1,11 @@
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
 /*
- *  linux/include/asm-arc/signal.h
- *
- *  Copyright (C)
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- * Authors : Amit Bhor, Sameer Dhavale
+ * Amit Bhor, Sameer Dhavale: Codito Technologies 2004
  */
 
 #ifndef _ASM_ARC_SIGNAL_H
@@ -124,9 +112,6 @@ typedef unsigned long sigset_t;
 #define SA_NOMASK	SA_NODEFER
 #define SA_ONESHOT	SA_RESETHAND
 
-/* Sameer: Now defined in include/linux/interrupt.h */
-/* #define SA_INTERRUPT	0x20000000 /\* dummy -- ignored *\/ */
-
 /*
  * sigaltstack controls
  */
@@ -146,11 +131,7 @@ typedef unsigned long sigset_t;
  * SA_SHIRQ is for shared interrupt support on PCI and EISA.
  */
 #define SA_PROBE		0x80000000
-/* Sameer: Now defined in include/linux/interrupt.h */
-/* #define SA_SAMPLE_RANDOM	0x10000000 */
 #define SA_IRQNOMASK		0x08000000
-/* Sameer: Now defined in include/linux/interrupt.h */
-/* #define SA_SHIRQ		0x04000000 */
 #endif
 
 #define SIG_BLOCK          0	/* for blocking signals */

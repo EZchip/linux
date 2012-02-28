@@ -1,12 +1,16 @@
-/*************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Feb 2009
  *  -Reworked the API to work with ARC PCI Bridge
  *
  * vineetg: Feb 2009
  *  -For AA4 board, kernel to DMA address APIs
- ************************************************************************/
+ */
 
 /* Some notes on DMA <=> kernel address generation
  *

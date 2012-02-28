@@ -1,11 +1,14 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Aug 2009
  *  -Moved core context switch macro out of entry.S into this file.
  *  -This is the more "natural" hand written assembler
- *
- *****************************************************************************/
+ */
 
 #include <linux/linkage.h>   /* contains declarations of SYMBOL_NAME */
 #include <asm/entry.h>       /* For the SAVE_* macros */

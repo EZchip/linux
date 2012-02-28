@@ -1,39 +1,20 @@
-/*************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *  vineetg: April 2008
  *      -Added a critical CacheLine flush to copy_to_user_page( ) which
  *          was causing gdbserver to not setup breakpoints consistently
  *
- ************************************************************************/
-
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arc/cacheflush.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors: Sameer Dhavale
+ * Sameer Dhavale: Codito Technologies 2004
  */
 
 #ifndef _ASM_CACHEFLUSH_H
 #define _ASM_CACHEFLUSH_H
 
-/* Sameer: Getting these definitions from MIPS as
-           seemed simpler for a while */
 #define flush_dcache_mmap_lock(mapping)     do { } while (0)
 #define flush_dcache_mmap_unlock(mapping)   do { } while (0)
 #define flush_cache_vmap(start, end)        flush_cache_all()

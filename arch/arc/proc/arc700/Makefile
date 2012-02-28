@@ -1,11 +1,11 @@
-# This file is subject to the terms and conditions of the GNU General Public
-# License.  See the file "COPYING" in the main directory of this archive
-# for more details.
 #
-# Copyright (C) 2009 by ARC International
-# Addition of S3C4530 by Arcturus Networks Inc.
+# Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
 #
-
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
+#
+#
 obj-y += entry.o process.o signal.o traps.o
 
 #----------------------------------------------------------------------

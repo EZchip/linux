@@ -1,33 +1,18 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * Vineetg: Feb 2008
  *  -Remove local_irq_count( ) from irq_stat no longer required by
  *  generic code
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arc/hardirq.h
- *
- *  Taken from m68knommu
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors: Amit Bhor, Sameer Dhavale
+ * Amit Bhor, Sameer Dhavale: Codito Technologies 2004
+ *  -Taken from m68knommu
  */
+
 #ifndef _ASM_ARC_HARDIRQ_H
 #define _ASM_ARC_HARDIRQ_H
 

@@ -1,36 +1,19 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * vineetg: April 2011
  *  -CONFIG_ARC_MMU_SASID: support for ARC MMU Shared Address spaces
  *     activate_mm() and switch_mm() to setup MMU SASID reg with task's
  *     current sasid subscriptions
  *
- * Vineetg: March 25th Bug #92690
+ * Vineetg: March 25th, 2008: Bug #92690
  *  -Major rewrite of Core ASID allocation routine get_new_mmu_context
  *
- *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arc/mmu_context.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors: Amit Bhor, Sameer Dhavale
+ * Amit Bhor, Sameer Dhavale: Codito Technologies 2004
  */
 
 #ifndef _ASM_ARC_MMU_CONTEXT_H

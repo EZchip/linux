@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2008-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *              Stack tracing for ARC Linux
  *
@@ -12,13 +16,13 @@
  *      = which frame to stop capturing (wchan)
  *      = specifics of data structs where trace is saved(CONFIG_STACKTRACE etc)
  *
- *
  *  vineetg: March 2009
  *  -Implemented correct versions of thread_saved_pc() and get_wchan()
  *
  *  rajeshwarr: 2008
  *  -Initial implementation
- *****************************************************************************/
+ */
+
 #include <linux/ptrace.h>
 #include <linux/module.h>
 #include <asm/arcregs.h>

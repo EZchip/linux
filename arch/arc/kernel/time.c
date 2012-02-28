@@ -1,5 +1,9 @@
-/************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * vineetg: Jan 1011
  *  -sched_clock( ) no longer jiffies based. Uses the same clocksource
@@ -11,10 +15,6 @@
  *  -Implemented CONFIG_GENERIC_CLOCKEVENTS as base for hrtimers
  *
  * Vineetg: Mar 2008: Forked off from time.c which now is time-jiff.c
- ************************************************************************/
-/*
- * arch/arc/kernel/time.c
- *
  */
 
 #include <linux/spinlock.h>

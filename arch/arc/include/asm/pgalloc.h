@@ -1,13 +1,9 @@
 /*
- * Copyright (C) 2011-2012 Synopsys (www.synopsys.com)
- * Copyright (C) 2007-2010 ARC International (www.arc.com)
- * Copyright (C) 2004 Codito Technologies (www.codito.com)
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
- *
- * ------------------------------------------------------------------------
  *
  * vineetg: May 2011
  *  -Variable pg-sz means that Page Tables could be variable sized themselves
@@ -26,7 +22,7 @@
  *      =sweet side effect is avoiding calls to ugly page_address( ) from the
  *       pg-tlb allocator sub-sys (pte_alloc_one, ptr_free, pmd_populate
  *
- * Amit Bhor, Sameer Dhavale: Codito 2004
+ *  Amit Bhor, Sameer Dhavale: Codito Technologies 2004
  */
 
 #ifndef _ASM_ARC_PGALLOC_H

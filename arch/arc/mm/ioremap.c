@@ -1,11 +1,11 @@
 /*
- * This file is subject to the terms and conditions of the GNU General Public
- * License.  See the file "COPYING" in the main directory of this archive
- * for more details.
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- * (C) Copyright 1995 1996 Linus Torvalds
- * (C) Copyright 2001, 2002 Ralf Baechle
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  */
+
 #include <linux/vmalloc.h>
 #include <linux/init.h>
 #include <linux/slab.h>

@@ -1,5 +1,9 @@
-/******************************************************************************
- * ARC International 2009-2011
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * vineetg: June 2010
  *    -__clear_user( ) called multiple times during elf load was byte loop
@@ -13,27 +17,8 @@
  *    -Added option to (UN)inline copy_(to|from)_user to reduce code sz
  *    -kernel shrunk by 200K even at -O3
  *    -Enabled when doing -Os
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
  *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/include/asm-arc/uaccess.h
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors : Amit Bhor, Sameer Dhavale.
+ * Amit Bhor, Sameer Dhavale: Codito Technologies 2004
  */
 
 #ifndef _ASM_ARC_UACCESS_H

@@ -1,5 +1,11 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * I-Cache and D-cache control functionality.
  *
  * vineetg: Apr 2011
  *  -Now that MMU can support larger pg sz (16K), the determiniation of
@@ -63,29 +69,7 @@
  *     with Code sz 600k, old code flushed 600k worth of cache (line-by-line),
  *     while cache is only 16 or 32k.
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-
-/*
- *  linux/arch/arc/mm/cache_arc700.c
- *
- *  Copyright (C)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors: Amit Bhor, Rahul Trivedi
- * I-Cache and D-cache control functionality.
- * Ashwin Chaugule <ashwin.chaugule@codito.com>
+ * Amit Bhor, Rahul Trivedi: Codito Technologies 2004
  */
 
 #include <linux/module.h>

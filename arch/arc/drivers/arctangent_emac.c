@@ -1,5 +1,11 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * MAC driver for the ARCTangent EMAC 10100 (Rev 5)
  *
  * vineetg: May 2010
  *  -Reduced foot-print of the main ISR (handling for error cases moved out
@@ -24,20 +30,8 @@
  *   in same function use "anchor" reg to save the base addr causing
  *   shorter instructions
  *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * MAC driver for the ARCTangent EMAC 10100 (Rev 5)
- * File : drivers/net/arctangent_emac.c
- * Author(s) : amit bhor (Codito Tech.), Sameer Dhavale
- *
- *****************************************************************************/
+ * Amit bhor, Sameer Dhavale: Codito Technologies 2004
+ */
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -1105,8 +1099,7 @@ int __init arc_emac_init(void)
     return err;
 }
 
-void __exit
-arc_emac_exit(void) {
+void __exit arc_emac_exit(void) {
 	platform_device_unregister(arc_emac_dev);
 	platform_driver_unregister(&arc_emac_driver);
 }
@@ -1114,8 +1107,7 @@ arc_emac_exit(void) {
 module_init(arc_emac_init);
 module_exit(arc_emac_exit);
 
-static int
-arc_thread(void *unused) //helps with interrupt mitigation.
+static int arc_thread(void *unused) //helps with interrupt mitigation.
 {
 	unsigned int    i;
 	while (1)

@@ -1,11 +1,9 @@
 /*
- *  linux/include/asm-arc/ide.h
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- *  ARC IDE Interface
- *
- *  Copyright (C) 1994-2005  Linus Torvalds & authors
- *  ARC IDE functions - ARC International, 2005-2007
- *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  */
 
 #ifndef __ASMARC_IDE_H

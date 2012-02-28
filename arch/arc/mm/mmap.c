@@ -1,12 +1,13 @@
 /*
- *  arch/arc/mm/mmap.c
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *  Custom mmap layout for ARC700
  *
- * Copyright ARC International (www.arc.com) 2009-2010
- *
  * Vineet Gupta <vineet.gupta@arc.com>
- *
  *  -mmap randomisation (borrowed from x86/ARM/s390 implementations)
  *  -dedicated mmap code virtual address space to ensure libs are mapped
  *   at same vaddr across processes: this is perf boost for VIPT I$ which

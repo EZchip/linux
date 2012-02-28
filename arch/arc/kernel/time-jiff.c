@@ -1,5 +1,9 @@
-/************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2008
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *  "Jiffies" based Time keeping with architecture specific
  *      -TOD
@@ -8,9 +12,7 @@
  *  Both of these are now done by generic code.
  *  Please refer to arch/arc/kernel/time.c whic has the new cool stuff
  *  This file is there just in case some body needs our good old lean-thin
- *   timer infrastructure
- *  CONFIG_GENERIC_TIME is not a menuconfig option, we have to change the
- *  selection  in the .config file. It is selected by default.
+ *  timer infrastructure
  *
  * Mar 2009: Rajeshwar Ranga
  *  Added Timer1 as clock source.
@@ -31,23 +33,7 @@
  * Oct 30 2007: Simon Spooner
  *  Implemented the arch specific gettimeofday routines
  *
- ************************************************************************/
-/************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *************************************************************************/
-
-/*
- * arch/arc/kernel/time.c
- *
- * Initially added to get the timer interrupt up
- *
- * Authors: Amit Shah, Rahul Trivedi, Sameer Dhavale
+ * Amit Shah, Rahul Trivedi, Sameer Dhavale: Codito Technologies 2004
  */
 
 #include <linux/spinlock.h>

@@ -1,20 +1,14 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2008-2010
- *
- *  Vineetg: July 2009
- *    -kernel_execve inline asm optimised to prevent un-needed reg shuffling
- *     Now have 6 instructions in  generated code as opposed to 16.
- *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- *****************************************************************************/
+ *  Vineetg: July 2009
+ *    -kernel_execve inline asm optimised to prevent un-needed reg shuffling
+ *     Now have 6 instructions in  generated code as opposed to 16.
+ */
 
 #include <linux/errno.h>
 #include <linux/msg.h>

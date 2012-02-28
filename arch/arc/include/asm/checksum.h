@@ -1,27 +1,17 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2009-2010
- *
- *
- * vineetg: May 2010
- *  -Rewrote ip_fast_cscum( ) and csum_fold( ) with fast inline asm
- *
- *****************************************************************************/
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- *****************************************************************************/
-
-/* include/asm-arc/checksum.h */
+ * vineetg: May 2010
+ *  -Rewrote ip_fast_cscum( ) and csum_fold( ) with fast inline asm
+ */
 
 #ifndef _ASM_ARC_CHECKSUM_H
 #define _ASM_ARC_CHECKSUM_H
 
-/* Sameer: So as to reach the definition for struct in6_addr */
 #include <linux/in6.h>
 /*
  * computes the checksum of a memory block at buff, length len,

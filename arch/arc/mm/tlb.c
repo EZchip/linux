@@ -1,5 +1,9 @@
-/******************************************************************************
- * Copyright ARC International (www.arc.com) 2007-2009
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * vineetg: April 2011 :
  *  -MMU v3: PD{0,1} bits layout changed: They don't overlap anymore,
@@ -19,7 +23,7 @@
  *  -Changes related to MMU v2 (Rel 4.8)
  *
  * Vineetg: Aug 29th 2008
- *    In TLB Flush operations (Metal Fix MMU) there is a explict command to
+ *  -In TLB Flush operations (Metal Fix MMU) there is a explict command to
  *    flush Micro-TLBS. If TLB Index Reg is invalid prior to TLBIVUTLB cmd,
  *    it fails. Thus need to load it with ANY valid value before invoking
  *    TLBIVUTLB cmd
@@ -27,37 +31,14 @@
  * Vineetg: Aug 21th 2008:
  *  -Reduced the duration of IRQ lockouts in TLB Flush routines
  *  -Multiple copies of TLB erase code seperated into a "single" function
- *
- * Vineetg: Aug 11th 2008:
- *    In TLB Flush routines, interrupt disabling moved UP to retrieve ASID
+ *  -In TLB Flush routines, interrupt disabling moved UP to retrieve ASID
  *       in interrupt-safe region.
  *
  * Vineetg: April 23rd Bug #93131
  *    Problem: tlb_flush_kernel_range() doesnt do anything if the range to
  *              flush is more than the size of TLB itself.
- *    Fix: Flush the entire TLB as that is the only thing we can do
  *
- *****************************************************************************/
-
-/******************************************************************************
- * Copyright Codito Technologies (www.codito.com) Oct 01, 2004
- *
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- *****************************************************************************/
-/*
- * arch/arc/mm/tlb.c
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Authors: Rahul Trivedi
- *
- * a700 specific mmu/tlb code.
+ * Rahul Trivedi : Codito Technologies 2004
  */
 
 #include <linux/module.h>

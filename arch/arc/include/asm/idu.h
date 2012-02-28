@@ -1,10 +1,12 @@
-/******************************************************************************
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
  *
- *  include/asm-arc/idu.h
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  *  Rajeshwar Ranga: Interrupt Distribution Unit API's
- *
- ******************************************************************************/
+ */
 
 #ifndef _ASM_ARC_IDU_H
 #define _ASM_ARC_IDU_H
