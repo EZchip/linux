@@ -124,7 +124,7 @@
 struct mmu_gather mmu_gathers;
 
 /* A copy of the ASID from the PID reg is kept in asid_cache */
-volatile int asid_cache;
+int asid_cache;
 
 
 /* ASID to mm struct mapping. We have one extra entry corresponding to
@@ -246,7 +246,15 @@ void noinline local_flush_tlb_all(void)
  */
 void noinline local_flush_tlb_mm(struct mm_struct *mm)
 {
-    get_new_mmu_context(mm, 1);
+    /* Small optimisation courtesy IA64
+     * flush_mm called during fork, exit, munmap etc, multiple times as well.
+     * Only for fork( ) do we need to move parent to a new MMU ctxt,
+     * all other cases are NOPs, hence this check.
+     */
+    if (atomic_read(&mm->mm_users) == 0)
+        return;
+
+    get_new_mmu_context(mm);
 }
 
 /*

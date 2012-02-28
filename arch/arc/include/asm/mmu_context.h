@@ -5,6 +5,10 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
+ * vineetg: May 2011
+ *  -Refactored get_new_mmu_context( ) to only handle live-mm.
+ *   retiring-mm handled in other hooks
+ *
  * vineetg: April 2011
  *  -CONFIG_ARC_MMU_SASID: support for ARC MMU Shared Address spaces
  *     activate_mm() and switch_mm() to setup MMU SASID reg with task's
@@ -39,66 +43,50 @@ extern void arch_exit_mmap(struct mm_struct *mm);
 /* ASID to mm struct mapping */
 extern struct mm_struct *asid_mm_map[ NUM_ASID + 1 ];
 
-extern volatile int asid_cache;
+extern int asid_cache;
 
 /* Get a new mmu context or a hardware PID/ASID to work with.
  * If PID rolls over flush cache and tlb.
  */
 static inline void
-get_new_mmu_context(struct mm_struct *mm, int retiring_mm)
+get_new_mmu_context(struct mm_struct *mm)
 {
-    int new_asid, mm_asid;
     struct mm_struct *prev_owner;
     unsigned long flags;
 
-    /* TODO-vineet:
-     *  1. SMP
-     *  2. Can we reduce the duration of Interrupts lockout
-     */
     local_irq_save(flags);
 
-    mm_asid = mm->context.asid;
-
-    /* Is this call from a flush_tlb_xxx () type function
-     *  which wants to get rid of old address space
+    /* Relinquish the currently owned ASID (if any).
+     * Doing unconditionally saves a cmp-n-branch;
+     * for invalid asid, the array index is still valid
      */
-    if ( retiring_mm ) {
-        if (mm_asid == NO_ASID ) goto finish_up;
-        //if ( current->active_mm->context.asid != mm_asid ) {
-        if ( current->mm != mm ) {
-            asid_mm_map[mm_asid] = (struct mm_struct *) NULL;
-            mm->context.asid = NO_ASID;
-            goto finish_up;
-        }
-    }
+    asid_mm_map[mm->context.asid] = (struct mm_struct *) NULL;
 
-    /* If Task already has an ASID, it should give-up
-     * After all he can have only one ASID.
-     * As someone said, "to get something you have to forgoe something"
-     */
-    if ( mm_asid != NO_ASID )
-        asid_mm_map[mm_asid] = (struct mm_struct *) NULL;
-
-    new_asid = asid_cache;
-    if ( ++new_asid > MAX_ASID) {
-        /* Start a new asid allocation cycle */
-        new_asid = FIRST_ASID;
-        flush_icache_all();
+    /* move to new asid */
+    if ( ++asid_cache > MAX_ASID) {  /* asid roll-over */
+        asid_cache = FIRST_ASID;
         flush_tlb_all();
     }
 
-    /* Are we sealing someone else's ASID. If yes, set that task's ASID to
-     * invalid so when it runs it asks for a new ASID
+    /* Is new ASID already owned by some-one else (we are stealing it).
+     * If yes, let the orig owner be aware of this fact, so that when it runs,
+     * it asks for a brand new ASID. This would only happen for a long-lived
+     * task with asid from prev allocation cycle (before asid roll-over).
+     *
+     * This might look wrong - if we are re-using some other task's ASID,
+     * won't we use it's stale TLB entries too. Actually switch_mm( ) takes
+     * care of such a case: it ensures that a task with asid from prev alloc
+     * cycle, when scheduled will refresh it's ASID - see switch_mm( ) below
+     * The scenario of stealing here will only happen if that task didn't get
+     * a chance to refresh it's asid.
      */
-    if ( (prev_owner = asid_mm_map[new_asid]) ) {
+    if ( (prev_owner = asid_mm_map[asid_cache]) ) {
         prev_owner->context.asid = NO_ASID;
     }
 
-    /* Actual assignment of ASID to task */
-    asid_mm_map[new_asid] = mm;
-    mm->context.asid = new_asid;
-
-    asid_cache = new_asid;
+    /* Assign new ASID to tsk */
+    asid_mm_map[asid_cache] = mm;
+    mm->context.asid = asid_cache;
 
 #ifdef  CONFIG_ARC_TLB_DBG
     printk ("ARC_TLB_DBG: NewMM=0x%x OldMM=0x%x task_struct=0x%x Task: %s,"
@@ -110,13 +98,12 @@ get_new_mmu_context(struct mm_struct *mm, int retiring_mm)
     /* This is to double check TLB entries already exist for
      *    this newly allocated ASID
      */
-    tlb_find_asid(new_asid);
+    tlb_find_asid(asid_cache);
 
 #endif
 
-    write_new_aux_reg(ARC_REG_PID, new_asid|MMU_ENABLE);
+    write_new_aux_reg(ARC_REG_PID, asid_cache|MMU_ENABLE);
 
-finish_up:
     local_irq_restore(flags);
 }
 
@@ -138,15 +125,34 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
                              struct task_struct *tsk)
 {
-    /* top level Page Directory cached in MMU register, to avoid
-     * task->mm->pgd in TLB miss handlers
-     */
+    /* PGD cached in MMU reg to avoid 3 mem lookups: task->mm->pgd */
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
 
+    /* Allocate a new ASID if task doesn't have a valid one.
+     * This could happen if this task never had an asid (fresh after fork) or
+     * it's ASID was stolen - past an asid roll-over. Also in a special case,
+     * even if the ASID was valid, we allocate a new ASID, if this task is
+     * running for the first time afer an ASID rollover.
+     * This is part of simplistic asid allocation algorithm - which allows
+     * asid "stealing" - If asid-cache is at "x-1", a new req will allocate "x"
+     * evenif "x" is already allocated. The *IMP* thing is stolen asid's TLB
+     * entries are not flushed - which can cause stale TLB entry use.
+     * The problem case is: A long-lived task has asid "x", asid_cache rolls
+     * over from 255 to 0, and later this task gets scheduled - creating TLB
+     * entries with "x". A little later, while asid_cache is "x-1" a task
+     * needs a new ASID, and steals this "x" while TLB entries already exist.
+     * To avoid this, we don't allow a ASID allocated in prev cycle to be used
+     * past a roll-over.
+     *
+     * Both the non-alloc scenario and first-use-after-rollover can be
+     * detected using the single condition below - since NO_ASID = 256
+     * while asid_cache is always a valid asid value (0-255).
+     */
     if (next->context.asid > asid_cache) {
-        get_new_mmu_context(next, 0);
+        get_new_mmu_context(next);
     } else {
-        BUG_ON(next->context.asid > MAX_ASID);
+        // XXX: This will never happen given the chks above
+        // BUG_ON(next->context.asid > MAX_ASID);
         write_new_aux_reg(ARC_REG_PID, next->context.asid|MMU_ENABLE);
     }
 
@@ -164,12 +170,23 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 
 static inline void destroy_context(struct mm_struct *mm)
 {
-    int asid = mm->context.asid;
+    unsigned long flags;
 
-    asid_mm_map[asid] = NULL;
+    local_irq_save(flags);
+
+    asid_mm_map[mm->context.asid] = NULL;
     mm->context.asid = NO_ASID;
+
+    local_irq_restore(flags);
 }
 
+/* it seemed that deactivate_mm( ) is a reasonable place to do book-keeping
+ * for retiring-mm. However destroy_context( ) still needs to do that because
+ * between mm_release( ) = >deactive_mm( ) and
+ * mmput => .. => __mmdrop( ) => destroy_context( )
+ * there is a good chance that task gets sched-out/in, making it's asid valid
+ * again (this teased me for a whole day).
+ */
 #define deactivate_mm(tsk,mm)   do { } while (0)
 
 static inline void
@@ -178,7 +195,7 @@ activate_mm (struct mm_struct *prev, struct mm_struct *next)
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
 
     /* Unconditionally get a new ASID */
-    get_new_mmu_context(next, 0);
+    get_new_mmu_context(next);
 
 #ifdef CONFIG_ARC_MMU_SASID
     BUG_ON((is_any_mmapcode_task_subscribed(next)));
