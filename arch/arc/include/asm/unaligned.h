@@ -15,8 +15,13 @@
 /* ARC700 can't handle unaligned accesses. */
 
 #include <linux/string.h>
+#if defined(__LITTLE_ENDIAN__)
 #include <linux/unaligned/le_struct.h>
 #include <linux/unaligned/be_byteshift.h>
+#else
+#include <linux/unaligned/be_struct.h>
+#include <linux/unaligned/le_byteshift.h>
+#endif
 
 /* Use memmove here, so gcc does not insert a __builtin_memcpy. */
 
