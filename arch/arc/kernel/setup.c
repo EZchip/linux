@@ -126,6 +126,7 @@ int __init read_arc_build_cfg_regs(void)
 {
     int cpu = smp_processor_id();
     struct cpuinfo_arc *p_cpu = &cpuinfo_arc700[cpu];
+    FIX_PTR(p_cpu);
 
     READ_BCR(AUX_IDENTITY, p_cpu->core);
 
@@ -187,16 +188,16 @@ int __init read_arc_build_cfg_regs(void)
     return cpu;
 }
 
+static const cpuinfo_data_t cpu_fam_nm [] = {
+	{ 0x10, "ARCTangent A5", 0x1F },
+    { 0x20, "ARC 600", 0x2F },
+    { 0x30, "ARC 700", 0x33 },
+    { 0x34, "ARC 700 R4.10", 0x34 },
+    { 0x0, NULL }
+};
 
 char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
 {
-    cpuinfo_data_t cpu_fam_nm [] = {
-        { 0x10, "ARCTangent A5", 0x1F },
-        { 0x20, "ARC 600", 0x2F },
-        { 0x30, "ARC 700", 0x33 },
-        { 0x34, "ARC 700 R4.10", 0x34 },
-        { 0x0, NULL }
-    };
     int i, num=0;
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
     FIX_PTR(p_cpu);
@@ -236,23 +237,24 @@ char * arc_cpu_mumbojumbo(int cpu_id, char *buf)
     return buf;
 }
 
+static const cpuinfo_data_t mul_type_nm [] = {
+	{ 0x0, "Not Present" },
+    { 0x1, "32x32 with SPECIAL Result Reg" },
+    { 0x2, "32x32 with ANY Result Reg" }
+};
+
+static const cpuinfo_data_t mac_mul_nm[] = {
+    { 0x0, "Not Present" },
+    { 0x1, "Not Present" },
+    { 0x2, "Dual 16 x 16" },
+    { 0x3, "Not Present" },
+    { 0x4, "32 x 16" },
+    { 0x5, "Not Present" },
+    { 0x6, "Dual 16 x 16 and 32 x 16" }
+};
+
 char * arc_extn_mumbojumbo(int cpu_id, char *buf)
 {
-    const cpuinfo_data_t mul_type_nm [] = {
-        { 0x0, "Not Present" },
-        { 0x1, "32x32 with SPECIAL Result Reg" },
-        { 0x2, "32x32 with ANY Result Reg" }
-    };
-
-    const cpuinfo_data_t mac_mul_nm[] = {
-        { 0x0, "Not Present" },
-        { 0x1, "Not Present" },
-        { 0x2, "Dual 16 x 16" },
-        { 0x3, "Not Present" },
-        { 0x4, "32 x 16" },
-        { 0x5, "Not Present" },
-        { 0x6, "Dual 16 x 16 and 32 x 16" }
-    };
 
     int num=0;
     struct cpuinfo_arc *p_cpu = & cpuinfo_arc700[cpu_id];
