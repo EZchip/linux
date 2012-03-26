@@ -14,13 +14,7 @@
 #include <asm/hardirq.h>
 #include <asm/thread_info.h>
 #include <asm/page.h>
-
-/* Use marker if you need to separate the values later */
-
-#define DEFINE(sym, val) \
-        asm volatile("\n->" #sym " %0 " #val : : "i" (val))
-
-#define BLANK() asm volatile("\n->" : : )
+#include <linux/kbuild.h>
 
 int main(void)
 {

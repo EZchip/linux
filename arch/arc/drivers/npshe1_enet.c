@@ -356,7 +356,7 @@ static irqreturn_t ez_net_tx_irq(int irq, void *dev_id)
      * This is because we don't want to get TX end interrupt
      * until we send a frame ( TX_CTL CT must be 0  )
      */
-    disable_irq(IRQ_LAN_TX_LINE);
+	disable_irq_nosync(IRQ_LAN_TX_LINE);
 
 	if (unlikely(!netdev || netPriv->status == EZ_NET_DEV_OFF))
         return IRQ_NONE;
@@ -493,7 +493,7 @@ static int __init npshe1_enet_init_module(void)
 {
 	int rc;
 
-	printk_init(KERN_INFO "%s\n", version);
+	printk_init(KERN_INFO "%s", version);
 	rc = platform_driver_register(&npshe1_lan_driver);
 	if ( rc ) {
 		printk( KERN_ERR "%s: Can not register device\n",__FUNCTION__ );

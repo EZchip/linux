@@ -39,17 +39,28 @@
 
 //#define ARC_IRQ_DBG
 
-/* table for system interrupt handlers */
-
-static struct irqaction *irq_list[NR_IRQS];
-static int irq_depth[NR_IRQS];
-
-/* IRQ status spinlock - enable, disable */
-static spinlock_t irq_controller_lock;
-
 extern void smp_ipi_init(void);
 
-void __init arc_irq_init(void)
+
+static void arc_mask_interrupt(unsigned int irqnr)
+{
+	mask_interrupt(1 << irqnr);
+}
+
+static void arc_unmask_interrupt(unsigned int irqnr)
+{
+	unmask_interrupt(1 << irqnr);
+}
+
+static struct irq_chip arc_chip = {
+	.name	= "ARC",
+	.ack	= arc_mask_interrupt,
+	.mask	= arc_mask_interrupt,
+	.unmask = arc_unmask_interrupt,
+	.disable	= arc_mask_interrupt,
+};
+
+static void __init arc_irq_init(void)
 {
     extern int _int_vec_base_lds;
 
@@ -91,147 +102,43 @@ void __init arc_irq_init(void)
 
 }
 
-/* initialise the irq table */
 void __init init_IRQ(void)
 {
-    int i;
+	int i;
 
-    for (i = 0; i < NR_IRQS; i++) {
-        irq_list[i] = NULL;
-    }
+	for (i = 0; i < NR_IRQS; i++) {
+		set_irq_noprobe(i);
+	}
+
+	for (i = 0; i < NR_LEVEL_IRQ ;i++) {
+		set_irq_chip_and_handler(i, &arc_chip, handle_level_irq);
+	}
+
+    arc_irq_init();
 
 #ifdef CONFIG_SMP
-    smp_ipi_init();
+	smp_ipi_init();
 #endif
 }
 
-/* setup_irq:
- * Typically used by architecure special interrupts for
- * registering handler to IRQ line
- */
-
-int setup_irq(unsigned int irq, struct irqaction *node)
-{
-    unsigned long flags;
-    struct irqaction **curr;
-
-    printk("---IRQ Request (%d) ISR ", irq);
-    __print_symbol("%s\n",(unsigned long) node->handler);
-
-    spin_lock_irqsave(&irq_controller_lock, flags); /* insert atomically */
-
-    /* IRQ might be shared, thus we need a link list per IRQ for all ISRs
-     * Adds to tail of list
-     */
-    curr = &irq_list[irq];
-
-    while (*curr) {
-        curr = &((*curr)->next);
-    }
-
-    *curr = node;
-
-    /* If this IRQ slot is enabled for first time (shared IRQ),
-     * enable vector on CPU side
-     */
-    if (irq_list[irq] == node) {
-        unmask_interrupt((1<<irq)); // AUX_IEMABLE
-    }
-
-    spin_unlock_irqrestore(&irq_controller_lock, flags);
-    return 0;
-}
-
-/* request_irq:
- * Exported to device drivers / modules to assign handler to IRQ line
- */
-int request_irq(unsigned int irq,
-        irqreturn_t (*handler)(int, void *),
-        unsigned long flags, const char *name, void *dev_id)
-{
-    struct irqaction *node;
-    int retval;
-
-    if (irq >= NR_IRQS) {
-        printk("%s: Unknown IRQ %d\n", __FUNCTION__, irq);
-        return -ENXIO;
-    }
-
-    node = (struct irqaction *)kmalloc(sizeof(struct irqaction), GFP_KERNEL);
-    if (!node)
-        return -ENOMEM;
-
-    node->handler = handler;
-    node->flags = flags;
-    node->dev_id = dev_id;
-    node->name = name;
-    node->next = NULL;
-
-    /* insert the new irq registered into the irq list */
-
-    retval = setup_irq(irq, node);
-    if (retval)
-        kfree(node);
-    return retval;
-}
-EXPORT_SYMBOL(request_irq);
-
-/* free an irq node for the irq list */
-
-void free_irq(unsigned int irq, void *dev_id)
-{
-    unsigned long flags;
-    struct irqaction *tmp = NULL, **node;
-
-    if (irq >= NR_IRQS) {
-        printk("%s: Unknown IRQ %d\n", __FUNCTION__, irq);
-        return;
-    }
-
-    spin_lock_irqsave(&irq_controller_lock, flags); /* delete atomically */
-
-    node = &irq_list[irq];
-
-    while (*node) {
-        if ((*node)->dev_id == dev_id) {
-            tmp = *node;
-            (*node) = (*node)->next;
-            kfree(tmp);
-        }
-        else {
-            node = &((*node)->next);
-        }
-    }
-
-    spin_unlock_irqrestore(&irq_controller_lock, flags);
-
-    if (!tmp)
-        printk("%s: tried to remove invalid interrupt", __FUNCTION__);
-
-}
-EXPORT_SYMBOL(free_irq);
-
 /* handle the irq */
-void process_interrupt(unsigned int irq, struct pt_regs *fp)
+void do_IRQ(unsigned int irq, struct pt_regs *fp)
 {
     struct pt_regs *old = set_irq_regs(fp);
-    struct irqaction *node;
 
     irq_enter();
 
-    /* call all the ISR's in the list for that interrupt source */
-    node = irq_list[irq];
-    while (node) {
-        kstat_cpu(smp_processor_id()).irqs[irq]++;
-        node->handler(irq, node->dev_id);
-        node = node->next;
-    }
-
-#ifdef  ARC_IRQ_DBG
-    if (!irq_list[irq])
-        printk(KERN_ERR "Spurious interrupt : irq no %u on cpu %u", irq,
-                    smp_processor_id());
-#endif
+	/*
+	 * Some hardware gives randomly wrong interrupts.  Rather
+	 * than crashing, do something sensible.
+	 */
+	if (unlikely(irq >= NR_IRQS)) {
+		if (printk_ratelimit())
+			printk(KERN_WARNING "Bad IRQ%u\n", irq);
+		ack_bad_irq(irq);
+	} else {
+		generic_handle_irq(irq);
+	}
 
     irq_exit();
 
@@ -239,115 +146,44 @@ void process_interrupt(unsigned int irq, struct pt_regs *fp)
     return;
 }
 
-/* IRQ Autodetect not required for ARC
- * However the stubs still need to be exported for IDE et all
- */
-unsigned long probe_irq_on(void)
-{
-    return 0;
-}
-EXPORT_SYMBOL(probe_irq_on);
-
-int probe_irq_off(unsigned long irqs)
-{
-    return 0;
-}
-EXPORT_SYMBOL(probe_irq_off);
-
-/* FIXME: implement if necessary */
-void init_irq_proc(void)
-{
-    // for implementing /proc/irq/xxx
-}
-
 int show_interrupts(struct seq_file *p, void *v)
 {
-   int i = *(loff_t *) v, j;
+	int i = *(loff_t *) v, cpu;
+	struct irqaction * action;
+	unsigned long flags;
 
-    if(i == 0)          // First line, first CPU
-    {
-        seq_printf(p,"\t");
-        for_each_online_cpu(j)
-            seq_printf(p,"CPU%-8d",j);
-        seq_putc(p,'\n');
-    }
+	if (i == 0) {
+		char cpuname[12];
 
-    if (i < NR_IRQS)
-    {
-        if(irq_list[i] != NULL)
-        {
-            seq_printf(p,"%u:\t",i);
-            if(strlen(irq_list[i]->name) < 8)
-                for_each_online_cpu(j)
-                    seq_printf(p,"%s\t\t\t%u\n", irq_list[i]->name,kstat_cpu(j).irqs[i]);
+		seq_printf(p, "    ");
+		for_each_present_cpu(cpu) {
+			sprintf(cpuname, "CPU%d", cpu);
+			seq_printf(p, " %10s", cpuname);
+		}
+		seq_putc(p, '\n');
+	}
 
-            else
-                for_each_online_cpu(j)
-                    seq_printf(p,"%s\t\t%u\n", irq_list[i]->name,kstat_cpu(j).irqs[i]);
-        }
-    }
+	if (i < NR_IRQS) {
+		raw_spin_lock_irqsave(&irq_desc[i].lock, flags);
+		action = irq_desc[i].action;
+		if (!action)
+			goto unlock;
 
+		seq_printf(p, "%3d: ", i);
+		for_each_present_cpu(cpu)
+			seq_printf(p, "%10u ", kstat_irqs_cpu(i, cpu));
+		seq_printf(p, " %10s", irq_desc[i].chip->name ? : "-");
+		seq_printf(p, "  %s", action->name);
+		for (action = action->next; action; action = action->next)
+			seq_printf(p, ", %s", action->name);
 
-    return 0;
+		seq_putc(p, '\n');
+unlock:
+		raw_spin_unlock_irqrestore(&irq_desc[i].lock, flags);
+	}
+	return 0;
 
 }
-/**
- *      disable_irq - disable an irq and wait for completion
- *      @irq: Interrupt to disable
- *
- *      Disable the selected interrupt line.  We do this lazily.
- *
- *      This function may be called from IRQ context.
- */
-void disable_irq(unsigned int irq)
-{
-    unsigned long flags;
-
-    if (irq < NR_IRQS && irq_list[irq]) {
-        spin_lock_irqsave(&irq_controller_lock, flags);
-        if (!irq_depth[irq]++) {
-            mask_interrupt(1<<irq);
-        }
-        spin_unlock_irqrestore(&irq_controller_lock, flags);
-    }
-    else {
-        // printk("Incorrect IRQ action %d %s\n",irq, __FUNCTION__);
-    }
-}
-
-EXPORT_SYMBOL(disable_irq);
-/**
- *      enable_irq - enable interrupt handling on an irq
- *      @irq: Interrupt to enable
- *
- *      Re-enables the processing of interrupts on this IRQ line.
- *      Note that this may call the interrupt handler, so you may
- *      get unexpected results if you hold IRQs disabled.
- *
- *      This function may be called from IRQ context.
- */
-void enable_irq(unsigned int irq)
-{
-    unsigned long flags;
-
-    if (irq < NR_IRQS && irq_list[irq]) {
-        spin_lock_irqsave(&irq_controller_lock, flags);
-        if (irq_depth[irq]) {
-            if (!--irq_depth[irq]) {
-                unmask_interrupt(1<<irq);
-            }
-        }
-        else {
-            printk("Unbalanced IRQ action %d %s\n", irq, __FUNCTION__);
-        }
-        spin_unlock_irqrestore(&irq_controller_lock, flags);
-    }
-    else {
-        // printk("Incorrect IRQ action %d %s\n",irq, __FUNCTION__);
-    }
-}
-
-EXPORT_SYMBOL(enable_irq);
 
 #ifdef CONFIG_SMP
 

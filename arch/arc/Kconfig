@@ -115,6 +115,13 @@ config BINFMT_ELF
         bool
         default y
 
+config GENERIC_HARDIRQS
+	bool
+	default y
+
+config GENERIC_HARDIRQS_NO__DO_IRQ
+	def_bool y
+
 config STACKTRACE_SUPPORT
 	def_bool y
     select STACKTRACE
