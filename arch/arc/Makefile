@@ -36,7 +36,6 @@ KBUILD_CFLAGS		+= -DNONINLINE_USR_CPY -DNONINLINE_MEMSET
 # Generic build system uses -O2, we want -O3
 else
 KBUILD_CFLAGS  += -O3
-else
 endif
 
 # small data is default for elf32 tool-chain. If not usable, disable it

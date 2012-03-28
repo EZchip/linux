@@ -122,5 +122,13 @@ strnlen_user(const char *s, long n)
     return __strnlen_user_inline(s, n);
 }
 
+EXPORT_SYMBOL(copy_from_user);
+EXPORT_SYMBOL(__copy_from_user);
+EXPORT_SYMBOL(copy_to_user);
+EXPORT_SYMBOL(__copy_to_user);
+EXPORT_SYMBOL(clear_user);
+EXPORT_SYMBOL(__clear_user);
+EXPORT_SYMBOL(strncpy_from_user);
+EXPORT_SYMBOL(strnlen_user);
 
 #endif
