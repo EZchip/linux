@@ -184,6 +184,7 @@ xtemac_emac_intr(int irq, void *dev_instance)
         arc_write_uncached_32(&xtemac->bridgeExtn.intrEnableReg,ENABLE_ALL_INTR & (~ENABLE_RX_OVERRUN_INTR));
 
         priv->stats.rx_packets++;
+        priv->stats.rx_bytes += priv->rx_len;
         flush_and_inv_dcache_range(priv->rx_buff, priv->rx_buff +priv->rx_len);
 // was in
 
@@ -394,6 +395,7 @@ xtemac_tx(struct sk_buff * skb, struct net_device * dev)
     arc_write_uncached_32(&xtemac->bridge.dmaTxAddrReg , priv->tx_buff);
     arc_write_uncached_32(&xtemac->bridge.dmaTxCmdReg , (skb->len <<8 | DMA_WRITE_COMMAND | DMA_START_OF_PACKET | DMA_END_OF_PACKET));
     priv->stats.tx_packets++;
+    priv->stats.tx_bytes += skb->len;
 
     priv->tx_skb = skb;
     dev_kfree_skb(priv->tx_skb);
