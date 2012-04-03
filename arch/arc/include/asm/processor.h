@@ -89,7 +89,7 @@ unsigned long thread_saved_pc(struct task_struct *t);
 /* Prepare to copy thread state - unlazy all lazy status */
 #define prepare_to_copy(tsk)    do { } while (0)
 
-#define cpu_relax()    do { } while (0)
+#define cpu_relax()    barrier()
 
 /*
  * Create a new kernel thread

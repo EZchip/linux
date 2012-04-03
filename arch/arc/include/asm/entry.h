@@ -348,6 +348,21 @@
     and \reg, sp, ~(THREAD_SIZE - 1)
 .endm
 
+#ifdef CONFIG_SMP
+#define EX_SCRATCH_REG ilink2
+.macro GET_EX_SCRATCH_ADDR reg
+	mov   EX_SCRATCH_REG, \reg
+	lr    \reg, [identity]
+  	and   \reg, \reg, 0xFF00	; CPU ID is at bits 8-15
+    lsr   \reg, \reg, 3			; Each CPU got 16 bytes for r0-r3 and is cache aligned
+    add	  \reg, \reg, ex_saved_reg1
+.endm
+
+.macro PUT_EX_SCRATCH_ADDR reg
+	mov   \reg, EX_SCRATCH_REG
+.endm
+#endif
+
 /*--------------------------------------------------------------
  * Save all registers used by Exceptions (TLB Miss, Prot-V, Mem err etc)
  * Requires SP to be already switched to kernel mode Stack
@@ -362,7 +377,13 @@
     /* restore original r9 , saved in ex_saved_reg1
      * It will be saved on stack in macro: SAVE_CALLER_SAVED
      */
+#ifdef CONFIG_SMP
+	GET_EX_SCRATCH_ADDR r1
+    ld  r9, [r1]
+   	PUT_EX_SCRATCH_ADDR r1
+#else
     ld  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
 
     /* now we are ready to save the remaining context */
     st.a    \marker, [sp, -4]	/* orig_r8:

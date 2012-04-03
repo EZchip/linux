@@ -97,7 +97,8 @@ static void (* ___flush_icache_rtn)(unsigned long, int);
 char * arc_cache_mumbojumbo(int cpu_id, char *buf)
 {
     int num = 0;
-    struct cpuinfo_arc_cache *p_cache = &cpuinfo_arc700[0].icache;
+    unsigned int cpu = smp_processor_id();
+    struct cpuinfo_arc_cache *p_cache = &cpuinfo_arc700[cpu].icache;
 
     num += sprintf(buf+num,"Detected I-cache : \n");
     num += sprintf(buf+num,"  Type=%d way set-assoc, Line length=%u, Size=%uK",
@@ -109,7 +110,7 @@ char * arc_cache_mumbojumbo(int cpu_id, char *buf)
     num += sprintf(buf+num," (disabled)\n");
 #endif
 
-    p_cache = &cpuinfo_arc700[0].dcache;
+    p_cache = &cpuinfo_arc700[cpu].dcache;
     num += sprintf(buf+num,"Detected D-cache : \n");
     num += sprintf(buf+num,"  Type=%d way set-assoc, Line length=%u, Size=%uK",
             p_cache->assoc, p_cache->line_len, TO_KB(p_cache->sz));
@@ -129,12 +130,13 @@ char * arc_cache_mumbojumbo(int cpu_id, char *buf)
  */
 void __init read_decode_cache_bcr(void)
 {
+    unsigned int cpu = smp_processor_id();
 
 #ifdef CONFIG_ARC700_USE_ICACHE
     {
         struct bcr_cache ibcr;
 
-        struct cpuinfo_arc_cache *p_ic = &cpuinfo_arc700[0].icache;
+        struct cpuinfo_arc_cache *p_ic = &cpuinfo_arc700[cpu].icache;
         READ_BCR(ARC_REG_I_CACHE_BUILD_REG, ibcr);
 
         if (ibcr.config == 0x3)
@@ -150,7 +152,7 @@ void __init read_decode_cache_bcr(void)
     {
         struct bcr_cache dbcr;
 
-        struct cpuinfo_arc_cache *p_dc = &cpuinfo_arc700[0].dcache;
+        struct cpuinfo_arc_cache *p_dc = &cpuinfo_arc700[cpu].dcache;
         READ_BCR(ARC_REG_D_CACHE_BUILD_REG, dbcr);
 
         if (dbcr.config == 0x2)
@@ -173,7 +175,10 @@ void __init arc_cache_init(void)
 {
     struct cpuinfo_arc_cache *dc, *ic;
     unsigned int temp;
+    unsigned int cpu = smp_processor_id();
+#ifdef CONFIG_ARC700_USE_ICACHE
     int way_pg_ratio;
+#endif
     char str[512];
 
     printk(arc_cache_mumbojumbo(0, str));
@@ -184,7 +189,7 @@ void __init arc_cache_init(void)
      * I-Cache related init
      **********************************************/
 
-    ic = &cpuinfo_arc700[0].icache;
+    ic = &cpuinfo_arc700[cpu].icache;
 
 #ifdef CONFIG_ARC700_USE_ICACHE
     /* 1. Confirm some of I-cache params which Linux assumes */
@@ -246,7 +251,7 @@ void __init arc_cache_init(void)
      * D-Cache related init
      **********************************************/
 
-    dc = &cpuinfo_arc700[0].dcache;
+    dc = &cpuinfo_arc700[cpu].dcache;
 
 #ifdef CONFIG_ARC700_USE_DCACHE
     if ( ( dc->assoc != DCACHE_COMPILE_WAY_NUM) ||

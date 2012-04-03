@@ -56,8 +56,10 @@
 #ifdef CONFIG_ARC700_CACHE
 
 #ifdef CONFIG_SMP
+#ifdef CONFIG_ARC700_USE_DCACHE
 #error "Caching not yet supported in SMP"
 #error "remove CONFIG_ARC700_USE_ICACHE and CONFIG_ARC700_USE_DCACHE"
+#endif
 #endif
 
 

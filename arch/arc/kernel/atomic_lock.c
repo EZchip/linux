@@ -8,4 +8,4 @@
 
 #include <linux/spinlock_types.h>
 
-DEFINE_SPINLOCK(smp_atomic_ops_lock);
+arch_spinlock_t smp_atomic_ops_lock = __ARCH_SPIN_LOCK_UNLOCKED;

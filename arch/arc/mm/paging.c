@@ -78,18 +78,22 @@ void pgd_init(unsigned long page)
 
 void clear_user_page(void *addr, unsigned long vaddr, struct page *page)
 {
+    unsigned int cpu = smp_processor_id();
+
     clear_page(addr);
 
-    if (cpuinfo_arc700[0].dcache.has_aliasing)
+    if (cpuinfo_arc700[cpu].dcache.has_aliasing)
         flush_dcache_page_virt((unsigned long *)page);
 
 }
 
 void copy_user_page(void *vto, void *vfrom, unsigned long vaddr, struct page *to)
 {
+    unsigned int cpu = smp_processor_id();
+
     copy_page(vto,vfrom);
 
-    if (cpuinfo_arc700[0].dcache.has_aliasing)
+    if (cpuinfo_arc700[cpu].dcache.has_aliasing)
         flush_dcache_page_virt((unsigned long*)vto);
 }
 

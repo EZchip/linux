@@ -111,6 +111,7 @@ SECTIONS
 
     }
 
+	PERCPU(PAGE_SIZE)
     . = ALIGN(PAGE_SIZE);
     _init_end = .;
 

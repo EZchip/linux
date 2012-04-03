@@ -27,35 +27,28 @@
 #include <asm/atomic.h>
 #include <asm/processor.h>
 #include <asm/percpu.h>
+#ifdef CONFIG_ARCH_ARC800
 #include <asm/idu.h>
+#endif
 #include <asm/mmu_context.h>
 #include <linux/delay.h>
 
 extern int _int_vec_base_lds;
 extern struct task_struct *_current_task[NR_CPUS];
 
-extern void wakeup_secondary(void);
+extern void wakeup_secondary(int);
 extern void first_lines_of_secondary(void);
-void smp_ipi_init(void);
-extern void board_setup_timer(void);
+extern void arc_clockevent_init(void);
 extern void setup_processor(void);
-
-/*
- * bitmask of present and online CPUs.
- * The present bitmask indicates that the CPU is physically present.
- * The online bitmask indicates that the CPU is up and running.
- */
-cpumask_t cpu_possible_map;
-EXPORT_SYMBOL(cpu_possible_map);
-cpumask_t cpu_online_map;
-EXPORT_SYMBOL(cpu_online_map);
-
+extern void arc_irq_init(void);
 secondary_boot_t secondary_boot_data;
 
 /* Called from start_kernel */
 void __init smp_prepare_boot_cpu(void)
 {
+    void **c_entry = (void **)CPU_SEC_ENTRY_POINT;
 
+    *c_entry = first_lines_of_secondary;
 }
 
 /*
@@ -113,8 +106,6 @@ asmlinkage void __cpuinit start_kernel_secondary(void)
     // TODO-vineetg: need to implement this call
     //enter_lazy_tlb(mm, current);
 
-    cpu_set(cpu, cpu_online_map);
-
     /* vineetg Nov 19th 2007:
         For this printk to work in ISS, a bridge.dll instance in the
         uart address space is needed so that uart access by non-owner
@@ -123,9 +114,12 @@ asmlinkage void __cpuinit start_kernel_secondary(void)
 
     printk(KERN_INFO "## CPU%u LIVE ##: Executing Code...\n", cpu);
 
-    board_setup_timer();
+    arc_irq_init();
 
-    smp_ipi_init();
+	calibrate_delay();
+    cpuinfo_arc700[cpu].lpj = loops_per_jiffy;
+
+    arc_clockevent_init();
 
     /* Enable the interrupts on the local cpu */
     local_irq_enable();
@@ -135,6 +129,7 @@ asmlinkage void __cpuinit start_kernel_secondary(void)
        But most of then time, idle is running, preemption is disabled
      */
     preempt_disable();
+    cpu_set(cpu, cpu_online_map);
     cpu_idle();
 }
 
@@ -167,7 +162,7 @@ int __cpuinit __cpu_up(unsigned int cpu)
 
     printk(KERN_INFO "Trying to bring up CPU%u ...\n", cpu);
 
-    wakeup_secondary();
+    wakeup_secondary(cpu);
 
     /* vineetg, Dec 11th 2007, Boot waits for 2nd to come-up
        Wait for 1 sec for 2nd CPU to comeup and then chk it's online bit
@@ -175,8 +170,7 @@ int __cpuinit __cpu_up(unsigned int cpu)
        jiffies + HZ => wait for 1 sec
      */
 
-    // TODO-vineetg: workaround for 3.4 bug, replace the 3 with HZ later
-    wait_till = jiffies + 3; //HZ;
+    wait_till = jiffies + HZ;
     while ( time_before(jiffies, wait_till)) {
         if (cpu_online(cpu))
             break;
@@ -216,6 +210,7 @@ int __init setup_profiling_timer(unsigned int multiplier)
 enum ipi_msg_type {
     IPI_RESCHEDULE,
     IPI_CALL_FUNC,
+	IPI_CALL_FUNC_SINGLE,
     IPI_CPU_STOP,
 };
 
@@ -239,18 +234,17 @@ struct smp_call_struct {
 };
 
 static struct smp_call_struct* volatile smp_call_function_data;
-static DEFINE_SPINLOCK(smp_call_function_lock);
 
-
-
-static void send_ipi_message(cpumask_t callmap, enum ipi_msg_type msg)
+static void send_ipi_message(const struct cpumask *mask, enum ipi_msg_type msg)
 {
     unsigned long flags;
     unsigned int cpu;
+    unsigned int k;
+    unsigned int this_cpu = smp_processor_id();
 
     local_irq_save(flags);
 
-    for_each_cpu_mask(cpu, callmap) {
+    for_each_cpu(cpu, mask) {
         struct ipi_data *ipi = &per_cpu(ipi_data, cpu);
 
         spin_lock(&ipi->lock);
@@ -262,16 +256,32 @@ static void send_ipi_message(cpumask_t callmap, enum ipi_msg_type msg)
      * Call the platform specific cross-CPU call function.
      */
 
-    for_each_cpu_mask(cpu, callmap)
+    for_each_cpu(cpu, mask) {
+#ifdef CONFIG_ARCH_ARC800
         idu_irq_assert(cpu);
+#else
+        k = 1 << cpu;
+        (* ( (volatile int*)(REGS_CPU_IPI(this_cpu))))=k;
+        (* ( (volatile int*)(REGS_CPU_IPI(this_cpu))))=0;
+#endif
+    }
 
     local_irq_restore(flags);
 }
 
+void arch_send_call_function_ipi_mask(const struct cpumask *mask)
+{
+	send_ipi_message(mask, IPI_CALL_FUNC);
+}
+
+void arch_send_call_function_single_ipi(int cpu)
+{
+	send_ipi_message(cpumask_of(cpu), IPI_CALL_FUNC_SINGLE);
+}
 
 void smp_send_reschedule(int cpu)
 {
-    send_ipi_message(cpumask_of_cpu(cpu), IPI_RESCHEDULE);
+    send_ipi_message(cpumask_of(cpu), IPI_RESCHEDULE);
 }
 
 
@@ -279,89 +289,7 @@ void smp_send_stop(void)
 {
     cpumask_t mask = cpu_online_map;
     cpu_clear(smp_processor_id(), mask);
-    send_ipi_message(mask, IPI_CPU_STOP);
-}
-
-/**
- * smp_call_function(): Run a function on all other CPUs.
- * @func: The function to run. This must be fast and non-blocking.
- * @info: An arbitrary pointer to pass to the function.
- * @nonatomic: currently unused.
- * @wait: If true, wait (atomically) until function has completed on other CPUs.
- *
- * Returns 0 on success, else a negative status code. Does not return until
- * remote CPUs are nearly ready to execute <<func>> or are or have executed.
- *
- * You must not call this function with disabled interrupts or from a
- * hardware interrupt handler or from a bottom half handler.
- */
-int smp_call_function (void (*func) (void *info), void *info, int nonatomic,
-            int wait)
-{
-    struct smp_call_struct data;
-    cpumask_t callmap = cpu_online_map;
-    int ret = 0;
-
-    data.func = func;
-    data.info = info;
-    data.wait = wait;
-
-    cpu_clear(smp_processor_id(), callmap);
-    if (cpus_empty(callmap))
-        goto out;
-
-    data.pending = callmap;
-    if (wait)
-        data.unfinished = callmap;
-
-    /*
-     * try to get the mutex on smp_call_function_data
-     */
-    spin_lock(&smp_call_function_lock);
-    smp_call_function_data = &data;
-
-    send_ipi_message(callmap, IPI_CALL_FUNC);
-
-    /* Wait for response */
-    while (!cpus_empty(data.pending))
-        barrier();
-
-    // TODO_rajesh Incase of arm, it times out,
-    // should we have to timeout? timeout value?
-
-    if (wait)
-        while (!cpus_empty(data.unfinished))
-            barrier();
-
-    smp_call_function_data = NULL;
-    spin_unlock(&smp_call_function_lock);
-
-out:
-    return ret;
-}
-
-
-
-/*
- * ipi_call_function - handle IPI from smp_call_function()
- *
- * We copy data out of the cross-call structure and then
- * let the caller know that we are here and done with their data
- *
- */
-static void ipi_call_function (unsigned int cpu)
-{
-    struct smp_call_struct *data = smp_call_function_data;
-    void (*func)(void *info) = data->func;
-    void *info = data->info;
-    int wait = data->wait;
-
-    cpu_clear(cpu, data->pending);
-
-    func(info);
-
-    if (wait)
-        cpu_clear (cpu, data->unfinished);
+    send_ipi_message(&mask, IPI_CPU_STOP);
 }
 
 /*
@@ -378,14 +306,18 @@ static void ipi_cpu_stop(unsigned int cpu)
  *
  */
 
-irqreturn_t do_IPI (int irq, void *dev_id, struct pt_regs *regs)
+irqreturn_t do_IPI (int irq, void *dev_id)
 {
     unsigned int cpu = smp_processor_id();
     struct ipi_data *ipi = &per_cpu(ipi_data, cpu);
 
     ipi->ipi_count++;
 
+#ifdef CONFIG_ARCH_ARC800
     idu_irq_clear((IDU_INTERRUPT_0 + cpu));
+#else
+    write_new_aux_reg(AUX_IPULSE, (1 << irq));
+#endif
 
     for(;;) {
         unsigned long msgs;
@@ -398,6 +330,7 @@ irqreturn_t do_IPI (int irq, void *dev_id, struct pt_regs *regs)
         if (!msgs)
             break;
 
+
         do {
             unsigned long nextmsg;
             nextmsg = msgs & -msgs;
@@ -406,27 +339,31 @@ irqreturn_t do_IPI (int irq, void *dev_id, struct pt_regs *regs)
 
             nextmsg = ffz(~nextmsg);
 
-            switch (nextmsg) {
-                case IPI_RESCHEDULE:
+			switch (nextmsg) {
+			case IPI_RESCHEDULE:
+				/*
+				 * nothing more to do - eveything is
+				 * done on the interrupt return path
+				 */
+				break;
 
-                    /* Do nothing, on return from interrupt, resched flag
-                       will be checked anyways
-                     */
-                    break;
+			case IPI_CALL_FUNC:
+				generic_smp_call_function_interrupt();
+				break;
 
-                case IPI_CALL_FUNC:
-                    ipi_call_function (cpu);
-                    break;
+			case IPI_CALL_FUNC_SINGLE:
+				generic_smp_call_function_single_interrupt();
+				break;
 
-                case IPI_CPU_STOP:
-                    ipi_cpu_stop (cpu);
-                    break;
+			case IPI_CPU_STOP:
+				ipi_cpu_stop(cpu);
+				break;
 
-                default:
-                    printk(KERN_CRIT"CPU%u: Unknown IPI message 0x%lx\n",
-                            cpu, nextmsg);
-                    break;
-            }
+			default:
+				printk(KERN_CRIT "CPU%u: Unknown IPI message 0x%lx\n",
+				       cpu, nextmsg);
+				break;
+			}
         } while (msgs);
     }
 
@@ -434,10 +371,10 @@ irqreturn_t do_IPI (int irq, void *dev_id, struct pt_regs *regs)
 }
 
 
-static struct irq_node ipi_intr[NR_CPUS];
-
 void smp_ipi_init(void)
 {
+	int i;
+	unsigned int tmp;
     // Owner of the Idu Interrupt determines who is SELF
     int cpu = smp_processor_id();
 
@@ -447,7 +384,15 @@ void smp_ipi_init(void)
         BUG();
 
     // Setup the interrupt in IDU
+#ifdef CONFIG_ARCH_ARC800
     idu_disable();
+#else
+    for (i = 0; i < NR_CPUS; i++)
+    {
+        tmp = read_new_aux_reg(AUX_IENABLE);
+        write_new_aux_reg(AUX_IENABLE, tmp & ~(1 << (i+IPI_IRQS_BASE)));
+    }
+#endif
 
 #ifdef CONFIG_ARCH_ARC800
     idu_irq_set_tgtcpu(cpu, /* IDU IRQ assoc with CPU */
@@ -460,17 +405,17 @@ void smp_ipi_init(void)
 
 #endif
 
+#ifdef CONFIG_ARCH_ARC800
     idu_enable();
-
-    // Install the interrupts
-    ipi_intr[cpu].handler = do_IPI;
-    ipi_intr[cpu].flags = IRQ_FLG_LOCK;
-    ipi_intr[cpu].disable_depth = 0;
-    ipi_intr[cpu].dev_id = NULL;
-    ipi_intr[cpu].devname = "IPI Interrupt";
-    ipi_intr[cpu].next = NULL;
-
-    /* Setup ISR as well as enable IRQ on CPU */
-    setup_arc_irq((IDU_INTERRUPT_0 + cpu), &ipi_intr[cpu]);
+#else
+    for (i = 0; i < NR_CPUS; i++)
+    {
+		tmp = read_new_aux_reg(AUX_ITRIGGER);
+		tmp |= (1 << (i+IPI_IRQS_BASE));
+		write_new_aux_reg(AUX_ITRIGGER,tmp);
+    	tmp = read_new_aux_reg(AUX_IENABLE);
+        write_new_aux_reg(AUX_IENABLE, tmp | (1 << (i+IPI_IRQS_BASE)) );
+    }
+#endif
 }
 

@@ -147,7 +147,6 @@ struct mm_struct *asid_mm_map[NUM_ASID + 1];
 /* Needed to avoid Cache aliasing */
 unsigned int ARC_shmlba;
 
-static struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[0].mmu;
 
 
 /*=========================================================================
@@ -232,6 +231,8 @@ void noinline local_flush_tlb_all(void)
 {
     unsigned long flags;
     unsigned int entry;
+    unsigned int cpu = smp_processor_id();
+    struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[cpu].mmu;
 
     take_snap(SNAP_TLB_FLUSH_ALL, 0, 0);
 
@@ -490,8 +491,9 @@ void __init read_decode_mmu_bcr(void)
     struct bcr_mmu_1_2  *mmu2;      // encoded MMU2 attributes
     struct bcr_mmu_3    *mmu3;      // encoded MMU3 attributes
     struct cpuinfo_arc_mmu *mmu;    // simplified attributes
+    unsigned int cpu = smp_processor_id();
 
-    mmu = &cpuinfo_arc700[0].mmu;
+    mmu = &cpuinfo_arc700[cpu].mmu;
 
     tmp = read_new_aux_reg(ARC_REG_MMU_BCR);
     mmu->ver = (tmp >>24);
@@ -520,7 +522,8 @@ void __init read_decode_mmu_bcr(void)
 char * arc_mmu_mumbojumbo(int cpu_id, char *buf)
 {
     int num=0;
-    struct cpuinfo_arc_mmu *p_mmu = &cpuinfo_arc700[0].mmu;
+    unsigned int cpu = smp_processor_id();
+    struct cpuinfo_arc_mmu *p_mmu = &cpuinfo_arc700[cpu].mmu;
 
     num += sprintf(buf+num, "ARC700 MMU Ver [%x]",p_mmu->ver);
 #if (CONFIG_ARC_MMU_VER > 2)
@@ -545,6 +548,8 @@ void __init arc_mmu_init(void)
     int i;
     static int one_time_init;
     char str[512];
+    unsigned int cpu = smp_processor_id();
+    struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[cpu].mmu;
 
     printk(arc_mmu_mumbojumbo(0, str));
 
@@ -608,8 +613,9 @@ void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
     unsigned int tlbpd0[4], tlbpd1[4];  /* assume max 4 ways */
     unsigned int flags;
     struct cpuinfo_arc_mmu *mmu;
+    unsigned int cpu = smp_processor_id();
 
-    mmu = &cpuinfo_arc700[0].mmu;
+    mmu = &cpuinfo_arc700[cpu].mmu;
 
     local_irq_save(flags);
 

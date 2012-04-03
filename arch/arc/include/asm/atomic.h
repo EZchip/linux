@@ -20,13 +20,26 @@
 #ifdef CONFIG_SMP
 
 #include <linux/spinlock_types.h>
+#include <asm/spinlock.h>
 
-extern spinlock_t smp_atomic_ops_lock;
-extern unsigned long    _spin_lock_irqsave(spinlock_t *lock);
-extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
+extern arch_spinlock_t smp_atomic_ops_lock;
 
-#define atomic_ops_lock(flags)   flags = _spin_lock_irqsave(&smp_atomic_ops_lock)
-#define atomic_ops_unlock(flags) _spin_unlock_irqrestore(&smp_atomic_ops_lock, flags)
+/* Can't use raw_spin_lock_irq because of #include problems, so
+ * this is the substitute */
+#define _atomic_spin_lock_irqsave(l,f) do {	\
+	arch_spinlock_t *s = (&l);		\
+	local_irq_save(f);			\
+	arch_spin_lock(s);			\
+} while(0)
+
+#define _atomic_spin_unlock_irqrestore(l,f) do {	\
+	arch_spinlock_t *s = (&l);			\
+	arch_spin_unlock(s);				\
+	local_irq_restore(f);				\
+} while(0)
+
+#define atomic_ops_lock(flags)   _atomic_spin_lock_irqsave(smp_atomic_ops_lock, flags)
+#define atomic_ops_unlock(flags) _atomic_spin_unlock_irqrestore(smp_atomic_ops_lock, flags)
 
 static inline void atomic_set(atomic_t *v, int i)
 {

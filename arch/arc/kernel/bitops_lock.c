@@ -8,4 +8,4 @@
 
 #include <linux/spinlock_types.h>
 
-DEFINE_SPINLOCK(smp_bitops_lock);
+arch_spinlock_t smp_bitops_lock = __ARCH_SPIN_LOCK_UNLOCKED;

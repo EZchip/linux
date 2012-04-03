@@ -125,8 +125,10 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
                              struct task_struct *tsk)
 {
+#ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch
     /* PGD cached in MMU reg to avoid 3 mem lookups: task->mm->pgd */
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
+#endif
 
     /* Allocate a new ASID if task doesn't have a valid one.
      * This could happen if this task never had an asid (fresh after fork) or
@@ -192,7 +194,9 @@ static inline void destroy_context(struct mm_struct *mm)
 static inline void
 activate_mm (struct mm_struct *prev, struct mm_struct *next)
 {
+#ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
+#endif
 
     /* Unconditionally get a new ASID */
     get_new_mmu_context(next);

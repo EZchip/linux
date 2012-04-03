@@ -14,6 +14,8 @@
 #define __ASM_ARC_UDELAY_H
 
 #include <asm/param.h> /* HZ */
+#include <asm/cacheflush.h> /* cpuinfo_arc700 */
+#include <linux/smp.h> /* smp_processor_id */
 
 extern __inline__ void __delay(unsigned long loops)
 {
@@ -38,8 +40,9 @@ extern void __bad_udelay(void);
  */
 static inline void __const_udelay(unsigned long xloops)
 {
+    unsigned int cpu = smp_processor_id();
 	unsigned long long tmp =
-		(unsigned long long)xloops * (unsigned long long)loops_per_jiffy;
+		(unsigned long long)xloops * (unsigned long long)cpuinfo_arc700[cpu].lpj;
 
 	xloops = tmp >> 32;
 /*
