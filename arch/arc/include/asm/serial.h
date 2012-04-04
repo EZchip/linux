@@ -17,4 +17,6 @@ extern void __init arc_early_serial_reg(void);
 
 extern unsigned long serial_baudrate;
 
+#include <asm-generic/serial.h>
+
 #endif  /* _ASM_ARC_SERIAL_H */
