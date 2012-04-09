@@ -12,7 +12,7 @@
  *  -MMU v3: PD{0,1} bits layout changed: They don't overlap anymore,
         helps avoid a shift when preparing PD0 from PTE
  *  -CONFIG_ARC_MMU_SASID: support for ARC MMU Shared Address spaces
- *      TLB_RELOAD can create shared TLB entries now.
+ *      CONV_PTE_TO_TLB can create shared TLB entries now.
  *
  * Vineetg: July 2009
  *  - For MMU V2, we need not do heuristics at the time of commiting a D-TLB
@@ -61,9 +61,9 @@
 ex_saved_reg1:
     .zero 4
 
-;--------------------------------------------------------------------------
+;============================================================================
 ;  Troubleshooting Stuff
-;--------------------------------------------------------------------------
+;============================================================================
 
 ; Linux keeps ASID (Address Space ID) in task->active_mm->context.asid
 ; When Creating TLB Entries, instead of doing 3 dependent loads from memory,
@@ -141,13 +141,14 @@ ex_saved_reg1:
 .endm
 
 
-;-----------------------------------------------------------------------------
+;============================================================================
 ;TLB Miss handling Code
-;-----------------------------------------------------------------------------
+;============================================================================
 
+;-----------------------------------------------------------------------------
 ; This macro does the page-table lookup for the faulting address.
 ; OUT: r0 = PTE faulted on, r1 = ptr to PTE, r2 = Faulting V-address
-.macro LOAD_PTE
+.macro LOAD_FAULT_PTE
 
     lr  r2, [efa]
 
@@ -186,51 +187,12 @@ ex_saved_reg1:
 
 .endm
 
-
-; Based on access type, check if PTE is valid
-; IN: r0 = PTE
-.macro VERIFY_PTE
-
-    mov_s   r2, 0
-    lr      r3, [ecr]
-    btst_s  r3,  DTLB_LD_MISS_BIT
-    or.nz   r2, r2, _PAGE_READ      ; If Read access, check for Read flag in PTE
-    btst_s  r3,  DTLB_ST_MISS_BIT
-    or.nz   r2, r2, _PAGE_WRITE     ; If Write access, chk if Write flag in PTE
-                                    ; Above laddering takes care of XCHG access
-                                    ;   which is both Read and Write
-
-    ; If kernel mode access, ; make _PAGE_xx flags as _PAGE_K_xx
-    ; This code doesn't hit, when exception happens in kernel mode, when
-    ; doing copy_to_user( ), as EFA would still have the user mode address
-    ; ( < 0x7000_0000) where kernel faulted.
-    ; This is correct, since there is nothing in user mode which kernel can't access.
-    ; What this checks for is faults in vmalloc region (0x7000_0000 to 0x7FFF_FFFF)
-
-    lr      r3, [efa]
-    cmp     r3, VMALLOC_START - 1   ; If kernel mode access
-    asl.hi  r2, r2, 3               ; make _PAGE_xx flags as _PAGE_K_xx
-    or      r2, r2, _PAGE_PRESENT   ; Common flag for K/U mode
-
-    ; By now, r2 setup with all the Flags we need to check in PTE
-    and     r3, r0, r2              ; Mask out NON Flag bits from PTE
-    brne.d  r3, r2, do_slow_path_pf ; check ( ( pte & flags_test ) == flags_test )
-.endm
-
-; Let Linux VM know that page was accessed/dirty
-; IN: r0 = PTE, r1 = ptr to PTE
-.macro UPDATE_PTE
-    lr      r3, [ecr]
-    or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED)  ; Set Accessed bit for all
-    btst_s  r3,  DTLB_ST_MISS_BIT         ; See if it was a Write Access ?
-    or.nz   r0, r0, _PAGE_MODIFIED        ; if Write, set Dirty bit as well
-    st_s    r0, [r1]                      ; Write back PTE
-.endm
-
+;-----------------------------------------------------------------
 ; Convert Linux PTE entry into TLB entry
 ; A one-word PTE entry is programmed as two-word TLB Entry [PD0:PD1] in mmu
 ; IN: r0 = PTE, r1 = ptr to PTE
-.macro TLB_RELOAD
+
+.macro CONV_PTE_TO_TLB
     and r3, r0, PTE_BITS_IN_PD1 ; Extract permission flags+PFN from PTE
     sr  r3, [ARC_REG_TLBPD1]    ; these go in PD1
 
@@ -255,7 +217,10 @@ ex_saved_reg1:
     sr  r3,[ARC_REG_TLBPD0]     ; rewrite PD0
 .endm
 
-.macro TLB_WRITE
+;-----------------------------------------------------------------
+; Commit the TLB entry into MMU
+
+.macro COMMIT_ENTRY_TO_MMU
 
     /* Get free TLB slot: Set = computed from vaddr, way = random */
     sr  TLBGetIndex, [ARC_REG_TLBCOMMAND]
@@ -268,7 +233,7 @@ ex_saved_reg1:
 #endif
 .endm
 
-.macro SAVE_TEMP
+.macro FREEUP_SCRATCH_REGS
     st    r0, [ex_saved_reg1]
     mov_s r0, ex_saved_reg1
     st_s  r1, [r0, 4]
@@ -289,7 +254,7 @@ ex_saved_reg1:
     DBG_PDG_MISMATCH
 .endm
 
-.macro RESTORE_TEMP
+.macro RESTORE_SCRATCH_REGS
     mov_s r0, ex_saved_reg1
     ld_s  r3, [r0,12]
     ld_s  r2, [r0, 8]
@@ -297,19 +262,15 @@ ex_saved_reg1:
     ld_s  r0, [r0]
 .endm
 
-;-----------------------------------------------------------------------------
-;I-TLB Miss handling Code
-;-----------------------------------------------------------------------------
-
 .section .text.arcfp, "ax",@progbits    ;Fast Path Code, candidate for ICCM
 
 ;-----------------------------------------------------------------------------
-;I-TLB Miss handling Code
+; I-TLB Miss Exception Handler
 ;-----------------------------------------------------------------------------
 
 ARC_ENTRY EV_TLBMissI
 
-    SAVE_TEMP
+    FREEUP_SCRATCH_REGS
 
 #ifdef CONFIG_ARC_TLB_PROFILE
     ld  r0, [numitlb]
@@ -317,9 +278,12 @@ ARC_ENTRY EV_TLBMissI
     st  r0, [numitlb]
 #endif
 
-    LOAD_PTE
+    ;----------------------------------------------------------------
+    ; Get the PTE corresponding to V-addr accessed
+    LOAD_FAULT_PTE
 
-    ; Check if PTE flags approp for executing code
+    ;----------------------------------------------------------------
+    ; VERIFY_PTE: Check if PTE permissions approp for executing code
     cmp_s   r2, VMALLOC_START
     mov.lo  r2, (_PAGE_PRESENT | _PAGE_READ | _PAGE_EXECUTE)
     mov.hs  r2, (_PAGE_PRESENT | _PAGE_K_READ | _PAGE_K_EXECUTE)
@@ -332,20 +296,20 @@ ARC_ENTRY EV_TLBMissI
     or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED)  ; set Accessed Bit
     st_s    r0, [r1]                                ; Write back PTE
 
-    TLB_RELOAD
-    TLB_WRITE
-    RESTORE_TEMP
+    CONV_PTE_TO_TLB
+    COMMIT_ENTRY_TO_MMU
+    RESTORE_SCRATCH_REGS
     rtie
 
 ARC_EXIT EV_TLBMissI
 
 ;-----------------------------------------------------------------------------
-;D-TLB Miss handling Code
+; D-TLB Miss Exception Handler
 ;-----------------------------------------------------------------------------
 
 ARC_ENTRY EV_TLBMissD
 
-    SAVE_TEMP
+    FREEUP_SCRATCH_REGS
 
 #ifdef CONFIG_ARC_TLB_PROFILE
     ld  r0, [numdtlb]
@@ -353,29 +317,65 @@ ARC_ENTRY EV_TLBMissD
     st  r0, [numdtlb]
 #endif
 
+    ;----------------------------------------------------------------
     ; Get the PTE corresponding to V-addr accessed
     ; If PTE exists, it will setup, r0 = PTE, r1 = Ptr to PTE
-    LOAD_PTE
+    LOAD_FAULT_PTE
 
-    VERIFY_PTE
+    ;----------------------------------------------------------------
+    ; VERIFY_PTE: Check if PTE permissions approp for data access type (R/W/R+W)
+    ; IN r0 = PTE
 
-    UPDATE_PTE
+    mov_s   r2, 0
+    lr      r3, [ecr]
+    btst_s  r3, DTLB_LD_MISS_BIT
+    or.nz   r2, r2, _PAGE_READ      ; If Read access, check for Read flag in PTE
+    btst_s  r3, DTLB_ST_MISS_BIT
+    or.nz   r2, r2, _PAGE_WRITE     ; If Write access, chk if Write flag in PTE
+                                    ; Above laddering takes care of XCHG access
+                                    ;   which is both Read and Write
 
-dtlb_commit_stage:
-    TLB_RELOAD
+    ; If kernel mode access, ; make _PAGE_xx flags as _PAGE_K_xx
+    ; This code doesn't hit, when exception happens in kernel mode, when
+    ; doing copy_to_user( ), as EFA would still have the user mode address
+    ; ( < 0x7000_0000) where kernel faulted.
+    ; This is correct, since there is nothing in user mode which kernel can't access.
+    ; What this checks for is faults in vmalloc region (0x7000_0000 to 0x7FFF_FFFF)
+
+    lr      r3, [efa]
+    cmp     r3, VMALLOC_START - 1   ; If kernel mode access
+    asl.hi  r2, r2, 3               ; make _PAGE_xx flags as _PAGE_K_xx
+    or      r2, r2, _PAGE_PRESENT   ; Common flag for K/U mode
+
+    ; By now, r2 setup with all the Flags we need to check in PTE
+    and     r3, r0, r2              ; Mask out NON Flag bits from PTE
+    brne.d  r3, r2, do_slow_path_pf ; check ( ( pte & flags_test ) == flags_test )
+
+    ;----------------------------------------------------------------
+    ; UPDATE_PTE: Let Linux VM know that page was accessed/dirty
+    ; IN: r0 = PTE, r1 = ptr to PTE
+    lr      r3, [ecr]
+    or      r0, r0, (_PAGE_PRESENT | _PAGE_ACCESSED)  ; Set Accessed bit for all
+    btst_s  r3, DTLB_ST_MISS_BIT          ; See if it was a Write Access ?
+    or.nz   r0, r0, _PAGE_MODIFIED        ; if Write, set Dirty bit as well
+    st_s    r0, [r1]                      ; Write back PTE
+
+    CONV_PTE_TO_TLB
+
 #if (METAL_FIX || (CONFIG_ARC_MMU_VER == 1))
     ; MMU with 2 way set assoc J-TLB, needs some help in pathetic case of
     ; memcpy where 3 parties contend for 2 ways, ensuing a livelock.
     ; But only for old MMU or one with Metal Fix
     TLB_WRITE_HEURISTICS
 #endif
-    TLB_WRITE
-    RESTORE_TEMP
+
+    COMMIT_ENTRY_TO_MMU
+    RESTORE_SCRATCH_REGS
     rtie
 
 ;-------- Common routine to call Linux Page Fault Handler -----------
 do_slow_path_pf:
-    RESTORE_TEMP
+    RESTORE_SCRATCH_REGS
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
 
     ; take a snapshot of upon entering SLOW Path TLB Hdlr
@@ -409,7 +409,6 @@ do_slow_path_pf:
 
     bl  do_page_fault
     b   ret_from_exception
-
 
 ARC_EXIT EV_TLBMissD
 
