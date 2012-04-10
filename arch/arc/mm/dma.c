@@ -26,6 +26,7 @@
 #include <linux/dma-mapping.h>
 #include <asm/cacheflush.h>
 #include <linux/kallsyms.h>
+#include <linux/module.h>
 
 void *
 dma_alloc_coherent(struct device *dev, size_t size, dma_addr_t *dma_handle,

@@ -621,7 +621,7 @@ void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
 {
     int set, way, n;
     unsigned int tlbpd0[4], tlbpd1[4];  /* assume max 4 ways */
-    unsigned int flags;
+    unsigned long flags;
     struct cpuinfo_arc_mmu *mmu;
 
     mmu = &cpuinfo_arc700[0].mmu;

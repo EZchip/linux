@@ -13,6 +13,7 @@
 #include <linux/blk.h>
 #endif
 #include <linux/swap.h>
+#include <linux/module.h>
 
 #include <asm/page.h>
 #include <asm/pgalloc.h>
@@ -93,36 +94,6 @@ void free_initmem(void)
 	       (&_init_end - &_init_begin) >> 10, &_init_begin, &_init_end);
 
     mmapcode_space_init();
-}
-
-void show_mem(void)
-{
-	int i, free = 0, total = 0, reserved = 0;
-	int shared = 0, cached = 0;
-
-	printk("Mem-info:\n");
-	show_free_areas();
-	printk("Free swap:       %6dkB\n",
-	       (int)(nr_swap_pages << (PAGE_SHIFT - 10)));
-	i = max_mapnr;
-	while (i-- > 0) {
-		total++;
-		if (PageReserved(mem_map + i))
-			reserved++;
-		else if (PageSwapCache(mem_map + i))
-			cached++;
-		else if (!page_count(mem_map + i))
-			free++;
-		else
-			shared += page_count(mem_map + i) - 1;
-	}
-	printk("%d pages of RAM\n", total);
-	printk("%d reserved pages\n", reserved);
-	printk("%d pages shared\n", shared);
-	printk("%d pages swap cached\n", cached);
-	printk("%d free pages\n", free);
-	/* Sameer: Seems to be obsolete. We need a look here too */
-	/*      show_buffers(); */
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD

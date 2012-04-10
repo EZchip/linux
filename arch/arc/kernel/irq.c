@@ -392,10 +392,10 @@ int get_hw_config_num_irq()
 
 #ifdef CONFIG_ARCH_ARC_LV2_INTR     // Complex version for 2 levels of Intr
 
-void local_irq_enable(void) {
+void arch_local_irq_enable(void) {
 
     unsigned long flags;
-    local_save_flags(flags);
+    flags = arch_local_save_flags();
 
     /* Allow both L1 and L2 at the onset */
     flags |= (STATUS_E1_MASK | STATUS_E2_MASK);
@@ -442,7 +442,7 @@ void local_irq_enable(void) {
         }
     }
 
-    local_irq_restore(flags);
+    arch_local_irq_restore(flags);
 }
 
 #else  /* ! CONFIG_ARCH_ARC_LV2_INTR */
@@ -451,10 +451,10 @@ void local_irq_enable(void) {
   * Here we only Worry about Level 1 Bits
   */
 
-void local_irq_enable(void) {
+void arch_local_irq_enable(void) {
 
     unsigned long flags;
-    local_save_flags(flags);
+    flags = arch_local_save_flags();
     flags |= (STATUS_E1_MASK | STATUS_E2_MASK);
 
     /* If called from hard ISR (between irq_enter and irq_exit)
@@ -465,8 +465,8 @@ void local_irq_enable(void) {
         flags &= ~(STATUS_E1_MASK | STATUS_E2_MASK);
     }
 
-    local_irq_restore(flags);
+    arch_local_irq_restore(flags);
 }
 #endif
 
-EXPORT_SYMBOL(local_irq_enable);
+EXPORT_SYMBOL(arch_local_irq_enable);

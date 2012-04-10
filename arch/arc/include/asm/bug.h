@@ -21,5 +21,6 @@
 #define HAVE_ARCH_BUG
 
 #include <asm-generic/bug.h>
+#include <asm/system.h>
 
 #endif

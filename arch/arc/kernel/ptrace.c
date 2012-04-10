@@ -206,7 +206,8 @@ setreg(unsigned int offset, unsigned int data, struct task_struct *child)
     }
 }
 
-long arch_ptrace(struct task_struct *child, long request, long addr, long data)
+long arch_ptrace(struct task_struct *child, long request,
+		unsigned long addr, unsigned long data)
 {
     int ret;
     int i;
@@ -288,11 +289,6 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
         wake_up_process(child);
         break;
     }
-
-    case PTRACE_DETACH:
-        /* detach a process that was attached. */
-        ret = ptrace_detach(child, data);
-        break;
 
     /* U-AREA Read (Registers, signal etc)
      * From offset @addr in @child's struct user into location @data

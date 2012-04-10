@@ -26,9 +26,7 @@
 /*
  * Save IRQ state and disable IRQs
  */
-#define local_irq_save(x) { x = _local_irq_save(); }
-
-static inline long _local_irq_save(void) {
+static inline long arch_local_irq_save(void) {
     unsigned long temp, flags;
 
     __asm__ __volatile__ (
@@ -47,7 +45,7 @@ static inline long _local_irq_save(void) {
 /*
  * restore saved IRQ state
  */
-static inline void local_irq_restore(unsigned long flags) {
+static inline void arch_local_irq_restore(unsigned long flags) {
 
     __asm__ __volatile__ (
         "flag %0\n\t"
@@ -59,12 +57,12 @@ static inline void local_irq_restore(unsigned long flags) {
 /*
  * Conditionally Enable IRQs
  */
-extern void local_irq_enable(void);
+extern void arch_local_irq_enable(void);
 
 /*
  * Unconditionally Disable IRQs
  */
-static inline void local_irq_disable(void) {
+static inline void arch_local_irq_disable(void) {
     unsigned long temp;
 
     __asm__ __volatile__ (
@@ -79,8 +77,7 @@ static inline void local_irq_disable(void) {
 /*
  * save IRQ state
  */
-#define local_save_flags(x) { x = _local_save_flags(); }
-static inline long _local_save_flags(void) {
+static inline long arch_local_save_flags(void) {
     unsigned long temp;
 
     __asm__ __volatile__ (
@@ -118,7 +115,7 @@ static inline long _local_save_flags(void) {
 /*
  * Query IRQ state
  */
-static inline int irqs_disabled_flags(unsigned long flags)
+static inline int arch_irqs_disabled_flags(unsigned long flags)
 {
     return (!(flags & (STATUS_E1_MASK
 #ifdef CONFIG_ARCH_ARC_LV2_INTR
@@ -127,10 +124,10 @@ static inline int irqs_disabled_flags(unsigned long flags)
             )));
 }
 
-static inline int irqs_disabled(void)
+static inline int arch_irqs_disabled(void)
 {
     unsigned long flags;
-    local_save_flags(flags);
+    flags = arch_local_save_flags();
     return (!(flags & (STATUS_E1_MASK
 #ifdef CONFIG_ARCH_ARC_LV2_INTR
                         | STATUS_E2_MASK

@@ -519,46 +519,14 @@ static inline int __attribute__((const)) __fls(unsigned long x)
 #define smp_mb__before_clear_bit()  barrier()
 #define smp_mb__after_clear_bit()   barrier()
 
-#define ext2_set_bit(nr, addr)  \
-    __test_and_set_bit((nr), (unsigned long *)(addr))
-#define ext2_clear_bit(nr, addr) \
-    __test_and_clear_bit((nr), (unsigned long *)(addr))
-
-#define ext2_test_bit(nr, addr) \
-    test_bit((nr), (unsigned long *)(addr))
-#define ext2_find_first_zero_bit(addr, size) \
-    find_first_zero_bit((unsigned long *)(addr), (size))
-#define ext2_find_next_zero_bit(addr, size, offset) \
-    find_next_zero_bit((unsigned long *)(addr), (size), (offset))
-#define ext2_find_next_bit(addr, size, offset) \
-    find_next_bit((unsigned long *)(addr), (size), (offset))
-
-#define ext2_set_bit_atomic(lock, nr, addr) \
-    test_and_set_bit((nr), (unsigned long *)(addr))
-#define ext2_clear_bit_atomic(lock, nr, addr) \
-    test_and_clear_bit((nr), (unsigned long *)(addr))
-
-#include <asm-generic/bitops/minix.h>
-
-/**
- * hweightN - returns the hamming weight of a N-bit word
- * @x: the word to weigh
- *
- * The Hamming Weight of a number is the total number of bits set in it.
- */
-
 #include <asm-generic/bitops/hweight.h>
 #include <asm-generic/bitops/fls64.h>
 #include <asm-generic/bitops/sched.h>
 #include <asm-generic/bitops/lock.h>
 
-/* DON'T include generic find.h
- * It over-rides simpler find_first_bit(addr, size) with complicated
- * find_next_bit((addr), (size), 0)
- */
-//#include <asm-generic/bitops/find.h>
-
-
+#include <asm-generic/bitops/find.h>
+#include <asm-generic/bitops/le.h>
+#include <asm-generic/bitops/ext2-atomic.h>
 
 #endif /* __KERNEL__ */
 

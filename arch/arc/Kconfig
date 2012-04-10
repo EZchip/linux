@@ -1,15 +1,10 @@
 #
-# For a description of the syntax of this configuration file,
-# see Documentation/kbuild/kconfig-language.txt.
+# Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
 #
-#   vineetg: Oct 4th 2007 : Added Config Options for 800/SMP
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
 #
-
-mainmenu "Linux Kernel Configuration"
-
-# CONFIG common to all ARC cores (700+800) under this
-#    config option instead of existing ARCH_ARC700
-# Need corresponding change in include/asm-arc/linkage.h
 
 config ARCH_ARC
     bool
@@ -114,7 +109,7 @@ source "init/Kconfig"
 
 source "kernel/Kconfig.freezer"
 
-menu "Processor Type and features"
+menu "ARC-specific Configuration"
 
 menu "ARC CPU Core Configuration"
 

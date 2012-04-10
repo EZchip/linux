@@ -227,10 +227,6 @@ void __init time_init(void)
     if (clk_speed != CONFIG_ARC700_CLK)
         panic("CONFIG_ARC700_CLK doesn't match corresp boot param\n");
 
-    xtime.tv_sec = 0;
-    xtime.tv_nsec = 0;
-    set_normalized_timespec(&wall_to_monotonic, -xtime.tv_sec, -xtime.tv_nsec);
-
     arc_clocksource_init();
     arc_clockevent_init();
 }

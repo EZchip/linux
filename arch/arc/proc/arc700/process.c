@@ -18,7 +18,6 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/smp.h>
-#include <linux/smp_lock.h>
 #include <linux/stddef.h>
 #include <linux/unistd.h>
 #include <linux/ptrace.h>
@@ -317,9 +316,9 @@ int copy_thread(unsigned long clone_flags,
     return 0;
 }
 
-/* Sameer: Appended __user compiler attribs to arguements */
-asmlinkage int sys_execve(char __user * filenamei, char __user * __user * argv,
-              char __user * __user * envp, struct pt_regs *regs)
+int sys_execve(const char __user * filenamei,
+		const char __user * __user * argv, const char __user * __user * envp,
+		struct pt_regs *regs)
 {
     int error;
     char __user *filename;

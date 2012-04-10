@@ -641,8 +641,8 @@ static void noinline
 mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
                int exec_or_not)
 {
-    unsigned long frame_tlbpd1;
-    unsigned int flags, asid;
+    unsigned long frame_tlbpd1, flags;
+    unsigned int asid;
 
     if (!mm) return;
     local_irq_save(flags);

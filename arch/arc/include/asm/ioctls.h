@@ -57,6 +57,13 @@
 #define TIOCGSID	0x5429  /* Return the session ID of FD */
 #define TIOCGPTN	_IOR('T',0x30, unsigned int) /* Get Pty Number (of pty-mux device) */
 #define TIOCSPTLCK	_IOW('T',0x31, int)  /* Lock/unlock Pty */
+#define TIOCGDEV	_IOR('T', 0x32, unsigned int) /* Get primary device node of /dev/console */
+//#define TCGETX		0x5432 /* SYS5 TCGETX compatibility */
+//#define TCSETX		0x5433
+//#define TCSETXF		0x5434
+//#define TCSETXW		0x5435
+#define TIOCSIG		_IOW('T', 0x36, int)  /* pty: generate signal */
+#define TIOCVHANGUP	0x5437
 
 #define FIONCLEX	0x5450  /* these numbers need to be adjusted. */
 #define FIOCLEX		0x5451
@@ -83,6 +90,7 @@
 #define TIOCPKT_START		 8
 #define TIOCPKT_NOSTOP		16
 #define TIOCPKT_DOSTOP		32
+#define TIOCPKT_IOCTL		64
 
 #define TIOCSER_TEMT	0x01	/* Transmitter physically empty */
 

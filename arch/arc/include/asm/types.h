@@ -17,9 +17,6 @@ typedef unsigned short umode_t;
 
 #ifdef __KERNEL__
 #define BITS_PER_LONG 32
-#ifndef __ASSEMBLY__
-typedef u32 dma_addr_t;
-#endif /* !__ASSEMBLY__ */
 #endif /* __KERNEL__ */
 
 #endif

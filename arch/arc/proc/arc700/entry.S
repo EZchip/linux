@@ -1076,7 +1076,7 @@ __syscall_start:
         .long   SYMBOL_NAME(sys_ni_syscall)
         .long   SYMBOL_NAME(sys_ni_syscall)
         .long   SYMBOL_NAME(sys_poll)
-        .long   SYMBOL_NAME(sys_nfsservctl)
+        .long   SYMBOL_NAME(sys_ni_syscall)
  /* 170 */  .long   SYMBOL_NAME(sys_setresgid16)
         .long   SYMBOL_NAME(sys_getresgid16)
         .long   SYMBOL_NAME(sys_prctl)

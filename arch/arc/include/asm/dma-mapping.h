@@ -177,12 +177,6 @@ dma_set_mask(struct device *dev, u64 dma_mask)
 }
 
 static inline int
-dma_get_cache_alignment(void)
-{
-    return (L1_CACHE_BYTES);
-}
-
-static inline int
 dma_mapping_error(struct device *dev, dma_addr_t dma_addr)
 {
     BUG();

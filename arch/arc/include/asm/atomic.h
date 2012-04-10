@@ -124,7 +124,8 @@ static inline void atomic_clear_mask(unsigned long mask, unsigned long *addr)
     : "cc");
 }
 
-static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
+static inline unsigned long
+__cmpxchg(volatile void *ptr, unsigned long expected, unsigned long new)
 {
     unsigned long prev;
 
@@ -135,7 +136,7 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
     "   bnz     1b          \n"
     "2:                     \n"
     : "=&r" (prev)
-    : "r" (p),  "ir" (expected),
+    : "r" (ptr),  "ir" (expected),
       "r" (new)  /* this can't be "ir"; scond can't take limm as arg "b" */
     : "cc");
 
@@ -202,10 +203,12 @@ static inline void atomic_clear_mask(unsigned long mask, unsigned long *addr)
 /* unlike other APIS, cmpxchg is same as atomix_cmpxchg because
  * because the sematics of cmpxchg itself is to be atomic
  */
-static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
+static inline unsigned long
+__cmpxchg(volatile void *ptr, unsigned long expected, unsigned long new)
 {
     unsigned long flags;
     int prev;
+    volatile unsigned long *p = ptr;
 
     atomic_ops_lock(flags);
     if ((prev = *p) == expected)
@@ -219,22 +222,25 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
 #define atomic_cmpxchg(v, o, n) ((int)cmpxchg(&((v)->counter), (o), (n)))
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))
 
+#define cmpxchg(ptr,o,n) ((__typeof__(*(ptr)))__cmpxchg((ptr),	\
+                             (unsigned long)(o), (unsigned long)(n)))
+
 /**
- * atomic_add_unless - add unless the number is a given value
+ * __atomic_add_unless - add unless the number is a given value
  * @v: pointer of type atomic_t
  * @a: the amount to add to v...
  * @u: ...unless v is equal to u.
  *
  * Atomically adds @a to @v, so long as it was not @u.
- * Returns non-zero if @v was not @u, and zero otherwise.
+ * Returns the old value of @v
  */
-#define atomic_add_unless(v, a, u)              \
+#define __atomic_add_unless(v, a, u)              \
 ({                              \
     int c, old;                     \
     c = atomic_read(v);                 \
     while (c != (u) && (old = atomic_cmpxchg((v), c, c + (a))) != c) \
         c = old;                    \
-    c != (u);                       \
+    c;                       \
 })
 
 #define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
@@ -254,8 +260,6 @@ static inline unsigned long cmpxchg(volatile int *p, int expected, int new)
 #define smp_mb__after_atomic_dec()  barrier()
 #define smp_mb__before_atomic_inc() barrier()
 #define smp_mb__after_atomic_inc()  barrier()
-
-#include <asm-generic/atomic-long.h>
 
 #ifdef CONFIG_GENERIC_ATOMIC64
 #include <asm-generic/atomic64.h>

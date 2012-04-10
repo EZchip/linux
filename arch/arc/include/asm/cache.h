@@ -55,6 +55,7 @@
 /* used to give SHMLBA a value to avoid Cache Aliasing */
 extern unsigned int ARC_shmlba ;
 
+#define ARCH_DMA_MINALIGN      L1_CACHE_BYTES
 
 #endif
 

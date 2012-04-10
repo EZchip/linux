@@ -40,7 +40,7 @@
     : "cc", "memory")
 
 static inline int
-futex_atomic_op_inuser (int encoded_op, int __user *uaddr)
+futex_atomic_op_inuser (int encoded_op, u32 __user *uaddr)
 {
     int op = (encoded_op >> 28) & 7;
     int cmp = (encoded_op >> 24) & 15;
@@ -101,15 +101,17 @@ futex_atomic_op_inuser (int encoded_op, int __user *uaddr)
  *      -user access r/w fails: return -EFAULT
  */
 static inline int
-futex_atomic_cmpxchg_inatomic(int __user *uaddr, int oldval, int newval)
+futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr, u32 oldval,
+								u32 newval)
 {
-    int val;
+    u32 val;
 
     if (!access_ok(VERIFY_WRITE, uaddr, sizeof(int)))
         return -EFAULT;
 
     pagefault_disable();    /* implies preempt_disable() */
 
+	/* TBD : can use llock/scond */
     __asm__ __volatile__(
 
     "1:     ld    %0, [%3]          \n"
@@ -132,6 +134,7 @@ futex_atomic_cmpxchg_inatomic(int __user *uaddr, int oldval, int newval)
 
     pagefault_enable(); /* subsumes preempt_enable() */
 
+    *uval = val;
     return val;
 }
 
