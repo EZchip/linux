@@ -124,7 +124,7 @@ config TRACING_SUPPORT
 	# tracers anyway, they were tested to build and work. Note that new
 	# exceptions to this list aren't welcomed, better implement the
 	# irqflags tracing for your architecture.
-	depends on TRACE_IRQFLAGS_SUPPORT || PPC32
+	depends on TRACE_IRQFLAGS_SUPPORT || PPC32 || ARCH_ARC
 	depends on STACKTRACE_SUPPORT
 	default y
 
