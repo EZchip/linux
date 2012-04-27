@@ -239,7 +239,7 @@ test_and_set_bit(unsigned long nr, volatile unsigned long *m)
     __asm__ __volatile__(
        "    bset  %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
-       :"=r" (temp), "=o" (*m)
+       :"=&r" (temp), "=o" (*m)
        :"ir" (nr), "r"(old));
 
     bitops_unlock(flags);
@@ -263,7 +263,7 @@ test_and_clear_bit(unsigned long nr, volatile unsigned long *m)
     __asm__ __volatile__(
        "    bclr  %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
-       :"=r" (temp), "=o" (*m)
+       :"=&r" (temp), "=o" (*m)
        :"ir" (nr), "r"(old));
 
     bitops_unlock(flags);
@@ -287,7 +287,7 @@ test_and_change_bit(unsigned long nr, volatile unsigned long *m)
     __asm__ __volatile__(
        "    bxor %0,%3,%2\n\t"
        "    st%U1 %0,%1\n\t"
-       :"=r" (temp), "=o" (*m)
+       :"=&r" (temp), "=o" (*m)
        :"ir" (nr), "r"(old));
 
     bitops_unlock(flags);
