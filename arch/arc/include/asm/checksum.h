@@ -116,8 +116,13 @@ static inline unsigned long csum_tcpudp_nofold(unsigned long saddr,
 		"adc.f %0, %0, %4   \n"
 		"adc   %0, %0, 0    \n"
 		: "=r" (sum)
-		: "r" (saddr), "r" (daddr), "r" (ntohs(len) << 16),
-		  "r" (proto << 8), "0" (sum)
+		: "r" (saddr), "r" (daddr),
+#ifdef __LITTLE_ENDIAN__
+		  "r" (len << 8),
+#else
+		  "r" (len),
+#endif
+		  "r" (ntohs(proto)), "0" (sum)
         : "cc"
 	);
 
