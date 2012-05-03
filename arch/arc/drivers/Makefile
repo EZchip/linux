@@ -4,6 +4,7 @@
 #
 
 #obj-$(CONFIG_ARC_SERIAL) += arc700_serial.obsolete.o
+obj-$(CONFIG_SERIAL_8250) += arc_8250.o
 obj-$(CONFIG_ARC_SERIAL) += arc_uart.o
 obj-$(CONFIG_ARC_PS2) += arc_ps2.o
 obj-$(CONFIG_ARCTANGENT_EMAC) += arctangent_emac.o
