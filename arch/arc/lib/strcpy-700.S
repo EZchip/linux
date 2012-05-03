@@ -24,6 +24,9 @@ ARC_ENTRY strcpy
 	brne.d	r2,0,charloop
 	mov_s	r10,r0
 	ld_s	r3,[r1,0]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r3,r11 ;swape r3,r3
+#endif
 	mov	r8,0x01010101
 	bbit0.d	r1,2,loop_start
 	ror	r12,r8
@@ -35,13 +38,23 @@ ARC_ENTRY strcpy
 	.balign 4
 loop:
 	ld.a	r3,[r1,4]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r3,r11 ;swape r3,r3
+	SWAPE	r4,r11 ;swape r4,r4
+#endif
 	st.ab	r4,[r10,4]
 loop_start:
 	ld.a	r4,[r1,4]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r4,r11 ;swape r4,r4
+#endif
 	sub	r2,r3,r8
 	bic_s	r2,r2,r3
 	tst_s	r2,r12
 	bne_s	r3z
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r3,r11 ;swape r3,r3
+#endif
 	st.ab	r3,[r10,4]
 	sub	r2,r4,r8
 	bic	r2,r2,r4

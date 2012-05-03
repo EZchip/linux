@@ -32,7 +32,12 @@ ARC_ENTRY memcpy
 	add3	r2,-1,r2
 	; uses long immediate
 	xor_s	r12,r12,r3
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	asr	r4,0x80000000,r2
+	and	r12,r12,r4
+#else
 	bmsk	r12,r12,r2
+#endif
     xor_s	r12,r12,r3
 .Last_store:
 	j_s.d	[blink]

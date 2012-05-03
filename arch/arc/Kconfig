@@ -42,6 +42,33 @@ config FLATMEM
         bool
         default y
 
+choice
+        prompt "Endianess selection"
+	default CPU_LITTLE_ENDIAN
+        help
+          Some ARC machines can be configured for either little or big endian
+          byte order. These modes require different kernels and a different
+          Linux distribution.  In general there is one preferred byteorder for a
+          particular system but some systems are just as commonly used in the
+          one or the other endianness.
+
+config CPU_BIG_ENDIAN
+        bool "Big endian"
+        depends on SYS_SUPPORTS_BIG_ENDIAN
+
+config CPU_LITTLE_ENDIAN
+        bool "Little endian"
+        depends on SYS_SUPPORTS_LITTLE_ENDIAN
+        help
+
+endchoice
+
+config SYS_SUPPORTS_BIG_ENDIAN
+        bool
+
+config SYS_SUPPORTS_LITTLE_ENDIAN
+        bool
+
 # Reminder: We need to restructure the menuconfig
 #            and get lots of options in.
 
@@ -119,6 +146,8 @@ choice
 
 config ARCH_ARC700
         bool "ARC700"
+	select SYS_SUPPORTS_LITTLE_ENDIAN
+	select SYS_SUPPORTS_BIG_ENDIAN
         help
           Support for ARC700 core processors.
 

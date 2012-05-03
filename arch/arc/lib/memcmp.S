@@ -32,6 +32,10 @@ ARC_ENTRY memcmp
 	nop_s
 	; one more load latency cycle
 .Last_cmp:
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE 	r4,r10 ;swape r4,r4
+	SWAPE 	r5,r10 ;swape r5,r5
+#endif
 	xor	r0,r4,r5
 	bset	r0,r0,r3
 	sub_s	r1,r0,1

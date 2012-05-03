@@ -16,7 +16,11 @@
 OUTPUT_ARCH(arc)
 ENTRY(_stext)
 
-jiffies = jiffies_64;
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	jiffies  = jiffies_64 + 4;
+#else
+	jiffies  = jiffies_64;
+#endif
 
 
 SECTIONS
