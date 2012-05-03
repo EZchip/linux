@@ -9,7 +9,7 @@
 #ifndef _ASM_ARC_SERIAL_H
 #define _ASM_ARC_SERIAL_H
 
-#if defined(CONFIG_ARC_SERIAL) && defined(CONFIG_EARLY_PRINTK)
+#if (defined(CONFIG_ARC_SERIAL) || defined(CONFIG_SERIAL_8250) ) && defined(CONFIG_EARLY_PRINTK)
 extern void __init arc_early_serial_reg(void);
 #else
 #define arc_early_serial_reg(void);
