@@ -106,7 +106,10 @@ KBUILD_IMAGE := bootpImage
 
 all:	$(KBUILD_IMAGE)
 
+boot := arch/arc/boot
+
 bootpImage uImage: objconvert vmlinux
+	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
 archclean:
 	$(Q)$(MAKE) $(clean)=$(boot)
