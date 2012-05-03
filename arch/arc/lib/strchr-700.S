@@ -24,6 +24,9 @@ ARC_ENTRY strchr
 	sub_s	r0,r0,r2
 	asl	r7,r2,3
 	ld_s	r2,[r0]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r2,r10 ;swape r2,r2
+#endif
 	asl	r7,r3,r7
 	or	r5,r5,r4
 	ror	r4,r3
@@ -33,6 +36,9 @@ ARC_ENTRY strchr
 	brne.d	r12,0,.Lfound0_ua
 	xor	r6,r2,r5
 	ld.a	r2,[r0,4]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r2,r10 ;swape r2,r2
+#endif
 	sub	r12,r6,r7
 	bic	r12,r12,r6
 	and	r7,r12,r4
@@ -43,6 +49,9 @@ ARC_ENTRY strchr
 	ld_s	r2,[r0]
 	or	r5,r5,r4
 	ror	r4,r3
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r2,r10 ;swape r2,r2
+#endif
 ; /* ... so that this code address is aligned, for itself and ...  */
 .Loop:
 	sub	r12,r2,r3
@@ -51,6 +60,9 @@ ARC_ENTRY strchr
 	brne.d	r12,0,.Lfound0
 	xor	r6,r2,r5
 	ld.a	r2,[r0,4]
+#ifdef CONFIG_CPU_BIG_ENDIAN
+	SWAPE	r2,r10 ;swape r2,r2
+#endif
 	sub	r12,r6,r3
 	bic	r12,r12,r6
 	and	r7,r12,r4

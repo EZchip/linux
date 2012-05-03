@@ -30,6 +30,14 @@
   .size \name, ASM_PREV_SYM_ADDR(\name)
 .endm
 
+.macro SWAPE reg temp
+  ror 	\temp,\reg,24
+  and 	\temp,\temp,0x00FF00FF
+  ror	\reg,\reg,8
+  and	\reg,\reg,0xFF00FF00
+  or	\reg,\reg,\temp
+.endm
+
 #endif
 
 #define __arcfp_code __attribute__((__section__(".text.arcfp")))
