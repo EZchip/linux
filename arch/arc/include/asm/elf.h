@@ -42,7 +42,11 @@ typedef unsigned long elf_fpregset_t;
  * These are used to set parameters in the core dumps.
  */
 #define ELF_CLASS	ELFCLASS32
-#define ELF_DATA	ELFDATA2LSB
+#ifdef __LITTLE_ENDIAN__
+#define ELF_DATA    ELFDATA2LSB
+#else
+#define ELF_DATA    ELFDATA2MSB
+#endif
 #define ELF_ARCH	EM_ARCTANGENT
 
 #ifdef __KERNEL__
