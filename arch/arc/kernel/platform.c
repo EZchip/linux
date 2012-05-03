@@ -45,3 +45,20 @@ static __init add_iss(void)
 
 device_initcall(add_iss);
 #endif
+
+#ifdef CONFIG_NPSHE0_LAN
+static int  __init add_eznet(void)
+{
+    struct platform_device *pd;
+    pd = platform_device_register_simple("eth",0,NULL,0);
+
+    if (IS_ERR(pd))
+    {
+        printk("Fail\n");
+    }
+
+    return IS_ERR(pd) ? PTR_ERR(pd): 0;
+}
+
+device_initcall(add_eznet);
+#endif
