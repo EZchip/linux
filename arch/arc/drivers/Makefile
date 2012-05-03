@@ -14,4 +14,5 @@ obj-$(CONFIG_SOUND_ARC_AC97)    += arc_ac97.o
 obj-$(CONFIG_VFB_SIM) += arc_vfb.o
 obj-$(CONFIG_XILINX_TEMAC) += xtemac.o
 obj-$(CONFIG_ISS_MAC) += iss_enet.o
+obj-$(CONFIG_NPSHE0_LAN) += npshe0_enet.o
 obj-$(CONFIG_ARC_AHB_PCI_BRIDGE) += arc700_pci.o
