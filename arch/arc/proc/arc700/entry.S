@@ -246,7 +246,7 @@ ARC_ENTRY handle_interrupt_level2
     and r0, r0, 0x1f
     mov r1, sp
 
-    bl  SYMBOL_NAME(process_interrupt)
+    bl  SYMBOL_NAME(do_IRQ)
 
     mov r8,0x2
     sr r8, [AUX_IRQ_LV12]       ; clear bit in Sticky Status Reg
@@ -283,7 +283,7 @@ ARC_ENTRY handle_interrupt_level1
 
     mov r1, sp
 
-    bl  SYMBOL_NAME(process_interrupt)
+    bl  SYMBOL_NAME(do_IRQ)
 
     mov r8,0x1
     sr r8, [AUX_IRQ_LV12]       ; clear bit in Sticky Status Reg

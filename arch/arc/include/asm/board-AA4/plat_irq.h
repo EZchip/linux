@@ -18,6 +18,8 @@
 #define NR_IRQS 16
 #endif
 
+#define NR_LEVEL_IRQ	9
+
 #define TIMER0_INT      3
 #define TIMER1_INT      4
 
