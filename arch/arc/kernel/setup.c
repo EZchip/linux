@@ -51,7 +51,6 @@ extern unsigned long end_kernel;
 extern unsigned long ramd_start, ramd_end;
 extern int root_mountflags;
 
-extern void arc_irq_init(void);
 extern void arc_cache_init(void);
 extern char * arc_mmu_mumbojumbo(int cpu_id, char *buf);
 extern char * arc_cache_mumbojumbo(int cpu_id, char *buf);
@@ -430,8 +429,6 @@ void __init setup_processor(void)
 {
     char str[512];
     int cpu_id = read_arc_build_cfg_regs();
-
-    arc_irq_init();
 
     printk(arc_cpu_mumbojumbo(cpu_id, str));
 

@@ -20,15 +20,7 @@
 
 #ifndef __ASSEMBLY__
 
-#define disable_irq_nosync(i) disable_irq(i)
-
-extern void disable_irq(unsigned int);
-extern void enable_irq(unsigned int);
 extern int  get_hw_config_num_irq(void);
-extern int request_irq(unsigned int irq,
-        irqreturn_t (*handler)(int, void *),
-        unsigned long flags, const char *name, void *dev_id);
-extern void free_irq(unsigned int irq, void *dev_id);
 
 #endif
 

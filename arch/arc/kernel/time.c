@@ -137,8 +137,8 @@ struct clock_event_device arc_clockevent_device;
 static irqreturn_t timer_irq_handler(int irq, void *dev_id);
 
 static struct irqaction arc_timer_irq = {
-    .name       = "ARC Timer0",
-    .flags      = IRQ_FLG_LOCK,
+    .name       = "Timer0",
+    .flags      = IRQF_DISABLED | IRQF_PERCPU | IRQF_TIMER,
     .handler    = timer_irq_handler,
     .dev_id     = &arc_clockevent_device,
 };
