@@ -111,6 +111,7 @@ SECTIONS
 
     }
 
+	PERCPU_SECTION(L1_CACHE_BYTES)
     . = ALIGN(PAGE_SIZE);
     _init_end = .;
 

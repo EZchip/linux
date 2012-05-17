@@ -21,7 +21,10 @@ endif
 #---------------------------------------------------------------------
 
 ifdef CONFIG_SMP
-obj-y += smp.o idu.o
+obj-y += smp.o
+ifdef CONFIG_ARCH_ARC800
+obj-y += idu.o
+endif
 endif
 
 extra-y += head.o

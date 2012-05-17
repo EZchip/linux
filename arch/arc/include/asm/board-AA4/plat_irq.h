@@ -23,6 +23,10 @@
 #define TIMER0_INT      3
 #define TIMER1_INT      4
 
+#ifdef CONFIG_SMP
+#define IPI_IRQS_BASE	9
+#endif
+
 #define VUART_IRQ       5
 #define VUART1_IRQ      10
 #define VUART2_IRQ      11

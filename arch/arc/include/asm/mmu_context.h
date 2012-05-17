@@ -66,6 +66,12 @@ extern void arch_exit_mmap(struct mm_struct *mm);
  * gauranteed that TLB entries with that ASID wont exist.
  */
 
+/*
+ * This is workaround till I fix asid
+ * also need to see why I get warn at IPI
+ */
+#define AVOID_ASID 1
+
 #define FIRST_ASID  0
 #define MAX_ASID    255 /* ARC 700 8 bit PID field in PID Aux reg */
 #define NUM_ASID    ((MAX_ASID - FIRST_ASID) + 1 )
@@ -96,10 +102,12 @@ get_new_mmu_context(struct mm_struct *mm)
     asid_mm_map[mm->context.asid] = (struct mm_struct *) NULL;
 
     /* move to new ASID */
-    if ( ++asid_cache > MAX_ASID) {  /* ASID roll-over */
+    if ( AVOID_ASID || ++asid_cache > MAX_ASID) {  /* ASID roll-over */
         asid_cache = FIRST_ASID;
-        flush_tlb_all();
+        local_flush_tlb_all();
     }
+
+    cpumask_set_cpu(smp_processor_id(), mm_cpumask(mm));
 
     /* Is next ASID already owned by some-one else (we are stealing it).
      * If yes, let the orig owner be aware of this fact, so that when it runs,
@@ -160,8 +168,10 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
                              struct task_struct *tsk)
 {
+#ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch
     /* PGD cached in MMU reg to avoid 3 mem lookups: task->mm->pgd */
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
+#endif
 
     /* Get a new ASID if task doesn't have a valid one. Possible when
      *  -task never had an ASID (fresh after fork)
@@ -174,7 +184,7 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
      * detected using the single condition below:  NO_ASID = 256
      * while asid_cache is always a valid ASID value (0-255).
      */
-    if (next->context.asid > asid_cache) {
+    if (AVOID_ASID || next->context.asid > asid_cache) {
         get_new_mmu_context(next);
     } else {
         // XXX: This will never happen given the chks above
@@ -218,7 +228,9 @@ static inline void destroy_context(struct mm_struct *mm)
 static inline void
 activate_mm (struct mm_struct *prev, struct mm_struct *next)
 {
+#ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch
     write_new_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
+#endif
 
     /* Unconditionally get a new ASID */
     get_new_mmu_context(next);

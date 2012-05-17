@@ -46,21 +46,6 @@
 #include <asm/pgtable.h>
 #include <asm/event-log-asm.h>
 
-;--------------------------------------------------------------------------
-; Temporary Variables used to Free UP a REG at the entry of Exception
-; ARC 700 doesnt have any scratch REG which can be used to free up a REG
-;   for low level stack switching and saving pre-exception REGS
-; Thus need these globals.
-; TODO: This wont work in SMP
-;--------------------------------------------------------------------------
-.section  .data.arcfp
-    .global ex_saved_reg1       ; Holds r0-r3 for duration of TLB Refill Code
-    .align 32                   ; IMP: Must be Cache Line aligned
-    .type   ex_saved_reg1, @object
-    .size   ex_saved_reg1, 16
-ex_saved_reg1:
-    .zero 4
-
 ;============================================================================
 ;  Troubleshooting Stuff
 ;============================================================================
@@ -234,8 +219,15 @@ ex_saved_reg1:
 .endm
 
 .macro FREEUP_SCRATCH_REGS
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st    r0, [r1]
+    mov_s r0, r1
+	PUT_EX_SCRATCH_ADDR r1
+#else
     st    r0, [ex_saved_reg1]
     mov_s r0, ex_saved_reg1
+#endif
     st_s  r1, [r0, 4]
     st_s  r2, [r0, 8]
     st_s  r3, [r0, 12]
@@ -255,7 +247,13 @@ ex_saved_reg1:
 .endm
 
 .macro RESTORE_SCRATCH_REGS
+#ifdef CONFIG_SMP
+	GET_EX_SCRATCH_ADDR r1
+    mov_s r0, r1
+    PUT_EX_SCRATCH_ADDR r1
+#else
     mov_s r0, ex_saved_reg1
+#endif
     ld_s  r3, [r0,12]
     ld_s  r2, [r0, 8]
     ld_s  r1, [r0, 4]
@@ -376,7 +374,13 @@ ARC_ENTRY EV_TLBMissD
 ;-------- Common routine to call Linux Page Fault Handler -----------
 do_slow_path_pf:
     RESTORE_SCRATCH_REGS
+#ifdef CONFIG_SMP
+	GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+	PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
 
     ; take a snapshot of upon entering SLOW Path TLB Hdlr
     TAKE_SNAP_ASM r8, r9, SNAP_DO_PF_ENTER

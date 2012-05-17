@@ -98,7 +98,15 @@ static void arc_timer1_setup_free_flow(unsigned int limit)
 
 static cycle_t cycle_read_t1(struct clocksource *cs)
 {
+#ifdef CONFIG_SMP
+	unsigned long cyc;
+
+    __asm__ __volatile__("rtsc %0,0   \r\n":"=r" (cyc));
+
+    return (cycle_t)cyc;
+#else
     return (cycle_t)read_new_aux_reg(ARC_REG_TIMER1_CNT);
+#endif
 }
 
 static struct clocksource clocksource_t1 = {
@@ -132,7 +140,7 @@ static void __init arc_clocksource_init(void)
 
 /********** Clock Event Device *********/
 
-struct clock_event_device arc_clockevent_device;
+static DEFINE_PER_CPU(struct clock_event_device, percpu_clockevent);
 
 static irqreturn_t timer_irq_handler(int irq, void *dev_id);
 
@@ -140,12 +148,11 @@ static struct irqaction arc_timer_irq = {
     .name       = "Timer0",
     .flags      = IRQF_DISABLED | IRQF_PERCPU | IRQF_TIMER,
     .handler    = timer_irq_handler,
-    .dev_id     = &arc_clockevent_device,
 };
 
-irqreturn_t timer_irq_handler(int irq, void *dev_id)
+static irqreturn_t timer_irq_handler(int irq, void *dev_id)
 {
-    struct clock_event_device *evt = dev_id;
+    struct clock_event_device *evt = &__get_cpu_var(percpu_clockevent);
 
     arc_timer0_ack_event(evt->mode == CLOCK_EVT_MODE_PERIODIC);
     evt->event_handler(evt);
@@ -176,11 +183,12 @@ static void arc_set_mode(enum clock_event_mode mode,
     return;
 }
 
-static void __cpuinit arc_clockevent_init(void)
+void __cpuinit arc_clockevent_init(void)
 {
     u64 temp;
     u32 shift;
-    struct clock_event_device *cd = &arc_clockevent_device;
+    int cpu = smp_processor_id();
+    struct clock_event_device *cd = &__get_cpu_var(percpu_clockevent);
 
     cd->name = "ARC Clock";
     cd->features = CLOCK_EVT_FEAT_ONESHOT;
@@ -210,13 +218,22 @@ static void __cpuinit arc_clockevent_init(void)
 
     cd->rating  = 300;
     cd->irq     = TIMER0_INT;
-    cd->cpumask = cpumask_of(0);
+    cd->cpumask = cpumask_of(cpu);
     cd->set_next_event  = arc_next_event;
     cd->set_mode        = arc_set_mode;
 
     clockevents_register_device(cd);
 
-    setup_irq(TIMER0_INT, &arc_timer_irq);
+#ifdef CONFIG_SMP
+    if (cpu > 0)
+    {
+    	unsigned int tmp;
+
+    	tmp = read_new_aux_reg(AUX_IENABLE);
+        write_new_aux_reg(AUX_IENABLE, tmp | (1 << TIMER0_INT) );
+    }
+#endif
+
 }
 
 
@@ -229,6 +246,8 @@ void __init time_init(void)
 
     arc_clocksource_init();
     arc_clockevent_init();
+
+    setup_irq(TIMER0_INT, &arc_timer_irq);
 }
 
 static int arc_finished_booting;

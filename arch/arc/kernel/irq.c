@@ -58,9 +58,10 @@ static struct irq_chip arc_chip = {
 	.irq_mask		= arc_mask_interrupt,
 	.irq_unmask 	= arc_unmask_interrupt,
 	.irq_disable	= arc_mask_interrupt,
+	.irq_eoi		= arc_unmask_interrupt
 };
 
-static void __init arc_irq_init(void)
+void __init arc_irq_init(void)
 {
     extern int _int_vec_base_lds;
 
@@ -100,7 +101,20 @@ static void __init arc_irq_init(void)
 }
 #endif
 
+#ifdef CONFIG_SMP
+	smp_ipi_init();
+#endif
+
 }
+
+#ifdef CONFIG_SMP
+extern irqreturn_t do_IPI (int irq, void *dev_id);
+static struct irqaction arc_ipi_irq = {
+		.name           = "IPI",
+		.flags          = IRQF_DISABLED | IRQF_PERCPU,
+		.handler        = do_IPI,
+};
+#endif
 
 void __init init_IRQ(void)
 {
@@ -114,11 +128,15 @@ void __init init_IRQ(void)
 		irq_set_chip_and_handler(i, &arc_chip, handle_level_irq);
 	}
 
-    arc_irq_init();
-
 #ifdef CONFIG_SMP
-	smp_ipi_init();
+	irq_set_chip_and_handler(TIMER0_INT, &arc_chip, handle_percpu_irq);
+	for (i = 0; i < NR_CPUS; i++) {
+		irq_set_chip_and_handler(i+IPI_IRQS_BASE,&arc_chip, handle_percpu_irq);
+        setup_irq(i+IPI_IRQS_BASE, &arc_ipi_irq);
+    }
 #endif
+
+    arc_irq_init();
 }
 
 /* handle the irq */

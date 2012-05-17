@@ -71,6 +71,7 @@
 
 #define AUX_IENABLE         0x40c   /* Known to the assembler as auxienable, so don't really need this */
 #define AUX_ITRIGGER        0x40d
+#define AUX_IPULSE        	0x415
 
 /* Privileged MMU auxiliary register definitions */
 #define ARC_REG_TLBPD0      0x405
@@ -158,6 +159,13 @@
 #define ARC_XTL_CMD_CLEAR_HALT  0x02
 
 
+#else
+#define CPU_SEC_ENTRY_POINT		0xFFFFFFFC
+#define CPU_REGS_BASE			0xC0002000
+#define CPU_REGS_IPI_BASE		(CPU_REGS_BASE + 0xC0)
+#define REGS_CPU_IPI(cpu)		(CPU_REGS_IPI_BASE+(cpu*4))
+#define REG_CPU_RST_CTL			(CPU_REGS_BASE+0x00000014)
+#define REG_CPU_HALT_CTL		(CPU_REGS_BASE+0x00000018)
 #endif
 
 // Profiling AUX regs.
@@ -444,6 +452,7 @@ struct cpuinfo_arc {
     struct bcr_mp  mp;
 #endif
     struct bcr_fp  fp, dpfp;
+    unsigned long lpj; // calibrate_delay output
 };
 
 #ifdef CONFIG_ARCH_ARC_FPU

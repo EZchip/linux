@@ -259,11 +259,19 @@ static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
  * Thus use this macro only when you are certain that "current" is current
  * e.g. when dealing with signal frame setup code etc
  */
+#ifndef CONFIG_SMP    // In smp we use this reg for interrupt 1 scratch
 #define pgd_offset_fast(mm, addr)\
 ({ \
     pgd_t *pgd_base = (pgd_t *) read_new_aux_reg(ARC_REG_SCRATCH_DATA0);  \
     pgd_base + pgd_index(addr); \
 })
+#else
+#define pgd_offset_fast(mm, addr)\
+({ \
+    pgd_t *pgd_base = (struct mm_struct *)mm->pgd; \
+    pgd_base + pgd_index(addr); \
+})
+#endif
 
 extern int do_check_pgt_cache(int, int);
 extern void paging_init(void);

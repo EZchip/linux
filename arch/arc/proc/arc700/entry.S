@@ -299,7 +299,13 @@ ARC_EXIT handle_interrupt_level1
 
 ARC_ENTRY instr_service
 
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+    PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
 
     TAKE_SNAP_ASM r8, r9, SNAP_EXCP_IN
 
@@ -325,7 +331,13 @@ ARC_EXIT instr_service
 
 ARC_ENTRY mem_service
 
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+    PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
 
     TAKE_SNAP_ASM r8, r9, SNAP_EXCP_IN
 
@@ -347,7 +359,13 @@ ARC_EXIT mem_service
 
 ARC_ENTRY EV_MachineCheck
 
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+    PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
     lr  r9, [erstatus]
 
     SWITCH_TO_KERNEL_STK
@@ -381,7 +399,13 @@ ARC_EXIT EV_MachineCheck
 ARC_ENTRY EV_TLBProtV
 
     ; free up r9 as scratchpad
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+    PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
 
     TAKE_SNAP_ASM r8, r9, SNAP_EXCP_IN
 
@@ -454,7 +478,13 @@ ARC_EXIT EV_TLBProtV
 ; Privilege Violation Exception Handler
 ; ---------------------------------------------
 ARC_ENTRY EV_PrivilegeV
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+    PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
 
     TAKE_SNAP_ASM r8, r9, SNAP_EXCP_IN
 
@@ -477,7 +507,13 @@ ARC_EXIT EV_PrivilegeV
 ; Extension Instruction Exception Handler
 ; ---------------------------------------------
 ARC_ENTRY EV_Extension
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+    PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
     lr  r9, [erstatus]
 
     SWITCH_TO_KERNEL_STK
@@ -579,7 +615,13 @@ trap_with_param:
 ARC_ENTRY EV_Trap
 
     ; free up r9 as scratchpad
+#ifdef CONFIG_SMP
+    GET_EX_SCRATCH_ADDR r1
+    st  r9, [r1]
+    PUT_EX_SCRATCH_ADDR r1
+#else
     st  r9, [SYMBOL_NAME(ex_saved_reg1)]
+#endif
 
     TAKE_SNAP_ASM r10, r9,  SNAP_TRAP_IN
 
