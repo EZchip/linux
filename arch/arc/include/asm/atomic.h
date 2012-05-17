@@ -17,34 +17,6 @@
 
 #if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
-#ifdef CONFIG_SMP
-
-#include <linux/spinlock_types.h>
-
-extern spinlock_t smp_atomic_ops_lock;
-extern unsigned long    _spin_lock_irqsave(spinlock_t *lock);
-extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
-
-#define atomic_ops_lock(flags)   flags = _spin_lock_irqsave(&smp_atomic_ops_lock)
-#define atomic_ops_unlock(flags) _spin_unlock_irqrestore(&smp_atomic_ops_lock, flags)
-
-static inline void atomic_set(atomic_t *v, int i)
-{
-    unsigned long flags;
-
-    atomic_ops_lock(flags);
-    v->counter = i;
-    atomic_ops_unlock(flags);
-}
-#else
-
-#define atomic_ops_lock(flags)      local_irq_save(flags)
-#define atomic_ops_unlock(flags)    local_irq_restore(flags)
-
-#define atomic_set(v,i) (((v)->counter) = (i))
-
-#endif
-
 #define atomic_read(v)  ((v)->counter)
 
 #if defined(CONFIG_ARC_HAS_LLSC)
@@ -145,77 +117,17 @@ __cmpxchg(volatile void *ptr, unsigned long expected, unsigned long new)
 
 #else
 
-static inline void atomic_add(int i, atomic_t *v)
-{
-    unsigned long flags;
-
-    atomic_ops_lock(flags);
-    v->counter += i;
-    atomic_ops_unlock(flags);
-}
-
-static inline void atomic_sub(int i, atomic_t *v)
-{
-    unsigned long flags;
-
-    atomic_ops_lock(flags);
-    v->counter -= i;
-    atomic_ops_unlock(flags);
-}
-
-static inline int atomic_add_return(int i, atomic_t *v)
-{
-    unsigned long flags ;
-    unsigned long temp;
-
-    atomic_ops_lock(flags);
-    temp = v->counter;
-    temp += i;
-    v->counter = temp;
-    atomic_ops_unlock(flags);
-
-    return temp;
-}
-
-static inline int atomic_sub_return(int i, atomic_t *v)
-{
-    unsigned long flags;
-    unsigned long temp;
-
-    atomic_ops_lock(flags);
-    temp = v->counter;
-    temp -= i;
-    v->counter = temp;
-    atomic_ops_unlock(flags);
-
-    return temp;
-}
-
-static inline void atomic_clear_mask(unsigned long mask, unsigned long *addr)
-{
-    unsigned long flags;
-
-    atomic_ops_lock(flags);
-    *addr &= ~mask;
-    atomic_ops_unlock(flags);
-}
-
-/* unlike other APIS, cmpxchg is same as atomix_cmpxchg because
- * because the sematics of cmpxchg itself is to be atomic
- */
-static inline unsigned long
-__cmpxchg(volatile void *ptr, unsigned long expected, unsigned long new)
-{
-    unsigned long flags;
-    int prev;
-    volatile unsigned long *p = ptr;
-
-    atomic_ops_lock(flags);
-    if ((prev = *p) == expected)
-        *p = new;
-    atomic_ops_unlock(flags);
-    return(prev);
-}
+#ifdef CONFIG_SMP
+extern void atomic_set(atomic_t *v, int i);
+#else
+#define atomic_set(v,i) (((v)->counter) = (i))
+#endif
+extern void atomic_add(int i, atomic_t *v);
+extern void atomic_sub(int i, atomic_t *v);
+extern int atomic_add_return(int i, atomic_t *v);
+extern int atomic_sub_return(int i, atomic_t *v);
+extern void atomic_clear_mask(unsigned long mask, unsigned long *addr);
+extern unsigned long __cmpxchg(volatile void *ptr, unsigned long expected, unsigned long new);
 
 #endif  /* CONFIG_ARC_HAS_LLSC */
 

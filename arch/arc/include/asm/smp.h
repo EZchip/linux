@@ -29,4 +29,7 @@ typedef struct {
 }
 secondary_boot_t;
 
+extern void arch_send_call_function_single_ipi(int cpu);
+extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
+
 #endif

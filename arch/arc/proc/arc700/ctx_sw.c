@@ -21,10 +21,13 @@
 struct task_struct * __sched
 __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
 {
+	extern struct task_struct *_current_task[NR_CPUS];
     unsigned int tmp;
     unsigned int prev = (unsigned int)prev_task;
     unsigned int next = (unsigned int)next_task ;
     int num_words_to_skip = 1;
+    unsigned int cpu = smp_processor_id();
+    unsigned int _current_task_ptr = (unsigned int)&_current_task[cpu];
 #ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     num_words_to_skip++;
 #endif
@@ -59,7 +62,7 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
     "sync   \n\t"
 
     //--------------------------------
-    "st  %2, [_current_task]   \n\t"
+    "st  %2, [%5]   \n\t"
 #ifdef CONFIG_ARCH_ARC_CURR_IN_REG
     "mov r25, %2   \n\t"
 #endif
@@ -97,7 +100,8 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
     :"n" ((TASK_THREAD + THREAD_KSP)/4),
      "r" (next),
      "r"(prev),
-     "n" (num_words_to_skip * 4)
+     "n" (num_words_to_skip * 4),
+     "r" (_current_task_ptr)
     :"blink"
     );
 

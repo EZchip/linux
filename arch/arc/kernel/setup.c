@@ -91,6 +91,18 @@ char __initdata command_line[COMMAND_LINE_SIZE];
 
 struct task_struct *_current_task[NR_CPUS];  /* currently active task */
 
+/*
+;--------------------------------------------------------------------------
+; Temporary Variables used to Free UP a REG at the entry of Exception
+; ARC 700 doesn't have any scratch REG which can be used to free up a REG
+;   for low level stack switching and saving pre-exception REGS
+; Thus need these globals.
+; Holds r0-r3 for duration of TLB Refill Code
+; IMP: Must be Cache Line aligned
+;--------------------------------------------------------------------------
+*/
+volatile unsigned char ex_saved_reg1[NR_CPUS * DCACHE_COMPILE_LINE_LEN] __attribute__((aligned(DCACHE_COMPILE_LINE_LEN))) __arcfp_data;
+
 /* A7 does not autoswitch stacks on interrupt or exception ,so we do it
  * manually.But we need one register for each interrupt level to play with
  * which is saved and restored from the following variable.
@@ -637,6 +649,7 @@ void __init setup_arch(char **cmdline_p)
     unsigned long first_free_pfn, kernel_end_addr;
     extern unsigned long atag_head;
     struct tag *tags = (struct tag *)&init_tags;   /* to shut up gcc */
+    unsigned int cpu = smp_processor_id();
 
 
     /* If parameters passed by u-boot, override compile-time parameters */
@@ -676,7 +689,7 @@ void __init setup_arch(char **cmdline_p)
      */
     strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
 
-    _current_task[0] = &init_task;
+    _current_task[cpu] = &init_task;
 
     /******* Setup bootmem allocator *************/
 
@@ -758,8 +771,8 @@ static int show_cpuinfo(struct seq_file *m, void *v)
     seq_printf(m, arc_cpu_mumbojumbo(cpu_id, str));
 
     seq_printf(m, "Bogo MIPS : \t%lu.%02lu\n",
-           loops_per_jiffy / (500000 / HZ),
-           (loops_per_jiffy / (5000 / HZ)) % 100);
+    		cpuinfo_arc700[cpu_id].lpj / (500000 / HZ),
+           (cpuinfo_arc700[cpu_id].lpj / (5000 / HZ)) % 100);
 
     seq_printf(m, arc_mmu_mumbojumbo(cpu_id, str));
 

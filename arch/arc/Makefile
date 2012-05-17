@@ -88,6 +88,10 @@ KBUILD_CFLAGS	+= -multcost=16
 ARC_LIBGCC		:= -mA7
 endif
 
+ifdef CONFIG_CPU_BIG_ENDIAN
+ARC_LIBGCC		+= -EB
+endif
+
 #setup AFLAGS from CFLAGS when we are done with all the CFLAGS
 KBUILD_AFLAGS		+= $(KBUILD_CFLAGS)
 

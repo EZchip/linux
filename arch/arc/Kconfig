@@ -163,7 +163,8 @@ endchoice
 config SMP
         bool "Symmetric Multi-Processing (Incomplete)"
     default y
-    depends on ARCH_ARC800
+    depends on ARCH_ARC800 || ARCH_ARC700
+	select USE_GENERIC_SMP_HELPERS
         help
           This enables support for systems with more than one CPU. If you have
           a system with only one CPU, like most personal computers, say N. If
@@ -186,7 +187,7 @@ config NR_CPUS
         int "Maximum number of CPUs (2-32)"
         range 2 32
         depends on SMP
-        default "2"
+        default "4"
 
 
 menuconfig ARC700_CACHE

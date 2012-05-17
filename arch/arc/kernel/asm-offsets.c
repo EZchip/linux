@@ -38,6 +38,7 @@ int main(void)
 	BLANK();
 
 	DEFINE(THREAD_INFO_FLAGS, offsetof(struct thread_info, flags));
+	DEFINE(THREAD_INFO_CURR_TASK, offsetof(struct thread_info, task));
 	DEFINE(THREAD_INFO_PREEMPT_COUNT, offsetof(struct thread_info, preempt_count));
 
 	BLANK();

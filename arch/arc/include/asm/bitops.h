@@ -37,25 +37,6 @@
 #include <linux/compiler.h>
 #include <linux/irqflags.h>
 
-#ifdef CONFIG_SMP
-
-#include <linux/spinlock_types.h>
-
-extern spinlock_t    smp_bitops_lock;
-extern unsigned long _spin_lock_irqsave(spinlock_t *lock);
-extern void _spin_unlock_irqrestore(spinlock_t *lock, unsigned long);
-
-#define bitops_lock(flags)   flags = _spin_lock_irqsave(&smp_bitops_lock)
-#define bitops_unlock(flags) _spin_unlock_irqrestore(&smp_bitops_lock, flags)
-
-#else
-
-#define bitops_lock(flags)   local_irq_save(flags)
-#define bitops_unlock(flags) local_irq_restore(flags)
-
-#endif
-
-
 #if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
 #if defined(CONFIG_ARC_HAS_LLSC)
@@ -173,129 +154,12 @@ test_and_change_bit(unsigned long nr, volatile unsigned long *m)
 
 #else
 
-static inline void set_bit(unsigned long nr, volatile unsigned long *m)
-{
-    unsigned long temp, flags;
-    m += nr >> 5;
-
-    bitops_lock(flags);
-
-    __asm__ __volatile__(
-    "   ld%U3 %0,%3\n\t"
-    "   bset %0,%0,%2\n\t"
-    "   st%U1 %0,%1\n\t"
-    :"=&r" (temp), "=o" (*m)
-    :"ir" (nr), "m" (*m));
-
-    bitops_unlock(flags);
-}
-
-static inline void clear_bit(unsigned long nr, volatile unsigned long *m)
-{
-    unsigned long temp, flags;
-    m += nr >> 5;
-
-    bitops_lock(flags);
-
-    __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bclr %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"ir" (nr), "m" (*m));
-
-    bitops_unlock(flags);
-}
-
-static inline void change_bit(unsigned long nr, volatile unsigned long *m)
-{
-    unsigned long temp, flags;
-    m += nr >> 5;
-
-    bitops_lock(flags);
-
-    __asm__ __volatile__(
-       "    ld%U3 %0,%3\n\t"
-       "    bxor %0,%0,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"ir" (nr), "m" (*m));
-
-    bitops_unlock(flags);
-}
-
-
-static inline int
-test_and_set_bit(unsigned long nr, volatile unsigned long *m)
-{
-    unsigned long old, temp, flags;
-    m += nr >> 5;
-    // int old = *m; This is wrong, we are reading data before getting lock
-
-    bitops_lock(flags);
-
-    old = *m;
-
-    __asm__ __volatile__(
-       "    bset  %0,%3,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"ir" (nr), "r"(old));
-
-    bitops_unlock(flags);
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    return (old & (1 << nr)) != 0;
-}
-
-
-static inline int
-test_and_clear_bit(unsigned long nr, volatile unsigned long *m)
-{
-    unsigned long temp, old, flags;
-    m += nr >> 5;
-
-    bitops_lock(flags);
-
-    old = *m;
-
-    __asm__ __volatile__(
-       "    bclr  %0,%3,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"ir" (nr), "r"(old));
-
-    bitops_unlock(flags);
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    return (old & (1 << nr)) != 0;
-}
-
-
-static inline int
-test_and_change_bit(unsigned long nr, volatile unsigned long *m)
-{
-    unsigned long temp, old, flags;
-    m += nr >> 5;
-
-    bitops_lock(flags);
-
-    old = *m;
-
-    __asm__ __volatile__(
-       "    bxor %0,%3,%2\n\t"
-       "    st%U1 %0,%1\n\t"
-       :"=&r" (temp), "=o" (*m)
-       :"ir" (nr), "r"(old));
-
-    bitops_unlock(flags);
-
-    if (__builtin_constant_p(nr)) nr &= 0x1f;
-
-    return (old & (1 << nr)) != 0;
-}
+extern void set_bit(unsigned long nr, volatile unsigned long *m);
+extern void clear_bit(unsigned long nr, volatile unsigned long *m);
+extern void change_bit(unsigned long nr, volatile unsigned long *m);
+extern int test_and_set_bit(unsigned long nr, volatile unsigned long *m);
+extern int test_and_clear_bit(unsigned long nr, volatile unsigned long *m);
+extern int test_and_change_bit(unsigned long nr, volatile unsigned long *m);
 
 #endif /* CONFIG_ARC_HAS_LLSC */
 

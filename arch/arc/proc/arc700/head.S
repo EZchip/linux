@@ -130,6 +130,7 @@ wakeup_secondary:
 
     ; (2)------- Set the PC of 2nd CPU  --------
 
+#ifdef CONFIG_ARCH_ARC800
     mov r1, SYMBOL_NAME(secondary_boot_data)    ; primary sets boot params here
     mov r2, ARC_XTL_CMD_WRITE_PC
     ld r3, [r1, SECONDARY_BOOT_CPU_ID]          ; Fetch cpu-id
@@ -147,6 +148,14 @@ wakeup_secondary:
     or r2, r2, r3                   ; club cpu-id and clear-hlt cmd.
                                     ;   r3 already has cpu-id nicely shifted
     sr r2, [ARC_AUX_XTL_REG_CMD]    ; trigger CLEAR_HTL
+#else
+	; Release secondary from HALT
+	asl r2, 0x1, r0
+	mov r0, REG_CPU_HALT_CTL
+	ld r1, [r0]
+	or r1, r1, r2
+	st r1, [r0]
+#endif
 
     j [blink]   ; function epilogue, return to caller
 
@@ -168,6 +177,11 @@ first_lines_of_secondary:
     mov r2, SYMBOL_NAME(secondary_boot_data)
     ld r3, [r2, SECONDARY_BOOT_STACK]
     mov sp, r3
+
+#ifdef CONFIG_ARCH_ARC_CURR_IN_REG
+	GET_CURR_THR_INFO_FROM_SP r25
+    ld  r25, [r25, THREAD_INFO_CURR_TASK]
+#endif
 
     mov fp, 0
     jal start_kernel_secondary
