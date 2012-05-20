@@ -18,6 +18,9 @@ KBUILD_CFLAGS		+= -Iarch/arc/include/asm/board-$(PLATFORM)
 KBUILD_CFLAGS		+= -mA7 -fno-common -pipe -fno-builtin \
 						-D__linux__
 
+LDFLAGS_vmlinux		+= $(call cc-ifversion, -gt, 0402, -marclinux)
+KBUILD_CFLAGS		+= $(call cc-ifversion, -gt, 0402, -mlong-calls)
+
 # preprocessor macros due to following: __Xlock __Xswape __Xrtsc
 ifdef CONFIG_ARC_HAS_LLSC
 KBUILD_CFLAGS		+= -mlock
@@ -89,7 +92,7 @@ ARC_LIBGCC		:= -mA7
 endif
 
 ifdef CONFIG_CPU_BIG_ENDIAN
-ARC_LIBGCC		+= -EB
+ARC_LIBGCC		+= $(call cc-ifversion, -lt, 0407, -EB)
 endif
 
 #setup AFLAGS from CFLAGS when we are done with all the CFLAGS
