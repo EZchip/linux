@@ -11,10 +11,6 @@
 
 #include <asm-generic/int-ll64.h>
 
-#ifndef __ASSEMBLY__
-typedef unsigned short umode_t;
-#endif /* !__ASSEMBLY__ */
-
 #ifdef __KERNEL__
 #define BITS_PER_LONG 32
 #endif /* __KERNEL__ */
