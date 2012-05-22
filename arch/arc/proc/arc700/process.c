@@ -82,7 +82,7 @@ void cpu_idle(void)
 
     /* endless idle loop with no priority at all */
     while (1) {
-        tick_nohz_stop_sched_tick(1);
+	tick_nohz_idle_enter();
 
         /* Test the need-resced "flag" of current task "idle"
            A local ISR or peer CPU may want resched
@@ -92,7 +92,7 @@ void cpu_idle(void)
         while(!need_resched())
             arch_idle();
 
-        tick_nohz_restart_sched_tick();
+	tick_nohz_idle_exit();
 
         preempt_enable_no_resched();
         schedule();
