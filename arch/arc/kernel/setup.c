@@ -470,7 +470,7 @@ static int __init parse_tag_mem32(struct tag *tag)
 {
     printk_init("ATAG_MEM: size = 0x%x\n", tag->u.mem.size);
 
-    end_mem = CONFIG_SDRAM_SIZE + CONFIG_LINUX_LINK_BASE;
+    end_mem = tag->u.mem.size + CONFIG_LINUX_LINK_BASE;
 
     return 0;
 }
