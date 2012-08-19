@@ -358,6 +358,12 @@ void __init setup_arch(char **cmdline_p)
 	strlcat(command_line, " ", sizeof(command_line));
 #endif
 	/*
+	 * Special case for getting command line from nSIM
+	 */
+	if (!running_on_hw)
+		strlcat(command_line, (char *)(0xc0004000), sizeof(command_line));
+
+	/*
 	 * Append .config cmdline to base command line, which might already
 	 * contain u-boot "bootargs" (handled by head.S, if so configured)
 	 */
