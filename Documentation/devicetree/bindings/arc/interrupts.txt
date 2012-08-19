@@ -6,6 +6,7 @@
 Properties:
 
 - compatible: "snps,arc700-intc"
+- compatible: "ezchip,arc700-intc"
 - interrupt-controller: This is an interrupt controller.
 - #interrupt-cells: Must be <1>.
 
