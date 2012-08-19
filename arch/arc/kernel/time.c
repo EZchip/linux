@@ -31,6 +31,7 @@
 #include <linux/clockchips.h>
 #include <asm/irq.h>
 #include <asm/arcregs.h>
+#include <plat/time.h>
 
 /* ARC700 has two 32bit independent prog Timers: TIMER0 and TIMER1
  * Each can programmed to go from @count to @limit and optionally
@@ -44,21 +45,6 @@
 /******************************************************************
  * Hardware Interface routines to program the ARC TIMERs
  ******************************************************************/
-
-/*
- * Arm the timer to interrupt after @limit cycles
- */
-static void arc_periodic_timer_setup(unsigned int limit)
-{
-	/* setup start and end markers */
-	write_aux_reg(ARC_REG_TIMER0_LIMIT, limit);
-	write_aux_reg(ARC_REG_TIMER0_CNT, 0);	/* start from 0 */
-
-	/* IE: Interrupt on count = limit,
-	 * NH: Count cycles only when CPU running (NOT Halted)
-	 */
-	write_aux_reg(ARC_REG_TIMER0_CTRL, TIMER_CTRL_IE | TIMER_CTRL_NH);
-}
 
 /*
  * Acknowledge the interrupt & enable/disable the interrupt
@@ -96,15 +82,10 @@ void __cpuinit arc_clock_counter_setup(void)
 
 /********** Clock Source Device *********/
 
-static cycle_t cycle_read_t1(struct clocksource *cs)
-{
-	return (cycle_t) read_aux_reg(ARC_REG_TIMER1_CNT);
-}
-
 static struct clocksource clocksource_t1 = {
 	.name = "ARC Timer1",
 	.rating = 300,
-	.read = cycle_read_t1,
+	.read = arc_platform_read_timer1,
 	.mask = CLOCKSOURCE_MASK(32),
 	.flags = CLOCK_SOURCE_IS_CONTINUOUS,
 };
@@ -125,7 +106,7 @@ void __cpuinit arc_clocksource_init(void)
 static int arc_clkevent_set_next_event(unsigned long delta,
 				    struct clock_event_device *dev)
 {
-	arc_periodic_timer_setup(delta);
+	arc_platform_periodic_timer_setup(delta);
 	return 0;
 }
 
@@ -135,7 +116,7 @@ static void arc_clkevent_set_mode(enum clock_event_mode mode,
 	pr_info("Device [%s] clockevent mode now [%d]\n", dev->name, mode);
 	switch (mode) {
 	case CLOCK_EVT_MODE_PERIODIC:
-		arc_periodic_timer_setup(CONFIG_ARC_PLAT_CLK / HZ);
+		arc_platform_periodic_timer_setup(CONFIG_ARC_PLAT_CLK / HZ);
 		break;
 	case CLOCK_EVT_MODE_ONESHOT:
 		break;
@@ -198,6 +179,7 @@ void __cpuinit arc_clockevent_init(void)
 
 void __init time_init(void)
 {
+	arc_platform_timer_init();
 	arc_clocksource_init();
 	arc_clockevent_init();
 }
