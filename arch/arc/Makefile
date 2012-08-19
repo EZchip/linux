@@ -15,6 +15,7 @@ KBUILD_DEFCONFIG := fpga_defconfig
 platform-$(CONFIG_ARC_PLAT_FPGA_LEGACY)	:= arcfpga
 platform-$(CONFIG_ARC_PLAT_HAPS51)	:= haps51
 # !! A new platform should be added here.
+platform-$(CONFIG_ARC_PLAT_EZNPS)	:= eznps
 
 PLATFORM := $(platform-y)
 export PLATFORM
