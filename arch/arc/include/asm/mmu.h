@@ -28,7 +28,7 @@
  */
 #ifndef __ASSEMBLY__
 typedef struct {
-	unsigned long asid;	/* Pvt Addr-Space ID for mm */
+	unsigned long asid[NR_CPUS];	/* Pvt Addr-Space ID for mm */
 #ifdef CONFIG_ARC_TLB_DBG
 	struct task_struct *tsk;
 #endif

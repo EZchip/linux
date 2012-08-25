@@ -510,6 +510,7 @@ static noinline void
 mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
 		   int exec_on)
 {
+	unsigned int cpu = smp_processor_id();
 	unsigned long frame_tlbpd1, flags;
 	unsigned int asid;
 
@@ -517,7 +518,7 @@ mod_tlb_permission(unsigned long frame_vaddr, struct mm_struct *mm,
 		return;
 	local_irq_save(flags);
 
-	asid = mm->context.asid;
+	asid = mm->context.asid[cpu];
 
 	frame_vaddr = frame_vaddr & PAGE_MASK;
 	/* get the ASID */

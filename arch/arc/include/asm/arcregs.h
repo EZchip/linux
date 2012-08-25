@@ -385,6 +385,18 @@ struct cpuinfo_arc {
 	struct bcr_extn_xymem extn_xymem;
 	struct bcr_extn_mac_mul extn_mac_mul;
 	struct bcr_fp fp, dpfp;
+	unsigned int asid_cache;
+#define FIRST_ASID  0
+#define MAX_ASID    255		/* ARC 700 8 bit PID field in PID Aux reg */
+#define NUM_ASID    ((MAX_ASID - FIRST_ASID) + 1)
+/* We use this to indicate that no ASID has been allocated to a mmu context */
+#define NO_ASID     (MAX_ASID + 1)
+	/*
+	 * ASID to mm struct mapping. We have one extra entry corresponding to
+	 * NO_ASID to save us a compare when clearing the mm entry for old asid
+	 * see get_new_mmu_context (asm-arc/mmu_context.h)
+	 */
+	struct mm_struct *asid_mm_map[NUM_ASID + 1];
 };
 
 #ifdef CONFIG_ARC_FPU_SAVE_RESTORE
