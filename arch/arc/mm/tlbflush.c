@@ -1,0 +1,100 @@
+/*
+ * Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+#include <linux/sched.h>
+#include <asm/tlbflush.h>
+
+static void
+on_each_cpu_mask(void (*func)(void *), void *info, int wait,
+               const struct cpumask *mask)
+{
+       preempt_disable();
+       smp_call_function_many(mask, func, info, wait);
+       if (cpumask_test_cpu(smp_processor_id(), mask))
+       {
+    	   local_irq_disable();
+    	   func(info);
+    	   local_irq_enable();
+       }
+       preempt_enable();
+}
+
+struct tlb_args {
+       struct vm_area_struct *ta_vma;
+       unsigned long ta_start;
+       unsigned long ta_end;
+};
+
+static inline void ipi_flush_tlb_all(void *ignored)
+{
+       local_flush_tlb_all();
+}
+
+static inline void ipi_flush_tlb_mm(void *arg)
+{
+       struct mm_struct *mm = (struct mm_struct *)arg;
+
+       local_flush_tlb_mm(mm);
+}
+
+static inline void ipi_flush_tlb_page(void *arg)
+{
+       struct tlb_args *ta = (struct tlb_args *)arg;
+
+       local_flush_tlb_page(ta->ta_vma, ta->ta_start);
+}
+
+static inline void ipi_flush_tlb_range(void *arg)
+{
+       struct tlb_args *ta = (struct tlb_args *)arg;
+
+       local_flush_tlb_range(ta->ta_vma, ta->ta_start, ta->ta_end);
+}
+
+static inline void ipi_flush_tlb_kernel_range(void *arg)
+{
+       struct tlb_args *ta = (struct tlb_args *)arg;
+
+       local_flush_tlb_kernel_range(ta->ta_start, ta->ta_end);
+}
+
+void flush_tlb_all(void)
+{
+       on_each_cpu(ipi_flush_tlb_all, NULL, 1);
+}
+
+void flush_tlb_mm(struct mm_struct *mm)
+{
+       on_each_cpu_mask(ipi_flush_tlb_mm, mm, 1, mm_cpumask(mm));
+}
+
+void flush_tlb_page(struct vm_area_struct *vma, unsigned long uaddr)
+{
+       struct tlb_args ta;
+       ta.ta_vma = vma;
+       ta.ta_start = uaddr;
+       on_each_cpu_mask(ipi_flush_tlb_page, &ta, 1, mm_cpumask(vma->vm_mm));
+}
+
+void flush_tlb_range(struct vm_area_struct *vma,
+                     unsigned long start, unsigned long end)
+{
+       struct tlb_args ta;
+       ta.ta_vma = vma;
+       ta.ta_start = start;
+       ta.ta_end = end;
+       on_each_cpu_mask(ipi_flush_tlb_range, &ta, 1, mm_cpumask(vma->vm_mm));
+}
+
+void flush_tlb_kernel_range(unsigned long start, unsigned long end)
+{
+       struct tlb_args ta;
+       ta.ta_start = start;
+       ta.ta_end = end;
+       on_each_cpu(ipi_flush_tlb_kernel_range, &ta, 1);
+}
