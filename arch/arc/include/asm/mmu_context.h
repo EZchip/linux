@@ -66,22 +66,15 @@ extern void arch_exit_mmap(struct mm_struct *mm);
  * gauranteed that TLB entries with that ASID wont exist.
  */
 
-#define FIRST_ASID  0
-#define MAX_ASID    255		/* ARC 700 8 bit PID field in PID Aux reg */
-#define NUM_ASID    ((MAX_ASID - FIRST_ASID) + 1)
-/* We use this to indicate that no ASID has been allocated to a mmu context */
-#define NO_ASID     (MAX_ASID + 1)
-
-/* ASID to mm struct mapping */
-extern struct mm_struct *asid_mm_map[NUM_ASID + 1];
-
-extern int asid_cache;
+#define asid_cache(cpu)		(cpuinfo_arc700[cpu].asid_cache)
+#define asid_mm_map(cpu, asid)	(cpuinfo_arc700[cpu].asid_mm_map[asid])
 
 /* Assign a new ASID to task. If the task already has an ASID, it is
  * relinquished.
  */
 static inline void get_new_mmu_context(struct mm_struct *mm)
 {
+	unsigned int cpu = smp_processor_id();
 	struct mm_struct *prev_owner;
 	unsigned long flags;
 
@@ -91,12 +84,12 @@ static inline void get_new_mmu_context(struct mm_struct *mm)
 	 * Doing unconditionally saves a cmp-n-branch; for already unused
 	 * ASID slot, the value was/remains NULL
 	 */
-	asid_mm_map[mm->context.asid] = (struct mm_struct *)NULL;
+	asid_mm_map(cpu, mm->context.asid[cpu]) = (struct mm_struct *)NULL;
 
 	/* move to new ASID */
-	if (++asid_cache > MAX_ASID) {	/* ASID roll-over */
-		asid_cache = FIRST_ASID;
-		flush_tlb_all();
+	if (++asid_cache(cpu) > MAX_ASID) {	/* ASID roll-over */
+		asid_cache(cpu) = FIRST_ASID;
+		local_flush_tlb_all();
 	}
 
 	/*
@@ -113,13 +106,13 @@ static inline void get_new_mmu_context(struct mm_struct *mm)
 	 * didn't get a chance to refresh it's ASID - implying stale entries
 	 * won't exist.
 	 */
-	prev_owner = asid_mm_map[asid_cache];
+	prev_owner = asid_mm_map(cpu, asid_cache(cpu));
 	if (prev_owner)
-		prev_owner->context.asid = NO_ASID;
+		prev_owner->context.asid[cpu] = NO_ASID;
 
 	/* Assign new ASID to tsk */
-	asid_mm_map[asid_cache] = mm;
-	mm->context.asid = asid_cache;
+	asid_mm_map(cpu, asid_cache(cpu)) = mm;
+	mm->context.asid[cpu] = asid_cache(cpu);
 
 #ifdef CONFIG_ARC_TLB_DBG
 	pr_info("ARC_TLB_DBG: NewMM=0x%x OldMM=0x%x task_struct=0x%x Task: %s,"
@@ -129,7 +122,7 @@ static inline void get_new_mmu_context(struct mm_struct *mm)
 	       (mm->context.tsk)->pid, mm->context.asid);
 #endif
 
-	write_aux_reg(ARC_REG_PID, asid_cache | MMU_ENABLE);
+	write_aux_reg(ARC_REG_PID, asid_cache(cpu) | MMU_ENABLE);
 
 	local_irq_restore(flags);
 }
@@ -141,7 +134,10 @@ static inline void get_new_mmu_context(struct mm_struct *mm)
 static inline int
 init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 {
-	mm->context.asid = NO_ASID;
+	int i;
+
+	for (i=0; i<NR_CPUS; i++)
+		mm->context.asid[i] = NO_ASID;
 #ifdef CONFIG_ARC_TLB_DBG
 	mm->context.tsk = tsk;
 #endif
@@ -154,6 +150,8 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 			     struct task_struct *tsk)
 {
+	unsigned int cpu = smp_processor_id();
+
 #ifndef CONFIG_SMP
 	/* PGD cached in MMU reg to avoid 3 mem lookups: task->mm->pgd */
 	write_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
@@ -171,15 +169,20 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 	 * detected using the single condition below:  NO_ASID = 256
 	 * while asid_cache is always a valid ASID value (0-255).
 	 */
-	if (next->context.asid > asid_cache) {
+	if (next->context.asid[cpu] > asid_cache(cpu)) {
 		get_new_mmu_context(next);
 	} else {
 		/*
 		 * XXX: This will never happen given the chks above
 		 * BUG_ON(next->context.asid > MAX_ASID);
 		 */
-		write_aux_reg(ARC_REG_PID, next->context.asid | MMU_ENABLE);
+		write_aux_reg(ARC_REG_PID, next->context.asid[cpu] | MMU_ENABLE);
 	}
+
+	/* Clear cpu from the old mm, and set it in the new one. */
+	cpumask_clear_cpu(cpu, mm_cpumask(prev));
+	cpumask_set_cpu(cpu, mm_cpumask(next));
+
 
 #ifdef CONFIG_ARC_MMU_SASID
 	{
@@ -195,12 +198,14 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 
 static inline void destroy_context(struct mm_struct *mm)
 {
+	unsigned int cpu = smp_processor_id();
 	unsigned long flags;
 
 	local_irq_save(flags);
 
-	asid_mm_map[mm->context.asid] = NULL;
-	mm->context.asid = NO_ASID;
+	cpumask_clear_cpu(cpu, mm_cpumask(mm));
+	asid_mm_map(cpu, mm->context.asid[cpu]) = NULL;
+	mm->context.asid[cpu] = NO_ASID;
 
 	local_irq_restore(flags);
 }
@@ -216,12 +221,16 @@ static inline void destroy_context(struct mm_struct *mm)
 
 static inline void activate_mm(struct mm_struct *prev, struct mm_struct *next)
 {
+	unsigned int cpu = smp_processor_id();
+
 #ifndef CONFIG_SMP
 	write_aux_reg(ARC_REG_SCRATCH_DATA0, next->pgd);
 #endif
 
 	/* Unconditionally get a new ASID */
 	get_new_mmu_context(next);
+
+	cpumask_set_cpu(cpu, mm_cpumask(next));
 
 #ifdef CONFIG_ARC_MMU_SASID
 	BUG_ON((is_any_mmapcode_task_subscribed(next)));
