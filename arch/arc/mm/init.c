@@ -9,6 +9,9 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/bootmem.h>
+#ifdef CONFIG_BLK_DEV_INITRD
+#include <linux/initrd.h>
+#endif
 #ifdef CONFIG_BLOCK_DEV_RAM
 #include <linux/blk.h>
 #endif
@@ -151,6 +154,32 @@ void __init free_initrd_mem(unsigned long start, unsigned long end)
 {
 	free_init_pages("initrd memory", start, end);
 }
+
+void __init reserve_initrd_mem(void)
+{
+	unsigned long size = initrd_end - initrd_start;
+	
+	if (size > 0)
+		reserve_bootmem(__pa(initrd_start), size, BOOTMEM_DEFAULT);
+}
+
+static int __init rd_start_early(char *p)
+{
+	unsigned long start = memparse(p, &p);
+
+	initrd_start = start;
+	initrd_end += start;
+	return 0;
+}
+early_param("rd_start", rd_start_early);
+
+static int __init rd_size_early(char *p)
+{
+	initrd_end += memparse(p, &p);
+	return 0;
+}
+early_param("rd_size", rd_size_early);
+
 #endif
 
 /*
@@ -199,4 +228,8 @@ void __init setup_arch_memory(void)
 	 */
 	alloc_start = kernel_img_end + bootmap_sz;
 	free_bootmem(alloc_start, end_mem - alloc_start);
+
+#ifdef CONFIG_BLK_DEV_INITRD
+	reserve_initrd_mem();
+#endif
 }
