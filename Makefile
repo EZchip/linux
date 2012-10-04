@@ -408,7 +408,7 @@ export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exc
 
 # Basic helpers built in scripts/
 PHONY += scripts_basic
-scripts_basic:
+scripts_basic: asm-generic
 	$(Q)$(MAKE) $(build)=scripts/basic
 	$(Q)rm -f .tmp_quiet_recordmcount
 
