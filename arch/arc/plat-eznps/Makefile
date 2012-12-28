@@ -4,5 +4,5 @@
 
 obj-y := platform.o irq.o time.o
 
-obj-$(CONFIG_NPS_SMP_EXTN)		+= smp.o
+obj-$(CONFIG_NPS_SMP_EXTN)		+= smp.o cmem.o
 
