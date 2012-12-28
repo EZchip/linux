@@ -1,0 +1,43 @@
+
+NPS-400 DPL driver and CMEM and FMT memory mappings
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The CTOP cores in EZchip's NPS-400 have several time of cloesly coupled memories
+that are not globally addressable. That is, load, stores and instruction fetches
+to virtual address mapping these local memories will result in reading different
+physical memories depending on from where (from which core, in which cluster)
+these transactions were inititated.
+
+For code running on these cores this is fine - access from each cores is
+directed to the appropriate local memory providing low and bounded access
+latencies which are required to allow data plane processing at 800 Gbps,
+which is the purpose of this hardware feature.
+
+However, this means that to access the content of these memories from another
+core, for example in order to provide access via ptrace() for debugging
+purposes, we cannot simply map a virtual address and perform the access from any
+random core but instead must perform an IPI function call invocation on the
+specific core the relevant memory is attached to.
+
+Hence, EZchip NPS-400 platform support code include a simple character device,
+dubbed DPL (for Data Plane Linux). This character device allows a user library
+to install, using mmap(), a special IO mapping to these ranges of virtual
+addresses which will cause kernel access to these virtual address space of the
+mapping process to be done via IPI function call.
+
+It is worth noting the mmap() call itself does not install any useful mapping
+as such - while does add page table entries for these mapping, thos are "fake"
+in the sense that they will never be used as the CTOP hardware will never incur
+a TLB miss for these address ranges since they are served by the Fixed Mapping
+Table MMU mechanism, which never faults.
+
+The driver also exposes an IOCTL which allows the user library to setup and
+configure these special mapping in the hardware.
+
+Two such special virtual mapping are supported:
+
+CMEM, for Core Memory, which a core specific closely coupled memory
+FMT, for Fixed Mapping Table, which allows mapping of a cluster
+(a cluster is a group of cores) level SRAM.
+
+Gilad Ben Yossef
