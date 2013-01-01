@@ -22,8 +22,11 @@ export PLATFORM
 
 cflags-y	+= -Iarch/arc/plat-$(PLATFORM)/include
 
-LINUXINCLUDE	+=  -include ${src}/arch/arc/include/asm/defines.h \
-		    -include ${src}/arch/arc/include/asm/current.h
+LINUXINCLUDE	+=  -include ${src}/arch/arc/include/asm/defines.h
+
+ifdef CONFIG_ARC_CURR_IN_REG
+LINUXINCLUDE	+=  -include ${src}/arch/arc/include/asm/current.h
+endif
 
 cflags-y	+= -mA7 -fno-common -pipe -fno-builtin \
 						-D__linux__
