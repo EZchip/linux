@@ -18,6 +18,7 @@
 
 #include <asm/page.h>		/* for PAGE_OFFSET  */
 #include <asm/arcregs.h>	/* for STATUS_E1_MASK et all */
+#include <plat/memmap.h>	/* for PLAT_RESERVED_GUTTER */
 
 /* Most of the architectures seem to be keeping some kind of padding between
  * userspace TASK_SIZE and PAGE_OFFSET. i.e TASK_SIZE != PAGE_OFFSET.
@@ -33,13 +34,13 @@
  */
 #define TASK_SIZE   (PAGE_OFFSET - VMALLOC_SIZE - USER_KERNEL_GUTTER)
 
-#define STACK_TOP_MAX   TASK_SIZE
-#define STACK_TOP       TASK_SIZE
+#define STACK_TOP_MAX   (TASK_SIZE - PLAT_RESERVED_GUTTER)
+#define STACK_TOP       (TASK_SIZE - PLAT_RESERVED_GUTTER)
 
 /* This decides where the kernel will search for a free chunk of vm
  * space during mmap's.
  */
-#define TASK_UNMAPPED_BASE      (TASK_SIZE / 3)
+#define TASK_UNMAPPED_BASE      PAGE_ALIGN(TASK_SIZE / 3)
 
 #ifndef __ASSEMBLY__
 
