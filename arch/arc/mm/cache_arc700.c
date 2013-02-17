@@ -753,11 +753,32 @@ void flush_icache_range(unsigned long kstart, unsigned long kend)
  * An added adv of knowing that vaddr is user-vaddr avoids various checks
  * and handling for k-vaddr, k-paddr as done in orig ver above
  */
-void flush_icache_range_vaddr(unsigned long paddr, unsigned long u_vaddr,
+void __flush_icache_range_vaddr(unsigned long paddr, unsigned long u_vaddr,
 			      int len)
 {
 	__arc_icache_inv_lines_vaddr(paddr, u_vaddr, len);
 	__arc_dcache_flush_lines(paddr, len);
+}
+
+struct ipi_flush {
+	unsigned long paddr;
+	unsigned long u_vaddr;
+	int len;
+};
+
+static void flush_icache_range_vaddr_ipi(void *info)
+{
+	struct ipi_flush *flush = (struct ipi_flush *) info;
+	__flush_icache_range_vaddr(flush->paddr, flush->u_vaddr, flush->len);
+}
+
+void flush_icache_range_vaddr(unsigned long paddr, unsigned long u_vaddr,
+			      int len)
+{
+	struct ipi_flush flush = { paddr, u_vaddr , len};
+	preempt_disable();
+	on_each_cpu(flush_icache_range_vaddr_ipi, &flush, 1);
+	preempt_enable();
 }
 
 /*
