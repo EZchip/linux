@@ -758,6 +758,11 @@ void __flush_icache_range_vaddr(unsigned long paddr, unsigned long u_vaddr,
 {
 	__arc_icache_inv_lines_vaddr(paddr, u_vaddr, len);
 	__arc_dcache_flush_lines(paddr, len);
+
+	if (!running_on_hw) {
+		extern void local_flush_tlb_all(void);
+		local_flush_tlb_all();
+	}
 }
 
 struct ipi_flush {
