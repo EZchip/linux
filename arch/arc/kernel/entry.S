@@ -459,7 +459,7 @@ ARC_ENTRY EV_TLBProtV
 	bl  do_misaligned_access
 
 #ifdef  CONFIG_ARC_MISALIGN_ACCESS
-	DISCARD_CALLEE_SAVED_USER
+	RESTORE_CALLEE_SAVED_USER
 #endif
 
 	b   ret_from_exception
