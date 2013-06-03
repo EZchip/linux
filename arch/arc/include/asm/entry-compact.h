@@ -35,6 +35,7 @@
 #include <asm/asm-offsets.h>
 #include <asm/irqflags-compact.h>
 #include <asm/thread_info.h>	/* For THREAD_SIZE */
+#include <plat/ctop.h>
 
 /*--------------------------------------------------------------
  * Switch to Kernel Mode stack if SP points to User Mode stack
@@ -298,9 +299,16 @@
 
 /* Get CPU-ID of this core */
 .macro  GET_CPU_ID  reg
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	lr  \reg, [CTOP_AUX_LOGIC_GLOBAL_ID]
+#ifndef CONFIG_EZNPS_MTM_EXT
+	lsr \reg, \reg, 4
+#endif
+#else
 	lr  \reg, [identity]
 	lsr \reg, \reg, 8
 	bmsk \reg, \reg, 7
+#endif
 .endm
 
 #endif  /* __ASM_ARC_ENTRY_COMPACT_H */
