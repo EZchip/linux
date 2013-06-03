@@ -12,7 +12,7 @@
 #ifndef __ASSEMBLY__
 
 /* TODO-vineetg: Need to see what this does, don't we need sync anywhere */
-#define mb() __asm__ __volatile__ ("" : : : "memory")
+#define mb() __asm__ __volatile__ ("sync" : : : "memory")
 #define rmb() mb()
 #define wmb() mb()
 #define set_mb(var, value)  do { var = value; mb(); } while (0)
