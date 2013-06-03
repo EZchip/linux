@@ -47,6 +47,14 @@
 	sr	r5, [ARC_REG_DC_CTRL]
 
 1:
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	lr r5, [CTOP_AUX_CORE_ID]
+	sr r5, [CTOP_AUX_LOGIC_CORE_ID]
+	lr r3, [CTOP_AUX_CLUSTER_ID]
+	.short CTOP_INST_MOV2B_FLIP_R3_B1_B2_INST
+	.word  CTOP_INST_MOV2B_FLIP_R3_B1_B2_LIMM
+	sr r3, [CTOP_AUX_LOGIC_CLUSTER_ID]
+#endif
 .endm
 
 	.section .init.text, "ax",@progbits
