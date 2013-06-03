@@ -61,9 +61,13 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
 #ifndef CONFIG_SMP
 		"st  %2, [@_current_task]	\n\t"
 #else
+#ifdef CONFIG_NPS_BOARD_HE0
 		"lr   r24, [identity]		\n\t"
 		"lsr  r24, r24, 8		\n\t"
 		"bmsk r24, r24, 7		\n\t"
+#else
+		"lr   r24, [0xfffff800]		\n\t"
+#endif
 		"add2 r24, @_current_task, r24	\n\t"
 		"st   %2,  [r24]		\n\t"
 #endif

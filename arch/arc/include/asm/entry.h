@@ -605,9 +605,13 @@
 
 /* Get CPU-ID of this core */
 .macro  GET_CPU_ID  reg
+#ifdef CONFIG_NPS_BOARD_HE0
 	lr  \reg, [identity]
 	lsr \reg, \reg, 8
 	bmsk \reg, \reg, 7
+#else
+	lr  \reg, [0xfffff800]
+#endif
 .endm
 
 #ifdef CONFIG_SMP
