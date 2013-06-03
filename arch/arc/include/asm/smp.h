@@ -42,6 +42,11 @@ extern void __init first_lines_of_secondary(void);
 extern int smp_ipi_irq_setup(int cpu, int irq);
 
 /*
+ * API expected by platform to manipulate ienable register
+ */
+void smp_send_ienable(unsigned int irq, bool do_set);
+
+/*
  * APIs expected FROM platform smp code
  *
  * arc_platform_smp_cpuinfo:
