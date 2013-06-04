@@ -264,8 +264,20 @@ noinline void local_flush_tlb_mm(struct mm_struct *mm)
 	 */
 	if (current->mm != mm)
 		destroy_context(mm);
-	else
+	else {
+#ifdef CONFIG_SMP
+		/* In case this task previously run in other CPU */
+		int i;
+		unsigned int cpu = smp_processor_id();
+
+		for (i=0; i<NR_CPUS; i++) {
+			if ( i == cpu )
+				continue;
+			mm->context.asid[i] = NO_ASID;
+		}
+#endif
 		get_new_mmu_context(mm);
+	}
 }
 
 /*
