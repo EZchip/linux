@@ -48,12 +48,14 @@ extern int smp_ipi_irq_setup(int cpu, int irq);
  * @cpu_kick:		For Master to kickstart a cpu (optionally at a PC)
  * @ipi_send:		To send IPI to a @cpu
  * @ips_clear:		To clear IPI received at @irq
+ * @map_cpus:		To map cpus possible and present according to @max_cpus
  */
 struct plat_smp_ops {
 	const char 	*info;
 	void		(*cpu_kick)(int cpu, unsigned long pc);
 	void		(*ipi_send)(int cpu);
 	void		(*ipi_clear)(int irq);
+	void		(*map_cpus)(int max_cpus);
 };
 
 /* TBD: stop exporting it for direct population by platform */

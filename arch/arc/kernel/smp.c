@@ -49,6 +49,9 @@ void __init smp_init_cpus(void)
 {
 	unsigned int i;
 
+	if (plat_smp_ops.map_cpus)
+		return plat_smp_ops.map_cpus(0);
+
 	for (i = 0; i < NR_CPUS; i++)
 		set_cpu_possible(i, true);
 }
@@ -62,6 +65,9 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 	 * Initialise the present map, which describes the set of CPUs
 	 * actually populated at the present time.
 	 */
+	if (plat_smp_ops.map_cpus)
+		return plat_smp_ops.map_cpus(max_cpus);
+
 	for (i = 0; i < max_cpus; i++)
 		set_cpu_present(i, true);
 }
