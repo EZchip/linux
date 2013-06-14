@@ -51,7 +51,7 @@ void __init smp_init_cpus(void)
 {
 	unsigned int i;
 
-	for (i = 0; i < NR_CPUS; i++)
+	for (i = 0; i < setup_max_cpus; i++)
 		cpu_set(i, cpu_possible_map);
 }
 
