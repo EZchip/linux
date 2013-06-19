@@ -167,6 +167,9 @@ static int mmap_dpl(struct file *file, struct vm_area_struct *vma)
 	resource_size_t phys_addr = vma->vm_pgoff << PAGE_SHIFT;
 	struct dpl_mmap_arg *arg;
 
+    /* VM_PFNMAP will trigger using of vm_ops.access while ptrace_request */
+	vma->vm_flags |= VM_PFNMAP;
+
 	vma->vm_ops = &dpl_mem_ops;
 
 	arg = kmalloc(sizeof(*arg), GFP_KERNEL);
