@@ -43,6 +43,21 @@ void __init smp_prepare_boot_cpu(void)
 {
 }
 
+void __init smp_cpus_maps(cpumask_t * map)
+{
+	int i;
+	char *__cpu_simulated_map  = (char*)(0xc0005100);
+	int thread, core;
+
+	/* TODO: Use Macro here instead when MTM support is added */
+	for (i = 0; i < NR_CPUS; i++) {
+		thread = i & 0xf;
+		core = (i >> 4) & 0xff;
+		if (thread < __cpu_simulated_map[core])
+			cpu_set(i, *map);
+	}
+}
+
 /*
  * Initialise the CPU possible map early - this describes the CPUs
  * which may be present or become present in the system.
@@ -51,8 +66,11 @@ void __init smp_init_cpus(void)
 {
 	unsigned int i;
 
-	for (i = 0; i < setup_max_cpus; i++)
-		cpu_set(i, cpu_possible_map);
+	if (running_on_hw)
+		for (i = 0; i < setup_max_cpus; i++)
+			cpu_set(i, cpu_possible_map);
+	else
+		smp_cpus_maps(&cpu_possible_map);
 }
 
 /* called from init ( ) =>  process 1 */
@@ -64,8 +82,11 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 	 * Initialise the present map, which describes the set of CPUs
 	 * actually populated at the present time.
 	 */
-	for (i = 0; i < max_cpus; i++)
-		cpu_set(i, cpu_present_map);
+	if (running_on_hw)
+		for (i = 0; i < max_cpus; i++)
+			cpu_set(i, cpu_present_map);
+	else
+		smp_cpus_maps(&cpu_present_map);
 }
 
 void __init smp_cpus_done(unsigned int max_cpus)
