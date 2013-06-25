@@ -103,6 +103,41 @@ void arc_platform_smp_wakeup_cpu(int cpu, unsigned long pc)
 	}
 }
 
+/* Initialize Number of Active Threads */
+static void init_nat(int cpu)
+{
+	char *__cpu_active_map  = (char*)(0xc0005000);
+	int core = (cpu >> 4) & 0xff;
+	int nat = __cpu_active_map[core];
+	int log_nat = 0;
+	long tmp;
+
+	switch (nat) {
+	case 1:
+		log_nat = 0;
+		break;
+	case 2:
+		log_nat = 1;
+		break;
+	case 4:
+		log_nat = 2;
+		break;
+	case 8:
+		log_nat = 3;
+		break;
+	case 16:
+		log_nat = 4;
+		break;
+	default:
+		break;
+	}
+
+	tmp = read_aux_reg(0xfffffb00);
+	tmp &= 0xfffff8ff;
+	tmp |= log_nat << 8;
+	write_aux_reg(0xfffffb00,tmp);
+}
+
 /*
  * Any SMP specific init any CPU does when it comes up.
  * Here we setup the CPU to enable Inter-Processor-Interrupts
@@ -132,6 +167,7 @@ void arc_platform_smp_init_cpu(void)
 					IPI_IRQ);
 		}
 		enable_percpu_irq(IPI_IRQ, 0);
+		init_nat(cpu);
 	}
 	else
 	{
