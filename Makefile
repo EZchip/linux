@@ -1,7 +1,7 @@
 VERSION = 3
 PATCHLEVEL = 2
 SUBLEVEL = 0
-EXTRAVERSION = .EZchip_1.0
+EXTRAVERSION = .EZchip_2.0
 NAME = Saber-toothed Squirrel
 
 # *DOCUMENTATION*
