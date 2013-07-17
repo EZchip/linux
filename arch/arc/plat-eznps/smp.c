@@ -92,6 +92,8 @@ void arc_platform_smp_wakeup_cpu(int cpu, unsigned long pc)
 	}
 	else
 	{
+		unsigned int halt_ctrl;
+
 		/* override pc */
 		pc = (unsigned long)ez_first_lines_of_secondary;
 
@@ -99,7 +101,14 @@ void arc_platform_smp_wakeup_cpu(int cpu, unsigned long pc)
 		__raw_writel(pc, CPU_SEC_ENTRY_POINT);
 
 		/* Take the cpu out of Halt */
-		__raw_writel(0, REG_CPU_HALT_CTL);
+		if (!running_on_hw) {
+			halt_ctrl = 0;
+		}
+		else {
+			halt_ctrl = __raw_readl(REG_CPU_HALT_CTL);
+			halt_ctrl |= 1 << cpu;
+		}
+		__raw_writel(halt_ctrl, REG_CPU_HALT_CTL);
 	}
 }
 
