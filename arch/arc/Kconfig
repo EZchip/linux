@@ -471,6 +471,14 @@ config ARCH_PHYS_ADDR_T_64BIT
 config ARCH_DMA_ADDR_T_64BIT
 	bool
 
+config ARC_VMALLOC_SIZE
+	hex "Vmalloc size (MB)"
+	range 0 512
+	default "256"
+	help
+	  By default equals to 256MB and the rest of 512MB is
+	  left for gutter between kernel and user space.
+
 config ARC_CURR_IN_REG
 	bool "Dedicate Register r25 for current_task pointer"
 	default y
