@@ -426,6 +426,14 @@ config LINUX_LINK_BASE
 	  Linux needs to be scooted a bit.
 	  If you don't know what the above means, leave this setting alone.
 
+config ARC_VMALLOC_SIZE
+	hex "Vmalloc size (MB)"
+	range 0 512
+	default "256"
+	help
+	  By default equals to 256MB and the rest of 512MB is
+	  left for gutter between kernel and user space.
+
 config ARC_CURR_IN_REG
 	bool "Dedicate Register r25 for current_task pointer"
 	default y

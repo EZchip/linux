@@ -113,13 +113,13 @@ extern unsigned int get_wchan(struct task_struct *p);
  * 0xC000_0000		0xFFFF_FFFF	(peripheral uncached space)
  * -----------------------------------------------------------------------------
  */
-#define VMALLOC_START	0x70000000
-#define VMALLOC_SIZE	(PAGE_OFFSET - VMALLOC_START)
-#define VMALLOC_END	(VMALLOC_START + VMALLOC_SIZE)
+#define VMALLOC_END	PAGE_OFFSET
+#define VMALLOC_SIZE	(CONFIG_ARC_VMALLOC_SIZE << 20)
+#define VMALLOC_START	(VMALLOC_END - VMALLOC_SIZE)
 
-#define USER_KERNEL_GUTTER    0x10000000
+#define TASK_SIZE	0x60000000
 
-#define TASK_SIZE	(VMALLOC_START - USER_KERNEL_GUTTER)
+#define USER_KERNEL_GUTTER    (VMALLOC_START - TASK_SIZE)
 
 #define STACK_TOP       TASK_SIZE
 #define STACK_TOP_MAX   STACK_TOP
