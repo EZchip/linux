@@ -19,6 +19,9 @@
 #include <linux/sched.h>
 #include <asm/arcregs.h>
 #include <plat/ctop.h>
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+#include <linux/hw_breakpoint.h>
+#endif
 
 void dp_save_restore(struct task_struct *prev, struct task_struct *next)
 {
@@ -34,4 +37,19 @@ void dp_save_restore(struct task_struct *prev, struct task_struct *next)
 	prev_task_dp->gpa1 = read_aux_reg(CTOP_AUX_GPA1);
 	write_aux_reg(CTOP_AUX_GPA1, next_task_dp->gpa1);
 }
+
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+void plat_update_bp_info(struct perf_event *bp)
+{
+	int tid;
+	struct arch_hw_breakpoint *info = counter_arch_bp(bp);
+
+	/* read thread id */
+	tid = read_aux_reg(CTOP_AUX_THREAD_ID);
+
+	/* update control fields*/
+	info->ctrl.tid = tid;
+	info->ctrl.tidmatch = 1;
+}
+#endif /* CONFIG_HAVE_HW_BREAKPOINT */
 
