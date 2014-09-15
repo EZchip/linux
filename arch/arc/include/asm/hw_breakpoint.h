@@ -10,7 +10,9 @@ struct arch_hw_breakpoint_ctrl {
 		struct {
 #ifdef CONFIG_CPU_BIG_ENDIAN
 			u32 len		: 8, /* logic len, for ptrace convers */
-			__reserved	: 14,
+			__reserved	: 9,
+			tidmatch	: 1,
+			tid		: 4,
 			quad		: 1,
 			action		: 1,
 			paired		: 1,
@@ -24,7 +26,9 @@ struct arch_hw_breakpoint_ctrl {
 			paired		: 1,
 			action		: 1,
 			quad		: 1,
-			__reserved	: 14,
+			tid		: 4,
+			tidmatch	: 1,
+			__reserved	: 9,
 			len		: 8; /* logic len, for ptrace convers */
 #endif
 		};
