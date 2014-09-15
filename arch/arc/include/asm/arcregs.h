@@ -81,6 +81,10 @@
 #define ECR_C_PROTV_MISALIG_DATA	0x04
 
 #define ECR_C_BIT_PROTV_MISALIG_DATA	10
+#define ECR_CODE_MASK			0x00ff00
+
+/* Privilege Violation Exception Actionpoint Hit Cause */
+#define ECR_C_BIT_PRIVV_AP_HIT		0x0200
 
 /* Machine Check Cause Code Values */
 #define ECR_C_MCHK_DUP_TLB		0x01

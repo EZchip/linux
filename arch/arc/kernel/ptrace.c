@@ -11,6 +11,8 @@
 #include <linux/regset.h>
 #include <linux/unistd.h>
 #include <linux/elf.h>
+#include <linux/hw_breakpoint.h>
+#include <linux/user.h>
 
 static struct callee_regs *task_callee_regs(struct task_struct *tsk)
 {
@@ -187,6 +189,14 @@ enum arc_getset {
 	REGSET_GENERAL,
 };
 
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+enum arc_hbp_register {
+	hw_breakpoint_value	= 0,	/* HW breakpoint value register */
+	hw_breakpoint_control	= 1,	/* HW breakpoint control register */
+	hw_breakpoint_mask	= 2,	/* HW breakpoint mask register */
+};
+#endif
+
 static const struct user_regset arc_regsets[] = {
 	[REGSET_GENERAL] = {
 	       .core_note_type = NT_PRSTATUS,
@@ -214,6 +224,137 @@ void ptrace_disable(struct task_struct *child)
 {
 }
 
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+/*
+ * Handle hitting a HW-breakpoint.
+ */
+static void ptrace_hbptriggered(struct perf_event *bp,
+				     struct perf_sample_data *data,
+				     struct pt_regs *regs)
+{
+	struct arch_hw_breakpoint *bkpt = counter_arch_bp(bp);
+	struct task_struct *tsk = current;
+	int i;
+	long num;
+	siginfo_t info;
+
+	for (i = 0; i < ARC_MAX_HBP_SLOTS; ++i)
+		if (current->thread.hbp[i] == bp)
+			break;
+
+	if (i == ARC_MAX_HBP_SLOTS)
+		num = 0;
+	else {
+		num = i + 1;
+		/* mark as breakpoint if target instruction address */
+		if (bkpt->ctrl.target == 0)
+			num = 0 - num;
+	}
+
+	info.si_signo	= SIGTRAP;
+	info.si_errno	= (int)num;
+	info.si_code	= TRAP_HWBKPT;
+	info.si_addr	= (void __user *)(bkpt->trigger);
+
+	tsk->thread.fault_address = (__force unsigned int)info.si_addr;
+
+	force_sig_info(SIGTRAP, &info, current);
+}
+
+static struct perf_event *ptrace_hbp_create(struct task_struct *tsk)
+{
+	struct perf_event_attr attr;
+
+	ptrace_breakpoint_init(&attr);
+
+	/* Initialise fields to sane defaults. */
+	attr.bp_addr	= 0;
+	attr.bp_len	= HW_BREAKPOINT_LEN_4;
+	attr.bp_type	= HW_BREAKPOINT_RW;
+	attr.disabled	= 1;
+
+	return register_user_hw_breakpoint(&attr, ptrace_hbptriggered, NULL,
+					   tsk);
+}
+
+static int ptrace_set_hbp(struct task_struct *tsk, int nr,
+		enum arc_hbp_register regtype, unsigned long data)
+{
+	struct thread_struct *t = &tsk->thread;
+	struct perf_event *bp = t->hbp[nr];
+	int gen_type, gen_len, err = 0;
+	struct perf_event_attr attr;
+	struct arch_hw_breakpoint_ctrl ctrl;
+
+	if (!(nr < ARC_MAX_HBP_SLOTS)) {
+		err = -EIO;
+		goto out;
+	}
+
+	if (!bp) {
+		bp = ptrace_hbp_create(tsk);
+		if (IS_ERR(bp)) {
+			err = PTR_ERR(bp);
+			goto out;
+		} else
+			t->hbp[nr] = bp;
+	}
+
+	attr = bp->attr;
+
+	switch (regtype) {
+	case hw_breakpoint_value:
+		attr.bp_addr = data;
+		break;
+	case hw_breakpoint_control:
+		ctrl.value = data;
+		err = arch_bp_generic_fields(ctrl, &gen_len, &gen_type);
+		if (err)
+			goto out;
+		attr.bp_type	= gen_type;
+		attr.bp_len	= gen_len;
+		attr.disabled	= gen_type == 0 ? 1 : 0;
+		break;
+	default:
+		err = -EIO;
+		goto out;
+	}
+	err = modify_user_hw_breakpoint(bp, &attr);
+
+out:
+	return err;
+}
+
+/*
+ * Unregister breakpoints from this task and reset the pointers in
+ * the thread_struct.
+ */
+void flush_ptrace_hw_breakpoint(struct task_struct *tsk)
+{
+	int i;
+	struct thread_struct *t = &tsk->thread;
+
+	for (i = 0; i < ARC_MAX_HBP_SLOTS; i++) {
+		if (t->hbp[i]) {
+			unregister_hw_breakpoint(t->hbp[i]);
+			t->hbp[i] = NULL;
+		}
+	}
+}
+
+/*
+ * Set ptrace breakpoint pointers to zero for this task.
+ * This is required in order to prevent child processes from unregistering
+ * breakpoints held by their parent.
+ */
+void clear_ptrace_hw_breakpoint(struct task_struct *tsk)
+{
+	memset(tsk->thread.hbp, 0, sizeof(tsk->thread.hbp));
+}
+
+#endif /* CONFIG_HAVE_HW_BREAKPOINT */
+
+
 long arch_ptrace(struct task_struct *child, long request,
 		 unsigned long addr, unsigned long data)
 {
@@ -226,6 +367,26 @@ long arch_ptrace(struct task_struct *child, long request,
 		ret = put_user(task_thread_info(child)->thr_ptr,
 			       (unsigned long __user *)data);
 		break;
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+	/* write the word at location addr in the USER area */
+	case PTRACE_POKEUSR:
+		ret = -EIO;
+		if ((addr & (sizeof(data) - 1)) || addr >= sizeof(struct user))
+			break;
+
+		if (addr >= offsetof(struct user, u_dr_value[0]) &&
+			addr <= offsetof(struct user, u_dr_value[7])) {
+			addr -= offsetof(struct user, u_dr_value[0]);
+			ret = ptrace_set_hbp(child, addr / sizeof(data),
+					hw_breakpoint_value, data);
+		} else if (addr >= offsetof(struct user, u_dr_control[0]) &&
+			addr <= offsetof(struct user, u_dr_control[7])) {
+			addr -= offsetof(struct user, u_dr_control[0]);
+			ret = ptrace_set_hbp(child, addr / sizeof(data),
+					hw_breakpoint_control, data);
+		}
+		break;
+#endif /* CONFIG_HAVE_HW_BREAKPOINT */
 	default:
 		ret = ptrace_request(child, request, addr, data);
 		break;

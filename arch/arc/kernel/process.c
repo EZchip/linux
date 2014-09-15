@@ -19,6 +19,7 @@
 #include <linux/syscalls.h>
 #include <linux/elf.h>
 #include <linux/tick.h>
+#include <linux/hw_breakpoint.h>
 
 SYSCALL_DEFINE1(arc_settls, void *, user_tls_data_ptr)
 {
@@ -141,6 +142,8 @@ int copy_thread(unsigned long clone_flags,
 
 	parent_callee = ((struct callee_regs *)regs) - 1;
 	*c_callee = *parent_callee;
+
+	clear_ptrace_hw_breakpoint(p);
 
 	if (unlikely(clone_flags & CLONE_SETTLS)) {
 		/*

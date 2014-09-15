@@ -146,13 +146,25 @@ ENTRY(EV_PrivilegeV)
 
 	EXCEPTION_PROLOGUE
 
+	lr  r2, [ecr]
 	lr  r0, [efa]
 	mov r1, sp
 
 	FAKE_RET_FROM_EXCPN
 
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+	and r2, r2, ECR_CODE_MASK
+	cmp r2, ECR_C_BIT_PRIVV_AP_HIT
+	bnz 4f
+
+	bl  do_actionpoint_hit
+	b   ret_from_exception
+4:
+#endif /* CONFIG_HAVE_HW_BREAKPOINT */
+
 	bl  do_privilege_fault
 	b   ret_from_exception
+
 END(EV_PrivilegeV)
 
 ; ---------------------------------------------
