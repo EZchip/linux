@@ -17,6 +17,7 @@
 #ifndef __ASSEMBLY__
 
 #include <asm/ptrace.h>
+#include <asm/hw_breakpoint.h>
 
 #ifdef CONFIG_ARC_FPU_SAVE_RESTORE
 /* These DPFP regs need to be saved/restored across ctx-sw */
@@ -37,6 +38,9 @@ struct thread_struct {
 	unsigned long fault_address;	/* dbls as brkpt holder as well */
 #ifdef CONFIG_ARC_FPU_SAVE_RESTORE
 	struct arc_fpu fpu;
+#endif
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+	struct perf_event *hbp[ARC_MAX_HBP_SLOTS];
 #endif
 };
 
