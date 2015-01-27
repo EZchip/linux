@@ -386,6 +386,12 @@ debug_marker_l1:
 
 	;this case is for syscalls or Exceptions or pure kernel mode
 
+	; switch back to CPU Exception context mode before restoring regs
+	; to prevent the registeres (i.e eret) from being overwritten
+	; by another exception (i.e perf overflow exception)
+	trap_s ECR_P_TRAP_FAKE_REVERT
+
+ret_as_exception:
 	EXCEPTION_EPILOGUE
 debug_marker_syscall:
 	rtie

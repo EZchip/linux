@@ -121,6 +121,36 @@
 55:
 .endm
 
+#define ECR_P_TRAP_FAKE_REVERT 8
+/*--------------------------------------------------------------
+ * Used by the Trap handler for a unique case where trap was
+ * made by an exception who faked rtie in order to switch
+ * back to CPU Exception context before restoring regs
+ *-------------------------------------------------------------*/
+.macro TRY_COMPLETE_FAKE_REVERT
+	/* Need at least 1 reg to code the early exception prologue */
+	PROLOG_FREEUP_REG r9, @ex_saved_reg1
+
+	/* Check if trap param indicates to revert fake */
+	lr    r9, [ecr]
+	bmsk  r9, r9, 7
+	cmp   r9, ECR_P_TRAP_FAKE_REVERT
+	bnz   66f
+
+	/* User Mode when this happened ? Yes: return to trap */
+	lr  r9, [erstatus]
+	bbit1   r9, STATUS_U_BIT, 66f
+
+	/* Restore r9 used to code the early prologue */
+	PROLOG_RESTORE_REG  r9, @ex_saved_reg1
+
+	/* Return to faking exception */
+	b ret_as_exception
+66:
+	/* Restore r9 used to code the early prologue */
+	PROLOG_RESTORE_REG  r9, @ex_saved_reg1
+.endm
+
 /*--------------------------------------------------------------
  * For early Exception/ISR Prologue, a core reg is temporarily needed to
  * code the rest of prolog (stack switching). This is done by stashing

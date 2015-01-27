@@ -255,6 +255,11 @@ trap_with_param:
 
 ENTRY(EV_Trap)
 
+	; Before doing anything, check if this trap was made by
+	; ret_from_exception in order to revert the fake rtie and
+	; switch back to CPU Exception context
+	TRY_COMPLETE_FAKE_REVERT
+
 	EXCEPTION_PROLOGUE
 
 	;============ TRAP 1   :breakpoints
