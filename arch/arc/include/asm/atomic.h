@@ -354,6 +354,8 @@ ATOMIC_OPS(xor, ^=, CTOP_INST_AXOR_DI_R2_R2_R3)
 
 #else	/* Kconfig ensures this is only enabled with needed h/w assist */
 
+#ifndef CONFIG_ARC_PLAT_EZNPS
+
 /*
  * ARCv2 supports 64-bit exclusive load (LLOCKD) / store (SCONDD)
  *  - The address HAS to be 64-bit aligned
@@ -604,6 +606,12 @@ static inline int atomic64_add_unless(atomic64_t *v, long long a, long long u)
 #define atomic64_dec_return(v)		atomic64_sub_return(1LL, (v))
 #define atomic64_dec_and_test(v)	(atomic64_dec_return((v)) == 0)
 #define atomic64_inc_not_zero(v)	atomic64_add_unless((v), 1LL, 0LL)
+
+#else /* CONFIG_ARC_PLAT_EZNPS */
+
+#include <asm-generic/atomic64.h>
+
+#endif /* CONFIG_ARC_PLAT_EZNPS */
 
 #endif	/* !CONFIG_GENERIC_ATOMIC64 */
 
