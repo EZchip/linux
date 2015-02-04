@@ -69,5 +69,9 @@
 			interrupts = <7>;
 			mac-address = [ 00 C0 00 F0 04 03 ];
 		};
+
+		arcpmu0: pmu {
+			compatible = "ezchip,nps-pct";
+		};
 	};
 };

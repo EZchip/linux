@@ -126,8 +126,9 @@ VECTOR   EV_TLBProtV             ; 0x118, Protection Violation  (0x23)
 VECTOR   EV_PrivilegeV           ; 0x120, Privilege Violation   (0x24)
 VECTOR   EV_Trap                 ; 0x128, Trap exception        (0x25)
 VECTOR   EV_Extension            ; 0x130, Extn Intruction Excp  (0x26)
+VECTOR   EV_PerfMon              ; 0x138, Perf Monitor Excp     (0x27)
 
-.rept   24
+.rept   23
 VECTOR   reserved                ; Reserved Exceptions
 .endr
 
@@ -287,6 +288,28 @@ ENTRY(EV_TLBProtV)
 	b   ret_from_exception
 
 END(EV_TLBProtV)
+
+; ---------------------------------------------
+; Perf Monitor Exception Handler
+; ---------------------------------------------
+ENTRY(EV_PerfMon)
+
+#if defined(CONFIG_ARC_PLAT_EZNPS) && defined(CONFIG_PERF_EVENTS)
+	EXCEPTION_PROLOGUE
+
+	mov r0, sp
+
+	bl  do_perfmon
+
+	; not using ret_from_exception to prevent invoking preemption and
+	; enabling interrupts which may lead to a double fault since we're
+	; not faking
+	EXCEPTION_EPILOGUE
+#endif /* CONFIG_ARC_PLAT_EZNPS && CONFIG_PERF_EVENTS */
+
+	rtie
+
+END(EV_PerfMon)
 
 ; Wrapper for Linux page fault handler called from EV_TLBMiss*
 ; Very similar to ProtV handler case (6a) above, but avoids the extra checks
