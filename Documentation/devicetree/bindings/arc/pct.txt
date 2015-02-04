@@ -10,8 +10,9 @@ Note that:
 
 Required properties:
 
-- compatible : should contain
-	"snps,arc700-pct"
+- compatible : should be one of
+        "snps,arc700-pct"
+        "ezchip,nps-pct"
 
 Example:
 
