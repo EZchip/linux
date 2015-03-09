@@ -62,7 +62,12 @@ struct task_struct;
  * get optimised away by gcc
  */
 #ifdef CONFIG_SMP
+#ifdef CONFIG_EZNPS_MTM_EXT
+#define cpu_relax()     \
+	__asm__ __volatile__ (".word %0" : : "i"(CTOP_INST_SCHD_RW) : "memory")
+#else
 #define cpu_relax()	__asm__ __volatile__ ("" : : : "memory")
+#endif
 #else
 #define cpu_relax()	do { } while (0)
 #endif
