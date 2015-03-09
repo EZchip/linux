@@ -156,6 +156,11 @@ int2_saved_reg:
 	.section .text, "ax",@progbits
 
 res_service:		; processor restart
+#ifdef CONFIG_EZNPS_MTM_EXT
+	; Except of first thread all other are awaken
+	; to the first entry of reset vector
+	j first_lines_of_secondary
+#endif
 	flag    0x1     ; not implemented
 	nop
 	nop
