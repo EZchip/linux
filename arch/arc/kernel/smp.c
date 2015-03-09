@@ -167,7 +167,7 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 
 	if (plat_smp_ops.cpu_kick)
 		plat_smp_ops.cpu_kick(cpu,
-				(unsigned long)first_lines_of_secondary);
+				(unsigned long)res_service);
 	else
 		arc_default_smp_cpu_kick(cpu, (unsigned long)NULL);
 
