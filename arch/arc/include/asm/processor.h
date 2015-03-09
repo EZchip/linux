@@ -57,9 +57,18 @@ struct task_struct;
  * A lot of busy-wait loops in SMP are based off of non-volatile data otherwise
  * get optimised away by gcc
  */
+#ifndef CONFIG_EZNPS_MTM_EXT
 #define cpu_relax()	__asm__ __volatile__ ("" : : : "memory")
+#else
+#define cpu_relax()     \
+	__asm__ __volatile__ (".word %0" : : "i"(CTOP_INST_SCHD_RW) : "memory")
+#endif
 
+#ifndef CONFIG_EZNPS_MTM_EXT
 #define cpu_relax_lowlatency() cpu_relax()
+#else
+#define cpu_relax_lowlatency() barrier()
+#endif
 
 #define copy_segments(tsk, mm)      do { } while (0)
 #define release_segments(mm)        do { } while (0)
