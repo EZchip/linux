@@ -833,6 +833,8 @@ static const char *const section_white_list[] =
 	".xt.lit",         /* xtensa */
 	".arcextmap*",			/* arc */
 	".gnu.linkonce.arcext*",	/* arc : modules */
+	".cmem*",			/* EZchip */
+	".fmt_slot*",			/* EZchip */
 	".gnu.lto*",
 	NULL
 };
