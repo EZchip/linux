@@ -9,6 +9,12 @@
 #ifndef __ASM_BARRIER_H
 #define __ASM_BARRIER_H
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+#include "../plat-eznps/include/plat/ctop.h"
+#define mb()	asm volatile (".word %0" : : "i"(CTOP_INST_SCHD_RW) : "memory")
+#define rmb()	asm volatile (".word %0" : : "i"(CTOP_INST_SCHD_RD) : "memory")
+#else
+
 #ifdef CONFIG_ISA_ARCV2
 
 /*
@@ -42,6 +48,8 @@
 
 #define mb()	asm volatile("sync\n" : : : "memory")
 #endif
+
+#endif /* CONFIG_ARC_PLAT_EZNPS */
 
 #include <asm-generic/barrier.h>
 
