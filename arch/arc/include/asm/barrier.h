@@ -34,6 +34,12 @@
 
 #ifdef CONFIG_ISA_ARCOMPACT
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+#include <plat/ctop.h>
+#define mb()	asm volatile (".word %0" : : "i"(CTOP_INST_SCHD_RW) : "memory")
+#define rmb()	asm volatile (".word %0" : : "i"(CTOP_INST_SCHD_RD) : "memory")
+#else
+
 /*
  * ARCompact based cores (ARC700) only have SYNC instruction which is super
  * heavy weight as it flushes the pipeline as well.
@@ -41,6 +47,8 @@
  */
 
 #define mb()	asm volatile("sync\n" : : : "memory")
+#endif /* CONFIG_ARC_PLAT_EZNPS */
+
 #endif
 
 #include <asm-generic/barrier.h>
