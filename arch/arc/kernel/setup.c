@@ -500,19 +500,25 @@ done:
 
 static void *c_start(struct seq_file *m, loff_t *pos)
 {
-	/*
-	 * Callback returns cpu-id to iterator for show routine, NULL to stop.
-	 * However since NULL is also a valid cpu-id (0), we use a round-about
-	 * way to pass it w/o having to kmalloc/free a 2 byte string.
-	 * Encode cpu-id as 0xFFcccc, which is decoded by show routine.
-	 */
-	return *pos < num_possible_cpus() ? cpu_to_ptr(*pos) : NULL;
+	if (*pos == 0)  /* just in case, cpu 0 is not the first */
+		*pos = cpumask_first(cpu_online_mask);
+	else
+		*pos = cpumask_next(*pos - 1, cpu_online_mask);
+
+	return *pos < nr_cpu_ids ? cpu_to_ptr(*pos) : NULL;
 }
 
 static void *c_next(struct seq_file *m, void *v, loff_t *pos)
 {
-	++*pos;
-	return c_start(m, pos);
+	*pos = cpumask_next(*pos, cpu_online_mask);
+
+	/*
+	 * return cpu-id to iterator for show routine, NULL to stop.
+	 * However since NULL is also a valid cpu-id (0), we use a round-about
+	 * way to pass it w/o having to kmalloc/free a 2 byte string.
+	 * Encode cpu-id as 0xFFcccc, which is decoded by show routine.
+	 */
+	return *pos < nr_cpu_ids ? cpu_to_ptr(*pos) : NULL;
 }
 
 static void c_stop(struct seq_file *m, void *v)
