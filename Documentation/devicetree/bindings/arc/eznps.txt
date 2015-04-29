@@ -1,0 +1,7 @@
+EZchip NPS Network Proccessor Platforms Device Tree Bindings
+---------------------------------------------------------------------------
+
+Appliance main board with NPS400 ASIC.
+
+Required root node properties:
+    - compatible = "ezchip,arc-nps";
