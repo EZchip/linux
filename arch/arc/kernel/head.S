@@ -104,12 +104,16 @@ stext:
 	j	start_kernel	; "C" entry point
 
 #ifdef CONFIG_SMP
+#ifndef ARC_PLAT_START_PC_ALIGN
+#define ARC_PLAT_START_PC_ALIGN 4
+#endif
 ;----------------------------------------------------------------
 ;     First lines of code run by secondary before jumping to 'C'
 ;----------------------------------------------------------------
 	.section .text, "ax",@progbits
 	.type first_lines_of_secondary, @function
 	.globl first_lines_of_secondary
+	.align ARC_PLAT_START_PC_ALIGN
 
 first_lines_of_secondary:
 
