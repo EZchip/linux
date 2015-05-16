@@ -22,6 +22,48 @@
 #include <asm/smp.h>
 #endif
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+#define BIT_OP(op, c_op, asm_op)					\
+static inline void op##_bit(unsigned long nr, volatile unsigned long *m)\
+{									\
+	m += nr >> 5;							\
+									\
+	nr = (1UL << (nr & 0x1f));					\
+	if (asm_op == CTOP_INST_AAND_DI_R2_R2_R3)			\
+		nr = ~nr;						\
+									\
+	__asm__ __volatile__(						\
+	"	mov r2, %0\n"						\
+	"	mov r3, %1\n"						\
+	"	.word %2\n"						\
+	:								\
+	: "r"(nr), "r"(m), "i"(asm_op)					\
+	: "r2", "r3", "memory");					\
+}
+
+#define TEST_N_BIT_OP(op, c_op, asm_op)					\
+static inline int test_and_##op##_bit(unsigned long nr, volatile unsigned long *m)\
+{									\
+	unsigned long old;						\
+									\
+	m += nr >> 5;							\
+									\
+	old = (1UL << (nr & 0x1f));					\
+	if (asm_op == CTOP_INST_AAND_DI_R2_R2_R3)			\
+		old = ~old;						\
+									\
+	__asm__ __volatile__(						\
+	"	mov r2, %0\n"						\
+	"	mov r3, %1\n"						\
+	"       .word %2\n"						\
+	"	mov %0, r2"						\
+	: "+r"(old)							\
+	: "r"(m), "i"(asm_op)						\
+	: "r2", "r3", "memory");					\
+									\
+	return (old & (1 << nr)) != 0;					\
+}
+#else /* CONFIG_ARC_PLAT_EZNPS */
 #if defined(CONFIG_ARC_HAS_LLSC)
 
 /*
@@ -155,6 +197,7 @@ static inline int test_and_##op##_bit(unsigned long nr, volatile unsigned long *
 }
 
 #endif /* CONFIG_ARC_HAS_LLSC */
+#endif /* CONFIG_ARC_PLAT_EZNPS */
 
 /***************************************
  * Non atomic variants
@@ -196,9 +239,15 @@ static inline int __test_and_##op##_bit(unsigned long nr, volatile unsigned long
 	/* __test_and_set_bit(), __test_and_clear_bit(), __test_and_change_bit() */\
 	__TEST_N_BIT_OP(op, c_op, asm_op)
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+BIT_OPS(set, |, CTOP_INST_AOR_DI_R2_R2_R3)
+BIT_OPS(clear, & ~, CTOP_INST_AAND_DI_R2_R2_R3)
+BIT_OPS(change, ^, CTOP_INST_AXOR_DI_R2_R2_R3)
+#else
 BIT_OPS(set, |, bset)
 BIT_OPS(clear, & ~, bclr)
 BIT_OPS(change, ^, bxor)
+#endif
 
 /*
  * This routine doesn't need to be atomic.

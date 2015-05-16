@@ -34,6 +34,7 @@
 #define AUX_REG_TSI1			(CTOP_AUX_BASE + 0x050)
 #define CTOP_AUX_EFLAGS			(CTOP_AUX_BASE + 0x080)
 #define CTOP_AUX_IACK			(CTOP_AUX_BASE + 0x088)
+#define CTOP_AUX_GPA1			(CTOP_AUX_BASE + 0x08C)
 #define CTOP_AUX_UDMC			(CTOP_AUX_BASE + 0x300)
 
 /* EZchip core instructions */
