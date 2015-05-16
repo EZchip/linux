@@ -14,6 +14,53 @@
 #include <asm/barrier.h>
 #include <asm/smp.h>
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+static inline unsigned long
+__cmpxchg(volatile void *ptr, unsigned long expected, unsigned long new)
+{
+	write_aux_reg(CTOP_AUX_GPA1, expected);
+
+	__asm__ __volatile__(
+	"	mov r2, %0\n"
+	"	mov r3, %1\n"
+	"	.word %2\n"
+	"	mov %0, r2"
+	: "+r"(new)
+	: "r"(ptr), "i"(CTOP_INST_EXC_DI_R2_R2_R3)
+	: "r2", "r3", "memory");
+
+	return new;
+}
+
+#define cmpxchg(ptr, o, n) ((typeof(*(ptr)))__cmpxchg((ptr), \
+				(unsigned long)(o), (unsigned long)(n)))
+#define atomic_cmpxchg(v, o, n) ((int)cmpxchg(&((v)->counter), (o), (n)))
+
+static inline unsigned long __xchg(unsigned long val, volatile void *ptr,
+				   int size)
+{
+	extern unsigned long __xchg_bad_pointer(void);
+
+	switch (size) {
+	case 4:
+		__asm__ __volatile__(
+		"	mov r2, %0\n"
+		"	mov r3, %1\n"
+		"	.word %2\n"
+		"	mov %0, r2\n"
+		: "+r"(val)
+		: "r"(ptr), "i"(CTOP_INST_XEX_DI_R2_R2_R3)
+		: "r2", "r3", "memory");
+
+		return val;
+	}
+	return __xchg_bad_pointer();
+}
+
+#define xchg(ptr, with) ((typeof(*(ptr)))__xchg((unsigned long)(with), (ptr), \
+						 sizeof(*(ptr))))
+#define atomic_xchg(v, new) (xchg(&((v)->counter), new))
+#else /* CONFIG_ARC_PLAT_EZNPS */
 #ifdef CONFIG_ARC_HAS_LLSC
 
 static inline unsigned long
@@ -157,6 +204,8 @@ static inline unsigned long __xchg(unsigned long val, volatile void *ptr,
  *         atomic_xchg is involved.
  */
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))
+
+#endif /* CONFIG_ARC_PLAT_EZNPS */
 
 #ifdef CONFIG_HAVE_VIRT_CPU_ACCOUNTING_GEN
 #include <asm-generic/cmpxchg-local.h>
