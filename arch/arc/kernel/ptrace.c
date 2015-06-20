@@ -13,6 +13,7 @@
 #include <linux/elf.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/user.h>
+#include <linux/context_tracking.h>
 #include <linux/thread_info.h>
 
 static struct callee_regs *task_callee_regs(struct task_struct *tsk)
@@ -398,6 +399,8 @@ long arch_ptrace(struct task_struct *child, long request,
 
 asmlinkage int syscall_trace_entry(struct pt_regs *regs)
 {
+	user_exit();
+
 	if ((test_thread_flag(TIF_SYSCALL_TRACE)) &&
 	    tracehook_report_syscall_entry(regs))
 		return ULONG_MAX;
@@ -407,6 +410,15 @@ asmlinkage int syscall_trace_entry(struct pt_regs *regs)
 
 asmlinkage void syscall_trace_exit(struct pt_regs *regs)
 {
+	/*
+	 * We may come here right after calling schedule_user()
+	 * or do_notify_resume(), in which case we can be in RCU
+	 * user mode.
+	 */
+	user_exit();
+
 	if (test_thread_flag(TIF_SYSCALL_TRACE))
 		tracehook_report_syscall_exit(regs, 0);
+
+	user_enter();
 }

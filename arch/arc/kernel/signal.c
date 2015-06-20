@@ -53,6 +53,7 @@
 #include <linux/uaccess.h>
 #include <linux/syscalls.h>
 #include <linux/tracehook.h>
+#include <linux/context_tracking.h>
 #include <asm/ucontext.h>
 
 struct rt_sigframe {
@@ -356,7 +357,7 @@ handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 	signal_setup_done(failed, ksig, 0);
 }
 
-void do_signal(struct pt_regs *regs)
+static void __do_signal(struct pt_regs *regs)
 {
 	struct ksignal ksig;
 	int restart_scall;
@@ -389,12 +390,28 @@ void do_signal(struct pt_regs *regs)
 	restore_saved_sigmask();
 }
 
+void do_signal(struct pt_regs *regs)
+{
+	user_exit();
+
+	__do_signal(regs);
+
+	user_enter();
+}
+
+/* TODO: vineetg:
+ * Please consider implementing all slow paths from resume_user_mode_begin
+ * in do_notify_resume. see x86\mips for reference. */
 void do_notify_resume(struct pt_regs *regs)
 {
+	user_exit();
+
 	/*
 	 * ASM glue gaurantees that this is only called when returning to
 	 * user mode
 	 */
 	if (test_and_clear_thread_flag(TIF_NOTIFY_RESUME))
 		tracehook_notify_resume(regs);
+
+	user_enter();
 }

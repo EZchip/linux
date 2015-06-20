@@ -22,6 +22,7 @@
 #include <asm/setup.h>
 #include <asm/unaligned.h>
 #include <asm/kprobes.h>
+#include <linux/context_tracking.h> /* exception_enter(), ... */
 
 void __init trap_init(void)
 {
@@ -44,6 +45,11 @@ void die(const char *str, struct pt_regs *regs, unsigned long address)
 static noinline int
 unhandled_exception(const char *str, struct pt_regs *regs, siginfo_t *info)
 {
+	int ret = 1;
+	enum ctx_state prev_state;
+
+	prev_state = exception_enter();
+
 	if (user_mode(regs)) {
 		struct task_struct *tsk = current;
 
@@ -54,12 +60,14 @@ unhandled_exception(const char *str, struct pt_regs *regs, siginfo_t *info)
 	} else {
 		/* If not due to copy_(to|from)_user, we are doomed */
 		if (fixup_exception(regs))
-			return 0;
-
-		die(str, regs, (unsigned long)info->si_addr);
+			ret = 0;
+		else
+			die(str, regs, (unsigned long)info->si_addr);
 	}
 
-	return 1;
+	exception_exit(prev_state);
+
+	return ret;
 }
 
 #define DO_ERROR_INFO(signr, str, name, sicode) \
@@ -90,9 +98,17 @@ DO_ERROR_INFO(SIGBUS, "Misaligned Access", do_misaligned_error, BUS_ADRALN)
 int do_misaligned_access(unsigned long address, struct pt_regs *regs,
 			 struct callee_regs *cregs)
 {
+	enum ctx_state prev_state;
+
+	prev_state = exception_enter();
+
 	/* If emulation not enabled, or failed, kill the task */
-	if (misaligned_fixup(address, regs, cregs) != 0)
+	if (misaligned_fixup(address, regs, cregs) != 0) {
+		exception_exit(prev_state);
 		return do_misaligned_error(address, regs);
+	}
+
+	exception_exit(prev_state);
 
 	return 0;
 }
@@ -119,6 +135,9 @@ void do_machine_check_fault(unsigned long address, struct pt_regs *regs)
 void do_non_swi_trap(unsigned long address, struct pt_regs *regs)
 {
 	unsigned int param = regs->ecr_param;
+	enum ctx_state prev_state;
+
+	prev_state = exception_enter();
 
 	switch (param) {
 	case 1:
@@ -137,6 +156,8 @@ void do_non_swi_trap(unsigned long address, struct pt_regs *regs)
 	default:
 		break;
 	}
+
+	exception_exit(prev_state);
 }
 
 /*
@@ -147,11 +168,18 @@ void do_non_swi_trap(unsigned long address, struct pt_regs *regs)
 void do_insterror_or_kprobe(unsigned long address, struct pt_regs *regs)
 {
 	int rc;
+	enum ctx_state prev_state;
+
+	prev_state = exception_enter();
 
 	/* Check if this exception is caused by kprobes */
 	rc = notify_die(DIE_IERR, "kprobe_ierr", regs, address, 0, SIGILL);
-	if (rc == NOTIFY_STOP)
+	if (rc == NOTIFY_STOP) {
+		exception_exit(prev_state);
 		return;
+	}
 
 	insterror_is_error(address, regs);
+
+	exception_exit(prev_state);
 }

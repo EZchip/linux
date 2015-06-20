@@ -15,6 +15,7 @@
 #include <linux/uaccess.h>
 #include <linux/kdebug.h>
 #include <linux/perf_event.h>
+#include <linux/context_tracking.h> /* exception_enter(), ... */
 #include <asm/pgalloc.h>
 #include <asm/mmu.h>
 
@@ -53,7 +54,7 @@ bad_area:
 	return 1;
 }
 
-void do_page_fault(unsigned long address, struct pt_regs *regs)
+static void __do_page_fault(unsigned long address, struct pt_regs *regs)
 {
 	struct vm_area_struct *vma = NULL;
 	struct task_struct *tsk = current;
@@ -232,4 +233,13 @@ do_sigbus:
 	info.si_code = BUS_ADRERR;
 	info.si_addr = (void __user *)address;
 	force_sig_info(SIGBUS, &info, tsk);
+}
+
+void do_page_fault(unsigned long address, struct pt_regs *regs)
+{
+	enum ctx_state prev_state;
+
+	prev_state = exception_enter();
+	__do_page_fault(address, regs);
+	exception_exit(prev_state);
 }
