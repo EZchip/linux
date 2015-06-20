@@ -337,7 +337,11 @@ resume_user_mode_begin:
 	; --- (Slow Path #1) task preemption ---
 	bbit0  r9, TIF_NEED_RESCHED, .Lchk_pend_signals
 	mov    blink, resume_user_mode_begin  ; tail-call to U mode ret chks
+#ifdef CONFIG_CONTEXT_TRACKING
+	b      @schedule_user 	; BTST+Bnz causes relo error in link
+#else
 	b      @schedule 	; BTST+Bnz causes relo error in link
+#endif
 
 .Lchk_pend_signals:
 	IRQ_ENABLE	r10
