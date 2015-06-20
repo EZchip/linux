@@ -32,7 +32,7 @@ ENTRY(sys_clone_wrapper)
 	DISCARD_CALLEE_SAVED_USER
 
 	GET_CURR_THR_INFO_FLAGS   r10
-	btst r10, TIF_SYSCALL_TRACE
+	and.f 0, r10, (_TIF_SYSCALL_TRACE|_TIF_NOHZ)
 	bnz  tracesys_exit
 
 	b ret_from_system_call
@@ -286,7 +286,7 @@ ENTRY(EV_Trap)
 
 	; If syscall tracing ongoing, invoke pre-post-hooks
 	GET_CURR_THR_INFO_FLAGS   r10
-	btst r10, TIF_SYSCALL_TRACE
+	and.f 0, r10, (_TIF_SYSCALL_TRACE|_TIF_NOHZ)
 	bnz tracesys  ; this never comes back
 
 	;============ Normal syscall case
