@@ -22,6 +22,7 @@
 #include <linux/atomic.h>
 #include <linux/cpumask.h>
 #include <linux/reboot.h>
+#include <linux/irq_work.h>
 #include <asm/processor.h>
 #include <asm/setup.h>
 #include <asm/mach_desc.h>
@@ -202,6 +203,7 @@ enum ipi_msg_type {
 	IPI_RESCHEDULE = 1,
 	IPI_CALL_FUNC,
 	IPI_CPU_STOP,
+	IPI_IRQ_WORK,
 };
 
 /*
@@ -276,6 +278,14 @@ void arch_send_call_function_ipi_mask(const struct cpumask *mask)
 	ipi_send_msg(mask, IPI_CALL_FUNC);
 }
 
+#ifdef CONFIG_IRQ_WORK
+void arch_irq_work_raise(void)
+{
+	if (arch_irq_work_has_interrupt())
+		ipi_send_msg_one(smp_processor_id(), IPI_IRQ_WORK);
+}
+#endif
+
 /*
  * ipi_cpu_stop - handle IPI from smp_send_stop()
  */
@@ -300,6 +310,12 @@ static inline int __do_IPI(unsigned long msg)
 	case IPI_CPU_STOP:
 		ipi_cpu_stop();
 		break;
+
+#ifdef CONFIG_IRQ_WORK
+	case IPI_IRQ_WORK:
+		irq_work_run();
+		break;
+#endif
 
 	default:
 		rc = 1;
