@@ -13,6 +13,7 @@
 #include <linux/elf.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/user.h>
+#include <linux/thread_info.h>
 
 static struct callee_regs *task_callee_regs(struct task_struct *tsk)
 {
@@ -400,13 +401,18 @@ long arch_ptrace(struct task_struct *child, long request,
 
 asmlinkage int syscall_trace_entry(struct pt_regs *regs)
 {
-	if (tracehook_report_syscall_entry(regs))
-		return ULONG_MAX;
+	u32 work = ACCESS_ONCE(current_thread_info()->flags);
+
+	if (work & _TIF_SYSCALL_TRACE) {
+		if (tracehook_report_syscall_entry(regs))
+			regs->r8 = -1;
+	}
 
 	return regs->r8;
 }
 
 asmlinkage void syscall_trace_exit(struct pt_regs *regs)
 {
-	tracehook_report_syscall_exit(regs, 0);
+	if (test_thread_flag(TIF_SYSCALL_TRACE))
+		tracehook_report_syscall_exit(regs, 0);
 }
