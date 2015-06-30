@@ -205,6 +205,9 @@
 
 #ifdef CONFIG_ARC_PLAT_EZNPS
 struct eznps_dp {
+	unsigned int dpc;
+	unsigned int eflags;
+	unsigned int gpa1;
 };
 #endif
 
