@@ -203,6 +203,11 @@
 #define PAGES_TO_MB(n_pages)	(PAGES_TO_KB(n_pages) >> 10)
 
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+struct eznps_dp {
+};
+#endif
+
 /*
  ***************************************************************
  * Build Configuration Registers, with encoded hardware config

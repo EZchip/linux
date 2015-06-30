@@ -4,6 +4,6 @@
 
 KBUILD_CFLAGS += -Iarch/arc/plat-eznps/include
 
-obj-y := platform.o irq.o dpl.o
+obj-y := platform.o irq.o dpl.o ctop.o
 obj-$(CONFIG_SMP) += time.o smp.o
 obj-$(CONFIG_EZNPS_MTM_EXT) += mtm.o

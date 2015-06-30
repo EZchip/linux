@@ -26,13 +26,24 @@ extern void fpu_save_restore(struct task_struct *p, struct task_struct *n);
 
 #endif /* !CONFIG_ARC_FPU_SAVE_RESTORE */
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+extern void dp_save_restore(struct task_struct *p, struct task_struct *n);
+#define ARC_DP_PREV(p, n)      dp_save_restore(p, n)
+#define ARC_DP_NEXT(t)
+#else
+#define ARC_DP_PREV(p, n)
+#define ARC_DP_NEXT(n)
+#endif /* !CONFIG_ARC_PLAT_EZNPS */
+
 struct task_struct *__switch_to(struct task_struct *p, struct task_struct *n);
 
 #define switch_to(prev, next, last)	\
 do {					\
+	ARC_DP_PREV(prev, next);	\
 	ARC_FPU_PREV(prev, next);	\
 	last = __switch_to(prev, next);\
 	ARC_FPU_NEXT(next);		\
+	ARC_DP_NEXT(next);		\
 	mb();				\
 } while (0)
 
