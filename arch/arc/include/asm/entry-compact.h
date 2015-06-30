@@ -35,6 +35,9 @@
 #include <asm/asm-offsets.h>
 #include <asm/irqflags-compact.h>
 #include <asm/thread_info.h>	/* For THREAD_SIZE */
+#ifdef CONFIG_ARC_PLAT_EZNPS
+#include "../plat-eznps/include/plat/ctop.h"
+#endif
 
 /*--------------------------------------------------------------
  * Switch to Kernel Mode stack if SP points to User Mode stack
@@ -219,6 +222,12 @@
 	PUSHAX	lp_start
 	PUSHAX	erbta
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	.word CTOP_INST_SCHD_RW
+	PUSHAX  CTOP_AUX_GPA1
+	PUSHAX  CTOP_AUX_EFLAGS
+#endif
+`
 	lr	r9, [ecr]
 	st      r9, [sp, PT_event]    /* EV_Trap expects r9 to have ECR */
 .endm
@@ -235,6 +244,12 @@
  * by hardware and that is not good.
  *-------------------------------------------------------------*/
 .macro EXCEPTION_EPILOGUE
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	.word CTOP_INST_SCHD_RW
+	POPAX   CTOP_AUX_EFLAGS
+	POPAX   CTOP_AUX_GPA1
+#endif
+
 	POPAX	erbta
 	POPAX	lp_start
 	POPAX	lp_end
@@ -292,6 +307,12 @@
 	PUSHAX	lp_end
 	PUSHAX	lp_start
 	PUSHAX	bta_l\LVL\()
+
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	.word CTOP_INST_SCHD_RW
+	PUSHAX  CTOP_AUX_GPA1
+	PUSHAX  CTOP_AUX_EFLAGS
+#endif
 .endm
 
 /*--------------------------------------------------------------
@@ -304,6 +325,12 @@
  * by hardware and that is not good.
  *-------------------------------------------------------------*/
 .macro INTERRUPT_EPILOGUE  LVL
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	.word CTOP_INST_SCHD_RW
+	POPAX   CTOP_AUX_EFLAGS
+	POPAX   CTOP_AUX_GPA1
+#endif
+
 	POPAX	bta_l\LVL\()
 	POPAX	lp_start
 	POPAX	lp_end

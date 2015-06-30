@@ -19,6 +19,9 @@
 #ifdef CONFIG_ISA_ARCOMPACT
 struct pt_regs {
 
+	unsigned long eflags;
+	unsigned long gpa1;
+
 	/* Real registers */
 	unsigned long bta;	/* bta_l1, bta_l2, erbta */
 

@@ -34,6 +34,7 @@ struct user_regs_struct {
 
 	unsigned long pad;
 	struct {
+		unsigned long eflags, gpa1;
 		unsigned long bta, lp_start, lp_end, lp_count;
 		unsigned long status32, ret, blink, fp, gp;
 		unsigned long r12, r11, r10, r9, r8, r7, r6, r5, r4, r3, r2, r1, r0;
