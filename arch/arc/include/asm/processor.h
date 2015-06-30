@@ -42,6 +42,9 @@ struct thread_struct {
 #ifdef CONFIG_HAVE_HW_BREAKPOINT
 	struct perf_event *hbp[ARC_MAX_HBP_SLOTS];
 #endif
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	struct eznps_dp dp;
+#endif
 };
 
 #define INIT_THREAD  {                          \
