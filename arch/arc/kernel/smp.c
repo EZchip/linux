@@ -126,6 +126,10 @@ void start_kernel_secondary(void)
 	current->active_mm = mm;
 	cpumask_set_cpu(cpu, mm_cpumask(mm));
 
+	/* Before we turn online */
+	if (machine_desc->init_cpu_smp)
+		machine_desc->init_cpu_smp(cpu);
+
 	notify_cpu_starting(cpu);
 	set_cpu_online(cpu, true);
 
@@ -134,9 +138,6 @@ void start_kernel_secondary(void)
 	/* Some SMP H/w setup - for each cpu */
 	if (plat_smp_ops.init_irq_cpu)
 		plat_smp_ops.init_irq_cpu(cpu);
-
-	if (machine_desc->init_cpu_smp)
-		machine_desc->init_cpu_smp(cpu);
 
 	arc_local_timer_setup();
 
