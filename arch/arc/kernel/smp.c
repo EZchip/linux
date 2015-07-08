@@ -131,13 +131,14 @@ void start_kernel_secondary(void)
 	current->active_mm = mm;
 	cpumask_set_cpu(cpu, mm_cpumask(mm));
 
+	/* Before we turn online */
+	if (machine_desc->init_smp)
+		machine_desc->init_smp(cpu);
+
 	notify_cpu_starting(cpu);
 	set_cpu_online(cpu, true);
 
 	pr_info("## CPU%u LIVE ##: Executing Code...\n", cpu);
-
-	if (machine_desc->init_smp)
-		machine_desc->init_smp(cpu);
 
 	arc_local_timer_setup();
 
