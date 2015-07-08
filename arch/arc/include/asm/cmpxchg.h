@@ -158,4 +158,10 @@ static inline unsigned long __xchg(unsigned long val, volatile void *ptr,
  */
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))
 
+#ifdef CONFIG_HAVE_VIRT_CPU_ACCOUNTING_GEN
+#include <asm-generic/cmpxchg-local.h>
+#define cmpxchg64_local(ptr, o, n) __cmpxchg64_local_generic((ptr), (o), (n))
+#define cmpxchg64(ptr, o, n)    cmpxchg64_local((ptr), (o), (n))
+#endif /* HAVE_VIRT_CPU_ACCOUNTING_GEN */
+
 #endif
