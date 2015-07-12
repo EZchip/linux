@@ -27,6 +27,7 @@
 	interrupt-parent = <&intc>;
 	present-cpus = "0-1,16-17";
 	possible-cpus = "0-4095";
+	init-possible-as-present = <1>;
 
 	chosen {
 		bootargs = "earlycon=uart8250,mmio32be,0xf7209000,115200n8 console=ttyS0,115200n8 rcupdate.rcu_cpu_stall_suppress=1";

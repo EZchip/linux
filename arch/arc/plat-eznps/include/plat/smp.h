@@ -126,6 +126,7 @@ static inline void *nps_msu_reg_addr(u32 cpu, u32 reg)
 	return nps_host_reg(cpu, NPS_MSU_BLKID, reg);
 }
 
+extern struct cpumask _cpu_possible_mask;
 void eznps_init_early_smp(void);
 void eznps_smp_init_cpu(unsigned int cpu);
 

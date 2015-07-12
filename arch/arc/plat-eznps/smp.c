@@ -24,6 +24,7 @@
 
 #define NPS_DEFAULT_MSID	0x34
 
+struct cpumask _cpu_possible_mask;
 static char smp_cpuinfo_buf[128];
 
 /* Get cpu map from device tree */
@@ -44,19 +45,24 @@ static int __init eznps_get_map(const char *name, struct cpumask *cpumask)
 /* Update board cpu maps */
 static void __init eznps_set_maps(void)
 {
-	struct cpumask cpumask;
+	struct cpumask cpumask_possible, cpumask_present;
+	unsigned long dt_root = of_get_flat_dt_root();
 
-	if (eznps_get_map("present-cpus", &cpumask)) {
+	if (eznps_get_map("present-cpus", &cpumask_present)) {
 		pr_err("Failed to get present-cpus from dtb");
 		return;
 	}
-	init_cpu_present(&cpumask);
+	init_cpu_present(&cpumask_present);
 
-	if (eznps_get_map("possible-cpus", &cpumask)) {
+	if (eznps_get_map("possible-cpus", &cpumask_possible)) {
 		pr_err("Failed to get possible-cpus from dtb");
 		return;
 	}
-	init_cpu_possible(&cpumask);
+	init_cpu_possible(&cpumask_possible);
+
+	cpumask_copy(&_cpu_possible_mask, &cpumask_possible);
+	if (of_get_flat_dt_prop(dt_root, "init-possible-as-present", NULL))
+		init_cpu_possible(&cpumask_present);
 }
 
 static void __init eznps_map_cpus(int max_cpus)
