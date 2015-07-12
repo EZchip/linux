@@ -23,6 +23,7 @@
 #include <linux/cpumask.h>
 #include <linux/reboot.h>
 #include <linux/irq_work.h>
+#include <linux/of_fdt.h>
 #include <asm/processor.h>
 #include <asm/setup.h>
 #include <asm/mach_desc.h>
@@ -66,6 +67,10 @@ void __init smp_init_cpus(void)
 void __init smp_prepare_cpus(unsigned int max_cpus)
 {
 	int i;
+	unsigned long dt_root = of_get_flat_dt_root();
+
+	if (of_get_flat_dt_prop(dt_root, "init-possible-as-present", NULL))
+		return;
 
 	/*
 	 * Initialise the present map, which describes the set of CPUs

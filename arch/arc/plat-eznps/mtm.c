@@ -33,7 +33,7 @@ static void mtm_init_nat(int cpu)
 
 	/* Iterate core threads and update nat */
 	for (i = 0, t = cpu; i < NPS_NUM_HW_THREADS; i++, t++)
-		nat += test_bit(t, cpumask_bits(cpu_possible_mask));
+		nat += test_bit(t, cpumask_bits(&_cpu_possible_mask));
 
 	log_nat = ilog2(nat);
 

@@ -19,6 +19,7 @@
 
 #ifdef CONFIG_SMP
 
+extern struct cpumask _cpu_possible_mask;
 extern void res_service(void);
 
 #endif /* CONFIG_SMP */
