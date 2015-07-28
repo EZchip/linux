@@ -13,6 +13,7 @@
 #include <linux/syscalls.h>
 #include <linux/smp.h>
 #include <linux/tick.h>
+#include <linux/ratelimit.h>
 #include <asm/unistd.h>
 #include <asm/syscall.h>
 #include "time/tick-sched.h"
@@ -211,4 +212,96 @@ int task_isolation_syscall(int syscall)
 	syscall_set_return_value(current, current_pt_regs(),
 					 -ERESTARTNOINTR, -1);
 	return -1;
+}
+
+/* Enable debugging of any interrupts of task_isolation cores. */
+static int task_isolation_debug_flag;
+static int __init task_isolation_debug_func(char *str)
+{
+	task_isolation_debug_flag = true;
+	return 1;
+}
+__setup("task_isolation_debug", task_isolation_debug_func);
+
+void task_isolation_debug_task(int cpu, struct task_struct *p,
+			       const char *fmt, va_list args)
+{
+	static DEFINE_RATELIMIT_STATE(console_output, 10*HZ, 10);
+	bool force_debug = false;
+	char buf[100];
+
+	/*
+	 * Our caller made sure the task was running on a task isolation
+	 * core, but make sure the task has enabled isolation.
+	 */
+	if (!(p->task_isolation_flags & PR_TASK_ISOLATION_ENABLE))
+		return;
+
+	/*
+	 * Ensure the task is actually in userspace; if it is in kernel
+	 * mode, it is expected that it may receive interrupts, and in
+	 * any case they don't affect the isolation.  Note that there
+	 * is a race condition here as a task may have committed
+	 * to returning to user space but not yet set the context
+	 * tracking state to reflect it, and the check here is before
+	 * we trigger the interrupt, so we might fail to warn about a
+	 * legitimate interrupt.  However, the race window is narrow
+	 * and hitting it does not cause any incorrect behavior other
+	 * than failing to send the warning.
+	 */
+	if (cpu != smp_processor_id() && !context_tracking_cpu_in_user(cpu))
+		return;
+
+	/* Format the message since we will probably use it now. */
+	vsnprintf(buf, sizeof(buf), fmt, args);
+
+	/*
+	 * We disable task isolation mode when we deliver a signal
+	 * so we won't end up recursing back here again.
+	 * If we are in an NMI, we don't try delivering the signal
+	 * and instead just treat it as if "debug" mode was enabled,
+	 * since that's pretty much all we can do.
+	 */
+	if (in_nmi())
+		force_debug = true;
+	else
+		task_isolation_deliver_signal(p, buf);
+
+	/*
+	 * If (for example) the timer interrupt starts ticking
+	 * unexpectedly, we will get an unmanageable flow of output,
+	 * so limit to one backtrace per second.
+	 */
+	if (force_debug ||
+	    (task_isolation_debug_flag && __ratelimit(&console_output))) {
+		pr_err("cpu %d: %s violating task isolation for %s/%d on cpu %d\n",
+		       smp_processor_id(), buf, p->comm, p->pid, cpu);
+		dump_stack();
+	}
+}
+
+/*
+ * Generate a task isolation debug message for an interrupt.  We check
+ * that we are interrupt a task isolation task in userspace, then hand
+ * off to the usual task_isolation_debug_task() code.
+ *
+ * If the caller doesn't have convenient access to pt_regs, typically
+ * passing the return value of get_irq_regs() should work.
+ */
+void task_isolation_irq(struct pt_regs *regs, const char *fmt, ...)
+{
+	va_list args;
+
+	if (regs == NULL) {
+		WARN_ONCE(1, "NULL pt_regs");
+		return;
+	}
+
+	if (!(current_thread_info()->flags & _TIF_TASK_ISOLATION) ||
+	    !user_mode(regs))
+		return;
+
+	va_start(args, fmt);
+	task_isolation_debug_task(smp_processor_id(), current, fmt, args);
+	va_end(args);
 }

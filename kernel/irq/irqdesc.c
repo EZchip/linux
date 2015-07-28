@@ -15,6 +15,7 @@
 #include <linux/radix-tree.h>
 #include <linux/bitmap.h>
 #include <linux/irqdomain.h>
+#include <linux/isolation.h>
 
 #include "internals.h"
 
@@ -433,6 +434,10 @@ int __handle_domain_irq(struct irq_domain *domain, unsigned int hwirq,
 	if (lookup)
 		irq = irq_find_mapping(domain, hwirq);
 #endif
+
+	task_isolation_irq(regs, (irq == hwirq) ?
+			   "irq %d (%s)" : "irq %d (%s hwirq %d)",
+			   irq, domain ? domain->name : "", hwirq);
 
 	/*
 	 * Some hardware gives randomly wrong interrupts.  Rather
