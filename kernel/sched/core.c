@@ -25,6 +25,7 @@
 #include <linux/profile.h>
 #include <linux/security.h>
 #include <linux/syscalls.h>
+#include <linux/isolation.h>
 
 #include <asm/switch_to.h>
 #include <asm/tlb.h>
@@ -668,6 +669,25 @@ bool sched_can_stop_tick(struct rq *rq)
 	return true;
 }
 #endif /* CONFIG_NO_HZ_FULL */
+
+#ifdef CONFIG_TASK_ISOLATION
+void _task_isolation_debug(int cpu, const char *fmt, ...)
+{
+	struct task_struct *task;
+	struct rq *rq;
+	va_list args;
+
+	rq = cpu_rq(cpu);
+	task = try_get_task_struct(&rq->curr);
+	if (!task)
+		return;
+
+	va_start(args, fmt);
+	task_isolation_debug_task(cpu, task, fmt, args);
+	va_end(args);
+	put_task_struct(task);
+}
+#endif
 
 void sched_avg_update(struct rq *rq)
 {
