@@ -24,6 +24,7 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/timekeeper_internal.h>
+#include <linux/isolation.h>
 #include <asm/irq_regs.h>
 #include <asm/traps.h>
 #include <asm/vdso.h>
@@ -193,6 +194,7 @@ void do_timer_interrupt(struct pt_regs *regs, int fault_num)
 	arch_local_irq_mask(INT_TILE_TIMER);
 
 	/* Track time spent here in an interrupt context */
+	task_isolation_irq(regs, "timer");
 	irq_enter();
 
 	/* Track interrupt count. */
