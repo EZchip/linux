@@ -76,6 +76,7 @@
 #include <linux/compiler.h>
 #include <linux/sysctl.h>
 #include <linux/kcov.h>
+#include <linux/isolation.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -1552,6 +1553,8 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	clear_tsk_thread_flag(p, TIF_SYSCALL_EMU);
 #endif
 	clear_all_latency_tracing(p);
+
+	task_isolation_set_flags(p, 0);
 
 	/* ok, now we should be set up.. */
 	p->pid = pid_nr(pid);
