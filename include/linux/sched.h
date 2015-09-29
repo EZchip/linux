@@ -932,6 +932,10 @@ struct task_struct {
 	unsigned long			numa_pages_migrated;
 #endif /* CONFIG_NUMA_BALANCING */
 
+#ifdef CONFIG_TASK_ISOLATION
+	unsigned int			task_isolation_flags;
+#endif
+
 	struct tlbflush_unmap_batch	tlb_ubc;
 
 	struct rcu_head			rcu;
