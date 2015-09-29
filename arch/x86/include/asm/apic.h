@@ -2,6 +2,7 @@
 #define _ASM_X86_APIC_H
 
 #include <linux/cpumask.h>
+#include <linux/isolation.h>
 
 #include <asm/alternative.h>
 #include <asm/cpufeature.h>
@@ -10,6 +11,7 @@
 #include <asm/fixmap.h>
 #include <asm/mpspec.h>
 #include <asm/msr.h>
+#include <asm/irq_regs.h>
 
 #define ARCH_APICTIMER_STOPS_ON_C3	1
 
@@ -632,6 +634,7 @@ extern void irq_exit(void);
 
 static inline void entering_irq(void)
 {
+	task_isolation_irq(get_irq_regs(), "irq");
 	irq_enter();
 }
 
@@ -643,6 +646,7 @@ static inline void entering_ack_irq(void)
 
 static inline void ipi_entering_ack_irq(void)
 {
+	task_isolation_irq(get_irq_regs(), "ack irq");
 	irq_enter();
 	ack_APIC_irq();
 }
