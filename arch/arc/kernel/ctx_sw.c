@@ -61,7 +61,11 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
 		"st      sp, [r24]       \n\t"
 #endif
 
+#ifdef CONFIG_EZNPS_MTM_EXT
+		".word %5   \n\t"
+#else
 		"sync   \n\t"
+#endif
 
 		/*
 		 * setup _current_task with incoming tsk.
@@ -121,6 +125,9 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
 		: "n"(KSP_WORD_OFF), "r"(next), "r"(prev)
 #ifdef CONFIG_ARC_PLAT_EZNPS
 		, "i"(CTOP_AUX_LOGIC_GLOBAL_ID)
+#endif
+#ifdef CONFIG_EZNPS_MTM_EXT
+		, "i"(CTOP_INST_SCHD_RW)
 #endif
 		: "blink"
 	);
