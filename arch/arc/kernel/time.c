@@ -283,6 +283,10 @@ void __init time_init(void)
 		 */
 		clocksource_register_hz(&arc_counter, arc_get_core_freq());
 
+#ifdef CONFIG_CLKSRC_OF
+	clocksource_of_init();
+#endif
+
 	/* sets up the periodic event timer */
 	arc_local_timer_setup();
 }
