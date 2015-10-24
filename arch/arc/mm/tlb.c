@@ -59,6 +59,7 @@
 #include <asm/setup.h>
 #include <asm/mmu_context.h>
 #include <asm/mmu.h>
+#include <asm/mtm.h>
 
 /*			Need for ARC MMU v2
  *
@@ -254,8 +255,10 @@ noinline void local_flush_tlb_all(void)
 	unsigned long flags;
 	unsigned int entry;
 	int num_tlb = mmu->sets * mmu->ways;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	/* Load PD0 and PD1 with template for a Blank Entry */
 	write_aux_reg(ARC_REG_TLBPD1, 0);
@@ -285,6 +288,7 @@ noinline void local_flush_tlb_all(void)
 
 	utlb_invalidate();
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -327,6 +331,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 {
 	const unsigned int cpu = smp_processor_id();
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/* If range @start to @end is more than 32 TLB entries deep,
 	 * its better to move to a new ASID rather than searching for
@@ -348,6 +353,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 	start &= PAGE_MASK;
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	if (asid_mm(vma->vm_mm, cpu) != MM_CTXT_NO_ASID) {
 		while (start < end) {
@@ -358,6 +364,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 
 	utlb_invalidate();
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -370,6 +377,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/* exactly same as above, except for TLB entry not taking ASID */
 
@@ -381,6 +389,8 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 	start &= PAGE_MASK;
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
+
 	while (start < end) {
 		tlb_entry_erase(start);
 		start += PAGE_SIZE;
@@ -388,6 +398,7 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 
 	utlb_invalidate();
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -400,17 +411,20 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 {
 	const unsigned int cpu = smp_processor_id();
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/* Note that it is critical that interrupts are DISABLED between
 	 * checking the ASID and using it flush the TLB entry
 	 */
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	if (asid_mm(vma->vm_mm, cpu) != MM_CTXT_NO_ASID) {
 		tlb_entry_erase((page & PAGE_MASK) | hw_pid(vma->vm_mm, cpu));
 		utlb_invalidate();
 	}
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -519,6 +533,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long vaddr, pte_t *ptep)
 	unsigned int asid_or_sasid, rwx;
 	unsigned long pd0;
 	pte_t pd1;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/*
 	 * create_tlb() assumes that current->mm == vma->mm, since
@@ -549,6 +564,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long vaddr, pte_t *ptep)
 		return;
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	tlb_paranoid_check(asid_mm(vma->vm_mm, smp_processor_id()), vaddr);
 
@@ -582,6 +598,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long vaddr, pte_t *ptep)
 
 	tlb_entry_insert(pd0, pd1);
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -895,8 +912,10 @@ void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
 	unsigned int pd0[mmu->ways];
 	unsigned long flags;
 	int set;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	/* re-enable the MMU */
 	write_aux_reg(ARC_REG_PID, MMU_ENABLE | read_aux_reg(ARC_REG_PID));
@@ -948,6 +967,7 @@ void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
 		}
 	}
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 

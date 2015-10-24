@@ -20,6 +20,7 @@
 #include <asm/cacheflush.h>
 #include <asm/cachectl.h>
 #include <asm/setup.h>
+#include <asm/mtm.h>
 
 #ifdef CONFIG_ISA_ARCV2
 #define USE_RGN_FLSH	1
@@ -571,14 +572,19 @@ static inline void __dc_line_op(phys_addr_t paddr, unsigned long vaddr,
 {
 	const int full_page = __builtin_constant_p(sz) && sz == PAGE_SIZE;
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+
+	hw_schd_save(&schd_flags);
 
 	__before_dc_op(op);
 
 	__cache_line_loop(paddr, vaddr, sz, op, full_page);
 
 	__after_dc_op(op);
+
+	hw_schd_restore(schd_flags);
 
 	local_irq_restore(flags);
 }
@@ -607,9 +613,12 @@ __ic_line_inv_vaddr_local(phys_addr_t paddr, unsigned long vaddr,
 {
 	const int full_page = __builtin_constant_p(sz) && sz == PAGE_SIZE;
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 	(*_cache_line_loop_ic_fn)(paddr, vaddr, sz, OP_INV_IC, full_page);
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -959,12 +968,15 @@ void __flush_dcache_page(phys_addr_t paddr, unsigned long vaddr)
 noinline void flush_cache_all(void)
 {
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	__ic_entire_inv();
 	__dc_entire_op(OP_FLUSH_N_INV);
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 
 }
