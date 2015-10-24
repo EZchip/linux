@@ -43,6 +43,7 @@
 #include <asm/cache.h>
 #include <asm/processor.h>
 #include <asm/tlb-mmu1.h>
+#include <asm/mtm.h>
 
 #ifdef CONFIG_ISA_ARCOMPACT
 ;-----------------------------------------------------------------
@@ -97,6 +98,7 @@ ex_saved_reg1:
 	st_s  r1, [r0, 4]
 	st_s  r2, [r0, 8]
 	st_s  r3, [r0, 12]
+	HW_SCHD_OFF_R4 r0,16
 
 	; VERIFY if the ASID in MMU-PID Reg is same as
 	; one in Linux data structures
@@ -109,6 +111,7 @@ ex_saved_reg1:
 	GET_CPU_ID  r0			; get to per cpu scratch mem
 	asl r0, r0, L1_CACHE_SHIFT	; each is cache line wide
 	add r0, @ex_saved_reg1, r0
+	HW_SCHD_RESTORE_R4 r0,16
 	ld_s  r3, [r0,12]
 	ld_s  r2, [r0, 8]
 	ld_s  r1, [r0, 4]
