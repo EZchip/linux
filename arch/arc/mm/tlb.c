@@ -101,7 +101,7 @@
 
 
 /* A copy of the ASID from the PID reg is kept in asid_cache */
-DEFINE_PER_CPU(unsigned int, asid_cache) = MM_CTXT_FIRST_CYCLE;
+DEFINE_PER_CPU(unsigned int, asid_cache);
 
 /*
  * Utility Routine to erase a J-TLB entry
@@ -827,7 +827,8 @@ char *arc_mmu_mumbojumbo(int cpu_id, char *buf, int len)
 void arc_mmu_init(void)
 {
 	char str[256];
-	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[smp_processor_id()].mmu;
+	const unsigned int cpu = smp_processor_id();
+	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[cpu].mmu;
 
 	printk(arc_mmu_mumbojumbo(0, str, sizeof(str)));
 
@@ -865,6 +866,8 @@ void arc_mmu_init(void)
 
 	if (IS_ENABLED(CONFIG_ARC_HAS_PAE40) && !mmu->pae)
 		panic("Hardware doesn't support PAE40\n");
+
+	asid_cpu(cpu) = asid_cpu_first(cpu);
 
 	/* Enable the MMU */
 	write_aux_reg(ARC_REG_PID, MMU_ENABLE);
