@@ -16,7 +16,11 @@
 #ifdef CONFIG_ISA_ARCOMPACT
 #define TIMER0_IRQ      3
 #define TIMER1_IRQ      4
+#if defined(CONFIG_SMP) && defined(CONFIG_ARC_PLAT_EZNPS)
+#define IPI_IRQ         5
+#else
 #define IPI_IRQ		(NR_CPU_IRQS-1) /* dummy to enable SMP build for up hardware */
+#endif
 #else
 #define TIMER0_IRQ      16
 #define TIMER1_IRQ      17
