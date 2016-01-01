@@ -35,6 +35,18 @@
 		};
 	};
 
+	timer0: timer_clkevt {
+		compatible = "snps,arc-timer0";
+		interrupts = <3>;
+		interrupt-parent = <&intc>;
+		clocks = <&cpu_clk>;
+	};
+
+	timer1: timer_clksrc {
+		compatible = "snps,arc-timer1";
+		clocks = <&cpu_clk>;
+	};
+
 	soc100 {
 		#address-cells	= <1>;
 		#size-cells	= <1>;

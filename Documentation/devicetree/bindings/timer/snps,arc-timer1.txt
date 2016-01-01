@@ -1,0 +1,17 @@
+Synopsys ARC Free Running Local 32-bit Timer
+- Found on all ARC CPUs (ARC700/ARCHS)
+- Mandatory clocksource provider on ARC700
+- Optional clocksource provider on UP ARC HS CPUs
+  (and if better timer archs-rtc not available in SoC)
+
+Required properties:
+
+- compatible : should be "snps,arc-timer1"
+- clocks     : phandle to the source clock
+
+Example:
+
+	timer1: timer_clksrc {
+		compatible = "snps,arc-timer1";
+		clocks = <&timer0_clk>;
+	};
