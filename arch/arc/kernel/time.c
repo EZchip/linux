@@ -183,6 +183,8 @@ static struct clocksource arc_counter = {
 
 /********** Clock Event Device *********/
 
+static int arc_timer_irq = TIMER0_IRQ;
+
 /*
  * Arm the timer to interrupt after @cycles
  * The distinction for oneshot/periodic is done in arc_event_timer_ack() below
@@ -244,21 +246,52 @@ static irqreturn_t timer_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-/*
- * Setup the local event timer for @cpu
- */
-void arc_local_timer_setup()
+static int arc_timer_cpu_notify(struct notifier_block *self,
+				unsigned long action, void *hcpu)
 {
 	struct clock_event_device *evt = this_cpu_ptr(&arc_clockevent_device);
-	int cpu = smp_processor_id();
 
-	evt->cpumask = cpumask_of(cpu);
+	evt->cpumask = cpumask_of(smp_processor_id());
+
+	switch (action & ~CPU_TASKS_FROZEN) {
+	case CPU_STARTING:
+		clockevents_config_and_register(evt, arc_get_core_freq(),
+						0, ULONG_MAX);
+		enable_percpu_irq(arc_timer_irq, 0);
+		break;
+	case CPU_DYING:
+		disable_percpu_irq(arc_timer_irq);
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block nps_timer_cpu_nb = {
+	.notifier_call = arc_timer_cpu_notify,
+};
+
+/*
+ * clockevent setup for boot CPU
+ */
+static void __init arc_clockevent_setup()
+{
+	struct clock_event_device *evt = this_cpu_ptr(&arc_clockevent_device);
+
+	register_cpu_notifier(&arc_timer_cpu_nb);
+
+	evt->cpumask = cpumask_of(smp_processor_id());
 	clockevents_config_and_register(evt, arc_get_core_freq(),
 					0, ARC_TIMER_MAX);
 
 	/* setup the per-cpu timer IRQ handler - for all cpus */
-	arc_request_percpu_irq(TIMER0_IRQ, cpu, timer_irq_handler,
-			       "Timer0 (per-cpu-tick)", evt);
+	request_percpu_irq(arc_timer_irq, timer_irq_handler,
+			   "Timer0 (per-cpu-tick)", evt);
+
+	enable_percpu_irq(arc_timer_irq, 0);
+
+	if (ret)
+		pr_err("Unable to register interrupt\n");
 }
 
 /*
@@ -283,6 +316,5 @@ void __init time_init(void)
 		 */
 		clocksource_register_hz(&arc_counter, arc_get_core_freq());
 
-	/* sets up the periodic event timer */
-	arc_local_timer_setup();
+	arc_clockevent_setup();
 }
