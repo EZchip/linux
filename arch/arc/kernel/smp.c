@@ -354,7 +354,16 @@ int smp_ipi_irq_setup(int cpu, int irq)
 {
 	int *dev = per_cpu_ptr(&ipi_dev, cpu);
 
-	arc_request_percpu_irq(irq, cpu, do_IPI, "IPI Interrupt", dev);
+	/* Boot cpu calls request, all call enable */
+	if (!cpu) {
+		int rc;
+
+		rc = request_percpu_irq(irq, do_IPI, "IPI Interrupt", dev);
+		if (rc)
+			panic("Percpu IRQ request failed for %d\n", irq);
+	}
+
+	enable_percpu_irq(irq, 0);
 
 	return 0;
 }
