@@ -350,19 +350,25 @@ static void arc_chk_core_config(void)
 
 void setup_processor(void)
 {
+#if defined(DEBUG)
 	char str[512];
 	int cpu_id = smp_processor_id();
+#endif
 
 	read_arc_build_cfg_regs();
 	arc_init_IRQ();
 
+#if defined(DEBUG)
 	printk(arc_cpu_mumbojumbo(cpu_id, str, sizeof(str)));
+#endif
 
 	arc_mmu_init();
 	arc_cache_init();
 
+#if defined(DEBUG)
 	printk(arc_extn_mumbojumbo(cpu_id, str, sizeof(str)));
 	printk(arc_platform_smp_cpuinfo());
+#endif
 
 	arc_chk_core_config();
 }

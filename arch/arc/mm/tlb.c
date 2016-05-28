@@ -826,11 +826,13 @@ char *arc_mmu_mumbojumbo(int cpu_id, char *buf, int len)
 
 void arc_mmu_init(void)
 {
-	char str[256];
 	const unsigned int cpu = smp_processor_id();
 	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[cpu].mmu;
+#if defined(DEBUG)
+	char str[256];
 
 	printk(arc_mmu_mumbojumbo(0, str, sizeof(str)));
+#endif
 
 	/*
 	 * Can't be done in processor.h due to header include depenedencies

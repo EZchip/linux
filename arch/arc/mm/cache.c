@@ -929,9 +929,11 @@ SYSCALL_DEFINE3(cacheflush, uint32_t, start, uint32_t, sz, uint32_t, flags)
 void arc_cache_init(void)
 {
 	unsigned int __maybe_unused cpu = smp_processor_id();
+#if defined(DEBUG)
 	char str[256];
 
 	printk(arc_cache_mumbojumbo(0, str, sizeof(str)));
+#endif
 
 	/*
 	 * Only master CPU needs to execute rest of function:
