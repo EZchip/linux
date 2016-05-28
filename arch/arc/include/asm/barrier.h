@@ -44,8 +44,16 @@
 
 #include <plat/ctop.h>
 
-#define mb()	asm volatile (".word %0" : : "i"(CTOP_INST_SCHD_RW) : "memory")
-#define rmb()	asm volatile (".word %0" : : "i"(CTOP_INST_SCHD_RD) : "memory")
+#define mb()	asm volatile ("nop	\n\t"		\
+			      ".word %0	\n\t"		\
+			      :				\
+			      : "i"(CTOP_INST_SCHD_RW)	\
+			      : "memory")
+#define rmb()	asm volatile ("nop	\n\t"		\
+			      ".word %0	\n\t"		\
+			      :				\
+			      : "i"(CTOP_INST_SCHD_RD)	\
+			      : "memory")
 
 #endif
 

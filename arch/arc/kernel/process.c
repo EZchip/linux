@@ -90,6 +90,7 @@ void arch_cpu_idle(void)
 		:"I"(ISA_SLEEP_ARG)); /* can't be "r" has to be embedded const */
 #else
 	__asm__ __volatile__(
+		"nop		\n"
 		".word %0	\n"
 		:
 		:"i"(CTOP_INST_HWSCHD_WFT_IE12));
