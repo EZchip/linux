@@ -71,6 +71,12 @@ static inline long arch_local_irq_save(void)
 	"	lr  %1, [status32]	\n"
 	"	bic %0, %1, %2		\n"
 	"	and.f 0, %1, %2	\n"
+#ifdef CONFIG_EZNPS_MTM_EXT
+	"	.align 16		\n"
+	"	nop			\n"
+	"	flag.nz %0		\n"
+	"	nop			\n"
+#endif
 	"	flag.nz %0		\n"
 	: "=r"(temp), "=r"(flags)
 	: "n"((STATUS_E1_MASK | STATUS_E2_MASK))
@@ -86,6 +92,12 @@ static inline void arch_local_irq_restore(unsigned long flags)
 {
 
 	__asm__ __volatile__(
+#ifdef CONFIG_EZNPS_MTM_EXT
+	"	.align 16		\n"
+	"	nop			\n"
+	"	flag %0			\n"
+	"	nop			\n"
+#endif
 	"	flag %0			\n"
 	:
 	: "r"(flags)
@@ -102,6 +114,12 @@ static inline void arch_local_irq_enable(void)
 	__asm__ __volatile__(
 	"	lr   %0, [status32]	\n"
 	"	or   %0, %0, %1		\n"
+#ifdef CONFIG_EZNPS_MTM_EXT
+	"	.align 16		\n"
+	"	nop			\n"
+	"	flag %0			\n"
+	"	nop			\n"
+#endif
 	"	flag %0			\n"
 	: "=&r"(temp)
 	: "n"((STATUS_E1_MASK | STATUS_E2_MASK))
@@ -119,6 +137,12 @@ static inline void arch_local_irq_disable(void)
 	__asm__ __volatile__(
 	"	lr  %0, [status32]	\n"
 	"	and %0, %0, %1		\n"
+#ifdef CONFIG_EZNPS_MTM_EXT
+	"	.align 16		\n"
+	"	nop			\n"
+	"	flag %0			\n"
+	"	nop			\n"
+#endif
 	"	flag %0			\n"
 	: "=&r"(temp)
 	: "n"(~(STATUS_E1_MASK | STATUS_E2_MASK))
@@ -183,7 +207,13 @@ static inline int arch_irqs_disabled(void)
 .macro IRQ_DISABLE  scratch
 	lr	\scratch, [status32]
 	bic	\scratch, \scratch, (STATUS_E1_MASK | STATUS_E2_MASK)
+#ifdef CONFIG_EZNPS_MTM_EXT
+	.align	16
+	nop
 	flag	\scratch
+	nop
+	flag	\scratch
+#endif
 	TRACE_ASM_IRQ_DISABLE
 .endm
 
@@ -191,6 +221,12 @@ static inline int arch_irqs_disabled(void)
 	TRACE_ASM_IRQ_ENABLE
 	lr	\scratch, [status32]
 	or	\scratch, \scratch, (STATUS_E1_MASK | STATUS_E2_MASK)
+#ifdef CONFIG_EZNPS_MTM_EXT
+	.align	16
+	nop
+	flag	\scratch
+	nop
+#endif
 	flag	\scratch
 .endm
 
