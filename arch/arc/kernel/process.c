@@ -45,10 +45,17 @@ SYSCALL_DEFINE0(arc_gettls)
 void arch_cpu_idle(void)
 {
 	/* sleep, but enable all interrupts before committing */
+#if defined(CONFIG_EZNPS_MTM_EXT)
+	__asm__ __volatile__(
+		".word %0	\n"
+		:
+		:"i"(CTOP_INST_HWSCHD_WFT_IE12));
+#else
 	__asm__ __volatile__(
 		"sleep %0	\n"
 		:
 		:"I"(ISA_SLEEP_ARG)); /* can't be "r" has to be embedded const */
+#endif
 }
 
 asmlinkage void ret_from_fork(void);
