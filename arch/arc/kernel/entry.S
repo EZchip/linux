@@ -303,7 +303,8 @@ ENTRY(ret_from_exception)
 	; Pre-{IRQ,Trap,Exception} K/U mode from pt_regs->status32
 	ld  r8, [sp, PT_status32]   ; returning to User/Kernel Mode
 
-	bbit0  r8, STATUS_U_BIT, resume_kernel_mode
+	btst   r8, STATUS_U_BIT
+	bz    resume_kernel_mode
 
 	; Before returning to User mode check-for-and-complete any pending work
 	; such as rescheduling/signal-delivery etc.
