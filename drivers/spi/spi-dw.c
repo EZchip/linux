@@ -428,6 +428,10 @@ static int dw_spi_setup(struct spi_device *spi)
 		chip->type = chip_info->type;
 	}
 
+	/* TODO need to see how to set poll_mode and type from platform */
+	chip->type = 0;
+	chip->poll_mode = 1;
+
 	chip->tmode = SPI_TMOD_TR;
 
 	if (gpio_is_valid(spi->cs_gpio)) {
