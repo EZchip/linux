@@ -143,6 +143,8 @@ static void dw_spi_set_cs(struct spi_device *spi, bool enable)
 
 	if (!enable)
 		dw_writel(dws, DW_SPI_SER, BIT(spi->chip_select));
+
+	dw_writel(dws, DW_SPI_RSVD2, enable);
 }
 
 /* Return the max entries we can fill into tx fifo */
@@ -397,6 +399,7 @@ static void dw_spi_handle_err(struct spi_master *master,
 /* This may be called twice for each spi dev */
 static int dw_spi_setup(struct spi_device *spi)
 {
+	struct dw_spi *dws = spi_master_get_devdata(spi->master);
 	struct dw_spi_chip *chip_info = NULL;
 	struct chip_data *chip;
 	int ret;
@@ -433,6 +436,8 @@ static int dw_spi_setup(struct spi_device *spi)
 		if (ret)
 			return ret;
 	}
+
+	dw_writel(dws, DW_SPI_RSVD2, 1);
 
 	return 0;
 }
