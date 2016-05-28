@@ -177,8 +177,8 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 
 	secondary_idle_tsk = idle;
 
-	pr_info("Idle Task [%d] %p", cpu, idle);
-	pr_info("Trying to bring up CPU%u ...\n", cpu);
+	pr_debug("Idle Task [%d] %p", cpu, idle);
+	pr_debug("Trying to bring up CPU%u ...\n", cpu);
 
 	if (plat_smp_ops.cpu_kick)
 		plat_smp_ops.cpu_kick(cpu,
