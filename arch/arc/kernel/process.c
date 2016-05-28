@@ -47,6 +47,7 @@ void arch_cpu_idle(void)
 	/* sleep, but enable all interrupts before committing */
 #if defined(CONFIG_EZNPS_MTM_EXT)
 	__asm__ __volatile__(
+		"nop		\n"
 		".word %0	\n"
 		:
 		:"i"(CTOP_INST_HWSCHD_WFT_IE12));

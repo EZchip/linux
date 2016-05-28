@@ -245,6 +245,7 @@
  *-------------------------------------------------------------*/
 .macro EXCEPTION_EPILOGUE
 #ifdef CONFIG_ARC_PLAT_EZNPS
+	nop
 	.word CTOP_INST_SCHD_RW
 	POPAX   CTOP_AUX_EFLAGS
 	POPAX   CTOP_AUX_GPA1
@@ -326,6 +327,7 @@
  *-------------------------------------------------------------*/
 .macro INTERRUPT_EPILOGUE  LVL
 #ifdef CONFIG_ARC_PLAT_EZNPS
+	nop
 	.word CTOP_INST_SCHD_RW
 	POPAX   CTOP_AUX_EFLAGS
 	POPAX   CTOP_AUX_GPA1
