@@ -288,7 +288,7 @@ static void set_max_threads(unsigned int max_threads_suggested)
 		threads = MAX_THREADS;
 	else
 		threads = div64_u64((u64) totalram_pages * (u64) PAGE_SIZE,
-				    (u64) THREAD_SIZE * 8UL);
+				    (u64) THREAD_SIZE * 2UL);
 
 	if (threads > max_threads_suggested)
 		threads = max_threads_suggested;
