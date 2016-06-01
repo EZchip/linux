@@ -1,0 +1,157 @@
+/*
+* Copyright (c) 2016, Mellanox Technologies. All rights reserved.
+*
+* This software is available to you under a choice of one of two
+* licenses.  You may choose to be licensed under the terms of the GNU
+* General Public License (GPL) Version 2, available from the file
+* COPYING in the main directory of this source tree, or the
+* OpenIB.org BSD license below:
+*
+*     Redistribution and use in source and binary forms, with or
+*     without modification, are permitted provided that the following
+*     conditions are met:
+*
+*      - Redistributions of source code must retain the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer.
+*
+*      - Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials
+*        provided with the distribution.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+* BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+* ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+* CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
+/dts-v1/;
+
+/include/ "skeleton.dtsi"
+
+/ {
+	compatible = "ezchip,arc-nps";
+	clock-frequency = <800000000>;	/* 800 MHZ */
+	#address-cells = <1>;
+	#size-cells = <1>;
+	interrupt-parent = <&intc>;
+	present-cpus = "0-3,16-4095";
+	possible-cpus = "0-3,16-4095";
+	init-possible-as-present = <1>;
+
+	aliases {
+		ethernet0 = &nps_mgt_enet0;
+	};
+	
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32be,0xf7209000,115200n8 console=ttyS0,115200n8 rcupdate.rcu_cpu_stall_suppress=1";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x80000000 0x76000000 0x00000000 0x80000000>;    /* 1.88G, 2G */
+	};
+	
+	clocks {
+		sysclk: sysclk {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <800000000>;
+		};
+	};
+	
+	
+	fpga {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* child and parent address space 1:1 mapped */
+		ranges;
+
+		intc: interrupt-controller {
+			compatible = "ezchip,arc700-intc";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
+		uart@f7209000 {
+			compatible = "snps,dw-apb-uart";
+			device_type = "serial";
+			reg = <0xf7209000 0x100>;
+			interrupts = <6>;
+			clock-frequency = <800000000>;
+			baud = <115200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			native-endian;
+		};
+
+		spi@f7208c00 {
+			compatible = "snps,dw-apb-ssi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0xf7208c00 0x100>;
+			interrupts = <0>;
+			clocks = <&sysclk>;
+			num-cs = <1>;
+			
+			flash@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "s25fl256s1";
+				reg = <0>;
+				spi-max-frequency = <25000000>;
+				spi-cpol;
+				spi-cpha;
+
+				partition@0 {
+					label = "uImage";
+					reg = <0x000000 0xe70000>;
+				};
+	
+				partition@1 {
+					label = "u-boot";
+					reg = <0xe70000 0x80000>;
+				};
+	
+				partition@2 {
+					label = "dtb";
+					reg = <0xef0000 0x10000>;
+				};
+				
+				partition@3 {
+					label = "btl";
+					reg = <0xf00000 0x80000>;
+				};
+				
+				partition@4 {
+					label = "btl-redundancy";
+					reg = <0xf80000 0x70000>;
+				};
+				
+				partition@5 {
+					label = "u-boot-env";
+					reg = <0xff0000 0x10000>;
+				};
+				
+			};
+		};
+	
+		nps_mgt_enet0: ethernet@f7470000 {
+			compatible = "ezchip,nps-mgt-enet";
+			reg = <0xf7070000 0x1940>;
+			interrupts = <7>;
+			/* Filled in by U-Boot */
+			mac-address = [ 00 00 00 00 00 00 ];
+		};
+
+		arcpmu0: pmu {
+			compatible = "ezchip,nps-pct";
+		};
+	};
+};

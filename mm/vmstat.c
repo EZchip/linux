@@ -1394,6 +1394,20 @@ static void vmstat_update(struct work_struct *w)
 }
 
 /*
+ * Switch off vmstat processing and then fold all the remaining differentials
+ * until the diffs stay at zero. The function is used by NOHZ and can only be
+ * invoked when tick processing is not active.
+ */
+void quiet_vmstat(void)
+{
+	do {
+		if (!cpumask_test_and_set_cpu(smp_processor_id(), cpu_stat_off))
+			cancel_delayed_work(this_cpu_ptr(&vmstat_work));
+
+	} while (refresh_cpu_vm_stats());
+}
+
+/*
  * Check if the diffs for a certain cpu indicate that
  * an update is needed.
  */
@@ -1414,6 +1428,16 @@ static bool need_update(int cpu)
 
 	}
 	return false;
+}
+
+/*
+ * Report on whether vmstat processing is quiesced on the core currently:
+ * no vmstat worker running and no vmstat updates to perform.
+ */
+bool vmstat_idle(void)
+{
+	int cpu = smp_processor_id();
+	return cpumask_test_cpu(cpu, cpu_stat_off) && !need_update(cpu);
 }
 
 

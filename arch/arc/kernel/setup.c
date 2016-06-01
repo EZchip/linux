@@ -356,13 +356,13 @@ void setup_processor(void)
 	read_arc_build_cfg_regs();
 	arc_init_IRQ();
 
-	printk(arc_cpu_mumbojumbo(cpu_id, str, sizeof(str)));
+	//printk(arc_cpu_mumbojumbo(cpu_id, str, sizeof(str)));
 
 	arc_mmu_init();
 	arc_cache_init();
 
-	printk(arc_extn_mumbojumbo(cpu_id, str, sizeof(str)));
-	printk(arc_platform_smp_cpuinfo());
+	//printk(arc_extn_mumbojumbo(cpu_id, str, sizeof(str)));
+	//printk(arc_platform_smp_cpuinfo());
 
 	arc_chk_core_config();
 }
@@ -532,14 +532,17 @@ const struct seq_operations cpuinfo_op = {
 	.show	= show_cpuinfo
 };
 
-static DEFINE_PER_CPU(struct cpu, cpu_topology);
+static DEFINE_PER_CPU(struct cpu, cpu_topo_info);
 
 static int __init topology_init(void)
 {
 	int cpu;
 
+	for_each_online_node(cpu)
+		register_one_node(cpu);
+
 	for_each_present_cpu(cpu)
-	    register_cpu(&per_cpu(cpu_topology, cpu), cpu);
+	    register_cpu(&per_cpu(cpu_topo_info, cpu), cpu);
 
 	return 0;
 }

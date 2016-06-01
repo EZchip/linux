@@ -1,20 +1,34 @@
-/*******************************************************************************
-
-  Copyright(c) 2015 EZchip Technologies.
-
-  This program is free software; you can redistribute it and/or modify it
-  under the terms and conditions of the GNU General Public License,
-  version 2, as published by the Free Software Foundation.
-
-  This program is distributed in the hope it will be useful, but WITHOUT
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-  more details.
-
-  The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-*******************************************************************************/
+/*
+* Copyright (c) 2016, Mellanox Technologies. All rights reserved.
+*
+* This software is available to you under a choice of one of two
+* licenses.  You may choose to be licensed under the terms of the GNU
+* General Public License (GPL) Version 2, available from the file
+* COPYING in the main directory of this source tree, or the
+* OpenIB.org BSD license below:
+*
+*     Redistribution and use in source and binary forms, with or
+*     without modification, are permitted provided that the following
+*     conditions are met:
+*
+*      - Redistributions of source code must retain the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer.
+*
+*      - Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials
+*        provided with the distribution.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+* BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+* ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+* CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 
 #include <linux/io.h>
 #include <linux/uaccess.h>
@@ -24,6 +38,7 @@
 #include <linux/miscdevice.h>
 #include <linux/bootmem.h>
 #include <linux/module.h>
+#include <asm/cacheflush.h>
 #include <asm/dpl.h>
 #include <plat/ctop.h>
 
@@ -159,10 +174,18 @@ static void dpl_access_phys_local(void *arg)
 		return;
 
 	write_aux_reg(CTOP_AUX_DPC, a->dpc);
-	if (a->write)
+	if (a->write) {
 		memcpy_toio(a->addr, a->buf, a->len);
-	else
+		/* if the address is cached there is a need
+		 * to flush dcache so that the data will be
+		 * in memory. also there is a need to flush
+		 * icache as the the data could be
+		 * executable code
+		 */
+		flush_cache_all();
+	} else {
 		memcpy_fromio(a->buf, a->addr, a->len);
+	}
 	write_aux_reg(CTOP_AUX_DPC, current->thread.dp.dpc);
 }
 
@@ -240,6 +263,13 @@ static int dpl_open(struct inode *inode, struct file *file)
 {
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (cpumask_weight(&(current->cpus_allowed)) != 1) {
+		pr_err("Cannot open dpl device - " \
+			"process must be binded to a specific cpu\n");
+		return -EPERM;
+	}
+
 	return 0;
 }
 

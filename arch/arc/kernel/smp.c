@@ -62,6 +62,10 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 {
 	int i;
 
+	init_cpu_topology();
+
+	store_cpu_topology(smp_processor_id());
+
 	/*
 	 * Initialise the present map, which describes the set of CPUs
 	 * actually populated at the present time.
@@ -136,6 +140,9 @@ void start_kernel_secondary(void)
 		machine_desc->init_smp(cpu);
 
 	notify_cpu_starting(cpu);
+
+	store_cpu_topology(cpu);
+
 	set_cpu_online(cpu, true);
 
 	pr_info("## CPU%u LIVE ##: Executing Code...\n", cpu);
@@ -163,8 +170,8 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 
 	secondary_idle_tsk = idle;
 
-	pr_info("Idle Task [%d] %p", cpu, idle);
-	pr_info("Trying to bring up CPU%u ...\n", cpu);
+	//pr_info("Idle Task [%d] %p", cpu, idle);
+	//pr_info("Trying to bring up CPU%u ...\n", cpu);
 
 	if (plat_smp_ops.cpu_kick)
 		plat_smp_ops.cpu_kick(cpu,

@@ -279,7 +279,7 @@ static void set_max_threads(unsigned int max_threads_suggested)
 		threads = MAX_THREADS;
 	else
 		threads = div64_u64((u64) totalram_pages * (u64) PAGE_SIZE,
-				    (u64) THREAD_SIZE * 8UL);
+				    (u64) THREAD_SIZE * 2UL);
 
 	if (threads > max_threads_suggested)
 		threads = max_threads_suggested;
@@ -1410,6 +1410,10 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 #ifdef CONFIG_BCACHE
 	p->sequential_io	= 0;
 	p->sequential_io_avg	= 0;
+#endif
+
+#ifdef CONFIG_TASK_ISOLATION
+	p->task_isolation_flags	= 0; /* do not isolate */
 #endif
 
 	/* Perform scheduler related setup. Assign this task to a CPU. */

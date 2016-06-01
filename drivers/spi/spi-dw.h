@@ -31,6 +31,7 @@
 #define DW_SPI_IDR			0x58
 #define DW_SPI_VERSION			0x5c
 #define DW_SPI_DR			0x60
+#define DW_SPI_RSV2			0xfc
 
 /* Bit fields in CTRLR0 */
 #define SPI_DFS_OFFSET			0

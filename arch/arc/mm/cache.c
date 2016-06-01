@@ -20,6 +20,7 @@
 #include <asm/cacheflush.h>
 #include <asm/cachectl.h>
 #include <asm/setup.h>
+#include <asm/mtm.h>
 
 static int l2_line_sz;
 
@@ -387,14 +388,19 @@ static inline void __dc_line_op(unsigned long paddr, unsigned long vaddr,
 				unsigned long sz, const int op)
 {
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+
+	hw_schd_save(&schd_flags);
 
 	__before_dc_op(op);
 
 	__cache_line_loop(paddr, vaddr, sz, op);
 
 	__after_dc_op(op);
+
+	hw_schd_restore(schd_flags);
 
 	local_irq_restore(flags);
 }
@@ -420,9 +426,12 @@ __ic_line_inv_vaddr_local(unsigned long paddr, unsigned long vaddr,
 			  unsigned long sz)
 {
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 	(*_cache_line_loop_ic_fn)(paddr, vaddr, sz, OP_INV_IC);
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -671,9 +680,15 @@ void __sync_icache_dcache(unsigned long paddr, unsigned long vaddr, int len)
 }
 
 /* wrapper to compile time eliminate alignment checks in flush loop */
-void __inv_icache_page(unsigned long paddr, unsigned long vaddr)
+void __inv_icache_page(struct vm_area_struct *vma, unsigned long paddr, unsigned long vaddr)
 {
-	__ic_line_inv_vaddr(paddr, vaddr, PAGE_SIZE);
+       struct ic_inv_args ic_inv = {
+               .paddr = paddr,
+               .vaddr = vaddr,
+               .sz    = PAGE_SIZE
+        };
+
+       on_each_cpu_mask(mm_cpumask(vma->vm_mm), __ic_line_inv_vaddr_helper, &ic_inv, 1);
 }
 
 /*
@@ -688,12 +703,15 @@ void __flush_dcache_page(unsigned long paddr, unsigned long vaddr)
 noinline void flush_cache_all(void)
 {
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	__ic_entire_inv();
 	__dc_entire_op(OP_FLUSH_N_INV);
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 
 }
@@ -738,8 +756,8 @@ void flush_anon_page(struct vm_area_struct *vma, struct page *page,
 void copy_user_highpage(struct page *to, struct page *from,
 	unsigned long u_vaddr, struct vm_area_struct *vma)
 {
-	unsigned long kfrom = (unsigned long)page_address(from);
-	unsigned long kto = (unsigned long)page_address(to);
+	void *kfrom = kmap_atomic(from);
+	void *kto = kmap_atomic(to);
 	int clean_src_k_mappings = 0;
 
 	/*
@@ -749,13 +767,16 @@ void copy_user_highpage(struct page *to, struct page *from,
 	 *
 	 * Note that while @u_vaddr refers to DST page's userspace vaddr, it is
 	 * equally valid for SRC page as well
+	 *
+	 * For !VIPT cache, all of this gets compiled out as
+	 * addr_not_cache_congruent() is 0
 	 */
 	if (page_mapped(from) && addr_not_cache_congruent(kfrom, u_vaddr)) {
-		__flush_dcache_page(kfrom, u_vaddr);
+		__flush_dcache_page((unsigned long)kfrom, u_vaddr);
 		clean_src_k_mappings = 1;
 	}
 
-	copy_page((void *)kto, (void *)kfrom);
+	copy_page(kto, kfrom);
 
 	/*
 	 * Mark DST page K-mapping as dirty for a later finalization by
@@ -772,11 +793,14 @@ void copy_user_highpage(struct page *to, struct page *from,
 	 * sync the kernel mapping back to physical page
 	 */
 	if (clean_src_k_mappings) {
-		__flush_dcache_page(kfrom, kfrom);
+		__flush_dcache_page((unsigned long)kfrom, (unsigned long)kfrom);
 		set_bit(PG_dc_clean, &from->flags);
 	} else {
 		clear_bit(PG_dc_clean, &from->flags);
 	}
+
+	kunmap_atomic(kto);
+	kunmap_atomic(kfrom);
 }
 
 void clear_user_page(void *to, unsigned long u_vaddr, struct page *page)
@@ -802,7 +826,7 @@ void arc_cache_init(void)
 	unsigned int __maybe_unused cpu = smp_processor_id();
 	char str[256];
 
-	printk(arc_cache_mumbojumbo(0, str, sizeof(str)));
+	//printk(arc_cache_mumbojumbo(0, str, sizeof(str)));
 
 	if (IS_ENABLED(CONFIG_ARC_HAS_ICACHE)) {
 		struct cpuinfo_arc_cache *ic = &cpuinfo_arc700[cpu].icache;

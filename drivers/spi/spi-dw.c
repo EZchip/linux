@@ -149,6 +149,11 @@ static void dw_spi_set_cs(struct spi_device *spi, bool enable)
 
 	if (!enable)
 		dw_writel(dws, DW_SPI_SER, BIT(spi->chip_select));
+
+	if (enable)
+		dw_writel(dws, DW_SPI_RSV2, 1);
+	else
+		dw_writel(dws, DW_SPI_RSV2, 0);
 }
 
 /* Return the max entries we can fill into tx fifo */
@@ -314,7 +319,6 @@ static int dw_spi_transfer_one(struct spi_master *master,
 
 		if ((transfer->speed_hz != speed) || !chip->clk_div) {
 			speed = transfer->speed_hz;
-
 			/* clk_div doesn't support odd number */
 			clk_div = (dws->max_freq / speed + 1) & 0xfffe;
 
@@ -324,6 +328,7 @@ static int dw_spi_transfer_one(struct spi_master *master,
 			spi_set_clk(dws, chip->clk_div);
 		}
 	}
+
 	if (transfer->bits_per_word) {
 		if (transfer->bits_per_word == 8) {
 			dws->n_bytes = 1;
@@ -413,6 +418,7 @@ static void dw_spi_handle_err(struct spi_master *master,
 /* This may be called twice for each spi dev */
 static int dw_spi_setup(struct spi_device *spi)
 {
+	struct dw_spi *dws = spi_master_get_devdata(spi->master);
 	struct dw_spi_chip *chip_info = NULL;
 	struct chip_data *chip;
 	int ret;
@@ -444,6 +450,12 @@ static int dw_spi_setup(struct spi_device *spi)
 		chip->tx_threshold = 0;
 	}
 
+	/* TODO need to see how to set poll_mode and type from platform */
+	chip->type = 0;
+	chip->rx_threshold = 0;
+	chip->tx_threshold = 0;
+	chip->poll_mode = 1;
+
 	if (spi->bits_per_word == 8) {
 		chip->n_bytes = 1;
 		chip->dma_width = 1;
@@ -474,6 +486,8 @@ static int dw_spi_setup(struct spi_device *spi)
 		if (ret)
 			return ret;
 	}
+
+	dw_writel(dws, DW_SPI_RSV2, 1);
 
 	return 0;
 }

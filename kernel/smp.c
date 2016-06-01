@@ -14,6 +14,7 @@
 #include <linux/smp.h>
 #include <linux/cpu.h>
 #include <linux/sched.h>
+#include <linux/isolation.h>
 
 #include "smpboot.h"
 
@@ -178,8 +179,10 @@ static int generic_exec_single(int cpu, struct call_single_data *csd,
 	 * locking and barrier primitives. Generic code isn't really
 	 * equipped to do the right thing...
 	 */
-	if (llist_add(&csd->llist, &per_cpu(call_single_queue, cpu)))
+	if (llist_add(&csd->llist, &per_cpu(call_single_queue, cpu))) {
+		task_isolation_debug(cpu);
 		arch_send_call_function_single_ipi(cpu);
+	}
 
 	return 0;
 }
@@ -457,6 +460,7 @@ void smp_call_function_many(const struct cpumask *mask,
 	}
 
 	/* Send a message to all CPUs in the map */
+	task_isolation_debug_cpumask(cfd->cpumask);
 	arch_send_call_function_ipi_mask(cfd->cpumask);
 
 	if (wait) {

@@ -17,7 +17,7 @@
 #include <asm/asm-offsets.h>
 #include <linux/sched.h>
 #ifdef CONFIG_ARC_PLAT_EZNPS
-#include "../plat-eznps/include/plat/ctop.h"
+#include <plat/ctop.h>
 #endif
 
 #define KSP_WORD_OFF 	((TASK_THREAD + THREAD_KSP) / 4)
@@ -61,7 +61,12 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
 		"st      sp, [r24]       \n\t"
 #endif
 
+#ifdef CONFIG_EZNPS_MTM_EXT
+		"nop	\n\t"
+		".word %5   \n\t"
+#else
 		"sync   \n\t"
+#endif
 
 		/*
 		 * setup _current_task with incoming tsk.
@@ -120,7 +125,7 @@ __switch_to(struct task_struct *prev_task, struct task_struct *next_task)
 		: "=r"(tmp)
 		: "n"(KSP_WORD_OFF), "r"(next), "r"(prev)
 #ifdef CONFIG_ARC_PLAT_EZNPS
-		,"i"(CTOP_AUX_LOGIC_GLOBAL_ID)
+		,"i"(CTOP_AUX_LOGIC_GLOBAL_ID), "i"(CTOP_INST_SCHD_RW)
 #endif
 		: "blink"
 	);

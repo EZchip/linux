@@ -652,8 +652,10 @@ static ktime_t tick_nohz_stop_sched_tick(struct tick_sched *ts,
 
 #ifdef CONFIG_NO_HZ_FULL
 	/* Limit the tick delta to the maximum scheduler deferment */
+/* remove the limit of at least one tick per second
 	if (!ts->inidle)
 		delta = min(delta, scheduler_tick_max_deferment());
+*/
 #endif
 
 	/* Calculate the next expiry time */

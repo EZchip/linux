@@ -1,20 +1,34 @@
-/*******************************************************************************
-
-  Copyright(c) 2015 EZchip Technologies.
-
-  This program is free software; you can redistribute it and/or modify it
-  under the terms and conditions of the GNU General Public License,
-  version 2, as published by the Free Software Foundation.
-
-  This program is distributed in the hope it will be useful, but WITHOUT
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-  more details.
-
-  The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-*******************************************************************************/
+/*
+* Copyright (c) 2016, Mellanox Technologies. All rights reserved.
+*
+* This software is available to you under a choice of one of two
+* licenses.  You may choose to be licensed under the terms of the GNU
+* General Public License (GPL) Version 2, available from the file
+* COPYING in the main directory of this source tree, or the
+* OpenIB.org BSD license below:
+*
+*     Redistribution and use in source and binary forms, with or
+*     without modification, are permitted provided that the following
+*     conditions are met:
+*
+*      - Redistributions of source code must retain the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer.
+*
+*      - Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials
+*        provided with the distribution.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+* BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+* ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+* CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 
 #ifndef _PLAT_EZNPS_MTM_H
 #define _PLAT_EZNPS_MTM_H
@@ -23,11 +37,6 @@
 #include <plat/ctop.h>
 #include <plat/smp.h>
 
-/* Core auxiliary registers */
-#define AUX_REG_MT_CTRL			(CTOP_AUX_BASE + 0x20)
-#define AUX_REG_HW_COMPLY		(CTOP_AUX_BASE + 0x24)
-#define AUX_REG_TSI1			(CTOP_AUX_BASE + 0x50)
-
 /* MTM registers */
 #define MTM_CFG(cpu)			nps_mtm_reg_addr(cpu, 0x81)
 #define MTM_THR_INIT(cpu)		nps_mtm_reg_addr(cpu, 0x92)
@@ -35,6 +44,7 @@
 
 #define get_thread(map) map.thread
 #define eznps_max_cpus 4096
+#define eznps_cpus_per_cluster	256
 
 void mtm_enable_core(unsigned int cpu);
 int mtm_enable_thread(int cpu);
@@ -42,6 +52,7 @@ int mtm_enable_thread(int cpu);
 
 #define get_thread(map) 0
 #define eznps_max_cpus 256
+#define eznps_cpus_per_cluster	16
 #define mtm_enable_core(cpu)
 #define mtm_enable_thread(cpu) 1
 

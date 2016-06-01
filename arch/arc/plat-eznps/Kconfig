@@ -33,3 +33,17 @@ config EZNPS_MTM_EXT
 	  any of them seem like CPU from Linux point of view.
 	  All threads within same core share the execution unit of the
 	  core and HW scheduler round robin between them.
+
+config EZNPS_SHARED_TIMER
+	bool "ARC-EZchip Shared Timer Support"
+	depends on EZNPS_MTM_EXT
+	default y
+	help
+	  Support for one HW timer per core.
+	  This means all threads on single core will
+	  Share the same HW timer. 
+
+config EZNPS_HAS_SCHD_WFT
+	bool "inst: schd.wft (schd and wait for interrupt)"
+	depends on EZNPS_MTM_EXT
+	default y

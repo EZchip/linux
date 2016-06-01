@@ -1,18 +1,34 @@
 /*
- * Copyright(c) 2015 EZchip Technologies.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * The full GNU General Public License is included in this distribution in
- * the file called "COPYING".
- */
+* Copyright (c) 2016, Mellanox Technologies. All rights reserved.
+*
+* This software is available to you under a choice of one of two
+* licenses.  You may choose to be licensed under the terms of the GNU
+* General Public License (GPL) Version 2, available from the file
+* COPYING in the main directory of this source tree, or the
+* OpenIB.org BSD license below:
+*
+*     Redistribution and use in source and binary forms, with or
+*     without modification, are permitted provided that the following
+*     conditions are met:
+*
+*      - Redistributions of source code must retain the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer.
+*
+*      - Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials
+*        provided with the distribution.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+* BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+* ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+* CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 
 #include <linux/module.h>
 #include <linux/etherdevice.h>
@@ -23,6 +39,15 @@
 #include "nps_enet.h"
 
 #define DRV_NAME			"nps_mgt_enet"
+
+static inline bool nps_enet_is_tx_pending(struct nps_enet_priv *priv)
+{
+	struct nps_enet_tx_ctl tx_ctrl;
+
+	tx_ctrl.value = nps_enet_reg_get(priv, NPS_ENET_REG_TX_CTL);
+
+	return (!tx_ctrl.ct && priv->tx_skb);
+}
 
 static void nps_enet_clean_rx_fifo(struct net_device *ndev, u32 frame_len)
 {
@@ -147,7 +172,7 @@ static void nps_enet_tx_handler(struct net_device *ndev)
 	tx_ctrl.value = nps_enet_reg_get(priv, NPS_ENET_REG_TX_CTL);
 
 	/* Check if we got TX */
-	if (!priv->tx_packet_sent || tx_ctrl.ct)
+	if (!nps_enet_is_tx_pending(priv))
 		return;
 
 	/* Ack Tx ctrl register */
@@ -162,7 +187,7 @@ static void nps_enet_tx_handler(struct net_device *ndev)
 	}
 
 	dev_kfree_skb(priv->tx_skb);
-	priv->tx_packet_sent = false;
+	priv->tx_skb = NULL;
 
 	if (netif_queue_stopped(ndev))
 		netif_wake_queue(ndev);
@@ -191,6 +216,19 @@ static int nps_enet_poll(struct napi_struct *napi, int budget)
 		buf_int_enable.tx_done = NPS_ENET_ENABLE;
 		nps_enet_reg_set(priv, NPS_ENET_REG_BUF_INT_ENABLE,
 				 buf_int_enable.value);
+
+		/* in case we will get a tx interrupt while interrupts
+		 * are masked, we will lose it since the tx is edge interrupt.
+		 * specifically, while executing the code section above,
+		 * between nps_enet_tx_handler and the interrupts enable, all
+		 * tx requests will be stuck until we will get an rx interrupt.
+		 * the two code lines below will solve this situation by
+		 * re-adding ouselves to the poll list.
+		 */
+		if (nps_enet_is_tx_pending(priv)) {
+			nps_enet_reg_set(priv, NPS_ENET_REG_BUF_INT_ENABLE, 0);
+			napi_reschedule(napi);
+		}
 	}
 
 	return work_done;
@@ -210,14 +248,12 @@ static int nps_enet_poll(struct napi_struct *napi, int budget)
 static irqreturn_t nps_enet_irq_handler(s32 irq, void *dev_instance)
 {
 	struct net_device *ndev = dev_instance;
-	struct nps_enet_priv *priv = netdev_priv(ndev);
 	struct nps_enet_rx_ctl rx_ctrl;
-	struct nps_enet_tx_ctl tx_ctrl;
+	struct nps_enet_priv *priv = netdev_priv(ndev);
 
 	rx_ctrl.value = nps_enet_reg_get(priv, NPS_ENET_REG_RX_CTL);
-	tx_ctrl.value = nps_enet_reg_get(priv, NPS_ENET_REG_TX_CTL);
 
-	if ((!tx_ctrl.ct && priv->tx_packet_sent) || rx_ctrl.cr)
+	if (nps_enet_is_tx_pending(priv) || rx_ctrl.cr)
 		if (likely(napi_schedule_prep(&priv->napi))) {
 			nps_enet_reg_set(priv, NPS_ENET_REG_BUF_INT_ENABLE, 0);
 			__napi_schedule(&priv->napi);
@@ -389,8 +425,6 @@ static void nps_enet_send_frame(struct net_device *ndev,
 	/* Write the length of the Frame */
 	tx_ctrl.nt = length;
 
-	/* Indicate SW is done */
-	priv->tx_packet_sent = true;
 	tx_ctrl.ct = NPS_ENET_ENABLE;
 
 	/* Send Frame */
@@ -464,7 +498,7 @@ static s32 nps_enet_open(struct net_device *ndev)
 	s32 err;
 
 	/* Reset private variables */
-	priv->tx_packet_sent = false;
+	priv->tx_skb = NULL;
 	priv->ge_mac_cfg_2.value = 0;
 	priv->ge_mac_cfg_3.value = 0;
 
@@ -529,6 +563,11 @@ static netdev_tx_t nps_enet_start_xmit(struct sk_buff *skb,
 	netif_stop_queue(ndev);
 
 	priv->tx_skb = skb;
+
+	/* make sure tx_skb is actually written to the memory
+	 * before the HW is informed and the IRQ is fired.
+	 */
+	wmb();
 
 	nps_enet_send_frame(ndev, skb);
 
@@ -613,8 +652,8 @@ static s32 nps_enet_probe(struct platform_device *pdev)
 		dev_err(dev, "Failed to register ndev for %s, err = 0x%08x\n",
 			ndev->name, (s32)err);
 		goto out_netif_api;
-	}
 
+	}
 	dev_info(dev, "(rx/tx=%d)\n", priv->irq);
 	return 0;
 

@@ -102,8 +102,14 @@ static inline __attribute_const__ struct thread_info *current_thread_info(void)
 #define _TIF_NOHZ		(1<<TIF_NOHZ)
 
 /* work to do on interrupt/exception return */
-#define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_SIGPENDING | \
+#define _TIF_WORK_LOOP_MASK		(_TIF_NEED_RESCHED | _TIF_SIGPENDING | \
 				 _TIF_NOTIFY_RESUME)
+
+#ifdef CONFIG_TASK_ISOLATION
+# define _TIF_WORK_MASK (_TIF_WORK_LOOP_MASK | _TIF_NOHZ)
+#else
+# define _TIF_WORK_MASK _TIF_WORK_LOOP_MASK
+#endif
 
 /*
  * _TIF_ALLWORK_MASK includes SYSCALL_TRACE, but we don't need it.

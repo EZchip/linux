@@ -5,7 +5,6 @@
 #include <linux/perf_event.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/percpu.h>
-#include <linux/context_tracking.h> /* exception_enter(), ... */
 #include <asm/arcregs.h>
 #include <asm/hw_breakpoint.h>
 
@@ -377,9 +376,6 @@ void do_actionpoint_hit(unsigned long address, struct pt_regs *regs)
 	unsigned int param = regs->ecr_param;
 	struct perf_event *bp;
 	unsigned int i;
-	enum ctx_state prev_state;
-
-	prev_state = exception_enter();
 
 	rcu_read_lock();
 	preempt_disable();
@@ -398,6 +394,4 @@ void do_actionpoint_hit(unsigned long address, struct pt_regs *regs)
 unlock:
 	preempt_enable();
 	rcu_read_unlock();
-
-	exception_exit(prev_state);
 }

@@ -1,40 +1,100 @@
-/*******************************************************************************
-
-  Copyright(c) 2015 EZchip Technologies.
-
-  This program is free software; you can redistribute it and/or modify it
-  under the terms and conditions of the GNU General Public License,
-  version 2, as published by the Free Software Foundation.
-
-  This program is distributed in the hope it will be useful, but WITHOUT
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-  more details.
-
-  The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-*******************************************************************************/
+/*
+* Copyright (c) 2016, Mellanox Technologies. All rights reserved.
+*
+* This software is available to you under a choice of one of two
+* licenses.  You may choose to be licensed under the terms of the GNU
+* General Public License (GPL) Version 2, available from the file
+* COPYING in the main directory of this source tree, or the
+* OpenIB.org BSD license below:
+*
+*     Redistribution and use in source and binary forms, with or
+*     without modification, are permitted provided that the following
+*     conditions are met:
+*
+*      - Redistributions of source code must retain the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer.
+*
+*      - Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials
+*        provided with the distribution.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+* BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+* ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+* CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 
 #include <linux/smp.h>
 #include <linux/io.h>
 #include <asm/arcregs.h>
 #include <plat/mtm.h>
 
-#define MT_CTRL_HS_CNT		0xFF
+#define MAX_MTM_HS_CTR		255
+#define MIN_MTM_HS_CTR		1
 #define MT_CTRL_ST_CNT		0xF
 #define NPS_NUM_HW_THREADS	0x10
+
+static int mtm_hs_ctr = MAX_MTM_HS_CTR;
+
+/* Handle an out of bounds mtm hs counter value */
+static void handle_mtm_hs_ctr_out_of_bounds_error(uint8_t val)
+{
+	pr_err("** The value of mtm_hs_ctr is out of bounds!\n" \
+		"** It must be in the range [%d,%d] (inclusive)\n" \
+		"Setting mtm_hs_ctr to %d\n",
+		MIN_MTM_HS_CTR,
+		MAX_MTM_HS_CTR,
+		val);
+
+	mtm_hs_ctr = val;
+}
+
+/* Verify and set the value of the mtm hs counter */
+static int __init set_mtm_hs_ctr(char *ctr_str)
+{
+	int ret;
+	long hs_ctr;
+
+	ret = kstrtol(ctr_str, 0, &hs_ctr);
+	if (ret) {
+		pr_err("** Error parsing the value of mtm_hs_ctr" \
+			"\n** Make sure you entered a valid integer value\n" \
+			"Setting mtm_hs_ctr to default value: %d\n",
+			MAX_MTM_HS_CTR);
+		mtm_hs_ctr = MAX_MTM_HS_CTR;
+		return -EINVAL;
+	}
+
+	if (hs_ctr > MAX_MTM_HS_CTR) {
+		handle_mtm_hs_ctr_out_of_bounds_error(MAX_MTM_HS_CTR);
+		return -EDOM;
+	}
+
+	if (hs_ctr < MIN_MTM_HS_CTR) {
+		handle_mtm_hs_ctr_out_of_bounds_error(MIN_MTM_HS_CTR);
+		return -EDOM;
+	}
+
+	mtm_hs_ctr = hs_ctr;
+
+	return 0;
+}
+early_param("nps_mtm_hs_ctr", set_mtm_hs_ctr);
 
 static void mtm_init_nat(int cpu)
 {
 	struct nps_host_reg_mtm_cfg mtm_cfg;
 	struct nps_host_reg_aux_udmc udmc;
-	struct global_id gid = {.value = cpu};
 	int log_nat, nat = 0, i, t;
 
 	/* Iterate core threads and update nat */
-	for (i = 0, t = NPS_NUM_HW_THREADS * gid.core;
-			i < NPS_NUM_HW_THREADS; i++, t++)
+	for (i = 0, t = cpu; i < NPS_NUM_HW_THREADS; i++, t++)
 		nat += test_bit(t, cpumask_bits(&_cpu_possible_mask));
 
 	switch (nat) {
@@ -109,7 +169,7 @@ int mtm_enable_thread(int cpu)
 
 	/* Enable thread in mtm */
 	mtm_cfg.value = ioread32be(MTM_CFG(cpu));
-	mtm_cfg.ten = (1 << (NPS_CPU_TO_THREAD_NUM(cpu)));
+	mtm_cfg.ten |= (1 << (NPS_CPU_TO_THREAD_NUM(cpu)));
 	iowrite32be(mtm_cfg.value, MTM_CFG(cpu));
 
 	return 0;
@@ -136,13 +196,10 @@ void mtm_enable_core(unsigned int cpu)
 	for (i = 1; i < NPS_NUM_HW_THREADS; i++)
 		mtm_init_thread(cpu + i);
 
-
 	/* Enable HW schedule, stall counter, mtm */
 	mt_ctrl.value = 0;
 	mt_ctrl.hsen = 1;
-	mt_ctrl.hs_cnt = MT_CTRL_HS_CNT;
-	mt_ctrl.sten = 1;
-	mt_ctrl.st_cnt = MT_CTRL_ST_CNT;
+	mt_ctrl.hs_cnt = mtm_hs_ctr;
 	mt_ctrl.mten = 1;
 	write_aux_reg(AUX_REG_MT_CTRL, mt_ctrl.value);
 

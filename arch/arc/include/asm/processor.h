@@ -67,7 +67,7 @@ struct task_struct;
 #ifdef CONFIG_SMP
 #ifdef CONFIG_EZNPS_MTM_EXT
 #define cpu_relax()     \
-	__asm__ __volatile__ (".word %0" : : "i"(CTOP_INST_SCHD_RW) : "memory")
+	__asm__ __volatile__ ("nop\n	.word %0" : : "i"(CTOP_INST_SCHD_RW) : "memory")
 #else
 #define cpu_relax()	__asm__ __volatile__ ("" : : : "memory")
 #endif
@@ -125,7 +125,11 @@ extern unsigned int get_wchan(struct task_struct *p);
  * 0xC000_0000		0xFFFF_FFFF	(peripheral uncached space)
  * -----------------------------------------------------------------------------
  */
-#define VMALLOC_END	PAGE_OFFSET
+/*
+ * 1 PGDIR_SIZE each for fixmap/pkmap, 2 PGDIR_SIZE gutter
+ * See asm/highmem.h for details
+ */
+#define VMALLOC_END	(PAGE_OFFSET - (PGDIR_SIZE * 32 * 2))
 #define VMALLOC_SIZE	(CONFIG_ARC_VMALLOC_SIZE << 20)
 #define VMALLOC_START	(VMALLOC_END - VMALLOC_SIZE)
 

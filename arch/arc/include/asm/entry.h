@@ -85,10 +85,6 @@
 	POP	r2
 	POP	r1
 	POP	r0
-
-#ifdef CONFIG_ARC_CURR_IN_REG
-	ld	r25, [sp, 12]
-#endif
 .endm
 
 /*--------------------------------------------------------------

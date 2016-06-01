@@ -523,7 +523,10 @@ handle_fasteoi_irq(unsigned int irq, struct irq_desc *desc)
 	 */
 	if (unlikely(!desc->action || irqd_irq_disabled(&desc->irq_data))) {
 		desc->istate |= IRQS_PENDING;
-		mask_irq(desc);
+		if (irq != 6)
+			mask_irq(desc);
+		else
+			__raw_readl((unsigned int*)(0xf7209000 + 0x7c));
 		goto out;
 	}
 

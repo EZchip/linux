@@ -74,6 +74,7 @@
 #include <linux/binfmts.h>
 #include <linux/context_tracking.h>
 #include <linux/compiler.h>
+#include <linux/isolation.h>
 
 #include <asm/switch_to.h>
 #include <asm/tlb.h>
@@ -744,6 +745,23 @@ bool sched_can_stop_tick(void)
 	return true;
 }
 #endif /* CONFIG_NO_HZ_FULL */
+
+#ifdef CONFIG_TASK_ISOLATION
+void task_isolation_debug(int cpu)
+{
+	struct task_struct *p;
+
+	if (!task_isolation_possible(cpu))
+		return;
+
+	rcu_read_lock();
+	p = cpu_curr(cpu);
+	get_task_struct(p);
+	rcu_read_unlock();
+	task_isolation_debug_task(cpu, p);
+	put_task_struct(p);
+}
+#endif
 
 void sched_avg_update(struct rq *rq)
 {
@@ -7134,8 +7152,11 @@ void __init sched_init_smp(void)
 	alloc_cpumask_var(&non_isolated_cpus, GFP_KERNEL);
 	alloc_cpumask_var(&fallback_doms, GFP_KERNEL);
 
-	/* nohz_full won't take effect without isolating the cpus. */
+	/* nohz_full won't take effect without isolating the cpus and enabling task isolation. */
 	tick_nohz_full_add_cpus_to(cpu_isolated_map);
+#ifdef CONFIG_TASK_ISOLATION
+	tick_nohz_full_add_cpus_to(task_isolation_map);
+#endif
 
 	sched_init_numa();
 

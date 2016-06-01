@@ -230,6 +230,12 @@ ENTRY(handle_interrupt_level1)
 	pop  r0
 #endif
 
+#ifdef CONFIG_CONTEXT_TRACKING
+	push r0
+	bl context_tracking_user_exit
+	pop  r0
+#endif
+
 	bl.d  @arch_do_IRQ
 	mov r1, sp
 

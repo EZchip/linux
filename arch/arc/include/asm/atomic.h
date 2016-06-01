@@ -65,7 +65,8 @@ static inline int atomic_##op##_return(int i, atomic_t *v)		\
 	: "r"(&v->counter), "i"(asm_op)					\
 	: "r2", "r3", "memory");					\
 									\
-	return v->counter;						\
+	temp c_op i;							\
+	return temp;							\
 }
 
 #define ATOMIC_OPS(op, c_op, asm_op)					\

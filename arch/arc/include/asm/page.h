@@ -73,7 +73,9 @@ typedef unsigned long pgtable_t;
 
 #define ARCH_PFN_OFFSET     (CONFIG_LINUX_LINK_BASE >> PAGE_SHIFT)
 
+#ifdef CONFIG_FLATMEM
 #define pfn_valid(pfn)      (((pfn) - ARCH_PFN_OFFSET) < max_mapnr)
+#endif
 
 /*
  * __pa, __va, virt_to_page (ALERT: deprecated, don't use them)
@@ -91,15 +93,14 @@ typedef unsigned long pgtable_t;
 #define __pa(vaddr)  ((unsigned long)vaddr)
 #define __va(paddr)  ((void *)((unsigned long)(paddr)))
 
-#define virt_to_page(kaddr)	\
-	(mem_map + ((__pa(kaddr) - CONFIG_LINUX_LINK_BASE) >> PAGE_SHIFT))
+#define virt_to_page(kaddr)  pfn_to_page(__pa(kaddr) >> PAGE_SHIFT)
 
 #define virt_addr_valid(kaddr)  pfn_valid(__pa(kaddr) >> PAGE_SHIFT)
 
 /* Default Permissions for stack/heaps pages (Non Executable) */
 #define VM_DATA_DEFAULT_FLAGS   (VM_READ | VM_WRITE | VM_MAYREAD | VM_MAYWRITE)
 
-#define WANT_PAGE_VIRTUAL   1
+/* #define WANT_PAGE_VIRTUAL   1 */
 
 #include <asm-generic/memory_model.h>   /* page_to_pfn, pfn_to_page */
 #include <asm-generic/getorder.h>

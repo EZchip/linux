@@ -41,7 +41,12 @@
 	bclr	r5, r5, 6		; Invalidate (discard w/o wback)
 #ifdef CONFIG_ARC_HAS_DCACHE
 #ifdef CONFIG_ARC_PLAT_EZNPS
+	sr 	1, [ARC_REG_DC_IVDC]
+	lr r3, [CTOP_AUX_THREAD_ID]
+	cmp r3, 0
+	bnz 2f
 	sr	HW_COMPLY_KRN_NOT_D_CACHED, [CTOP_AUX_HW_COMPLY]
+2:
 #endif
 	bclr	r5, r5, 0		; Enable (+Inv)
 #else

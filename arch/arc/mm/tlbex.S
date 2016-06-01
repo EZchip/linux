@@ -43,6 +43,8 @@
 #include <asm/cache.h>
 #include <asm/processor.h>
 #include <asm/tlb-mmu1.h>
+#include <asm/mtm.h>
+#include <asm/highmem.h>
 
 #ifdef CONFIG_ISA_ARCOMPACT
 ;-----------------------------------------------------------------
@@ -97,6 +99,7 @@ ex_saved_reg1:
 	st_s  r1, [r0, 4]
 	st_s  r2, [r0, 8]
 	st_s  r3, [r0, 12]
+	HW_SCHD_OFF_R4 r0,16
 
 	; VERIFY if the ASID in MMU-PID Reg is same as
 	; one in Linux data structures
@@ -109,6 +112,7 @@ ex_saved_reg1:
 	GET_CPU_ID  r0			; get to per cpu scratch mem
 	lsl r0, r0, L1_CACHE_SHIFT	; each is cache line wide
 	add r0, @ex_saved_reg1, r0
+	HW_SCHD_RESTORE_R4 r0,16
 	ld_s  r3, [r0,12]
 	ld_s  r2, [r0, 8]
 	ld_s  r1, [r0, 4]
@@ -204,11 +208,17 @@ ex_saved_reg1:
 	ld  r1, [r1, MM_PGD]
 #endif
 
+#ifdef CONFIG_HIGHMEM
+	; handle pkmap/fixmap with more then on pte table
+	cmp_s   r2, VMALLOC_END
+	b.hs    4f
+#endif
+
 	lsr     r0, r2, PGDIR_SHIFT     ; Bits for indexing into PGD
 	ld.as   r1, [r1, r0]            ; PGD entry corresp to faulting addr
 	and.f   r1, r1, PAGE_MASK       ; Ignoring protection and other flags
 	;   contains Ptr to Page Table
-	bz.d    do_slow_path_pf         ; if no Page Table, do page fault
+	bz      do_slow_path_pf         ; if no Page Table, do page fault
 
 	; Get the PTE entry: The idea is
 	; (1) x = addr >> PAGE_SHIFT 	-> masks page-off bits from @fault-addr
@@ -219,6 +229,30 @@ ex_saved_reg1:
 	lsr     r0, r2, (PAGE_SHIFT - 2)
 	and     r0, r0, ( (PTRS_PER_PTE - 1) << 2)
 	ld.aw   r0, [r1, r0]            ; get PTE and PTE ptr for fault addr
+#ifdef CONFIG_HIGHMEM
+	b       2f
+
+4:
+	lsr     r0, r2, (PGDIR_SHIFT + 5)   ; Bits for indexing into KMAP_PGD
+	lsl     r0, r0, 5
+	ld.as   r1, [r1, r0]                ; PGD entry corresp to faulting addr
+	tst     r1, r1
+	bz      do_slow_path_pf             ; if no Page Table, do page fault
+	and     r1, r1, PAGE_MASK
+
+	cmp_s   r2, PKMAP_BASE
+	mov.hs  r0, ( PKMAP_BASE >> PAGE_SHIFT )
+	b.hs    3f
+	mov     r0, ( FIXMAP_BASE >> PAGE_SHIFT )
+
+3:
+	#define PTE_SIZE_LOG    2       /* 4 == 2 ^ 2 */
+	lsr     r3, r2, PAGE_SHIFT
+	sub     r0, r3, r0
+	lsl     r0, r0, PTE_SIZE_LOG
+	ld.aw   r0, [r1, r0]
+2:
+#endif
 #ifdef CONFIG_ARC_DBG_TLB_MISS_COUNT
 	and.f 0, r0, _PAGE_PRESENT
 	bz   1f
@@ -227,7 +261,6 @@ ex_saved_reg1:
 	st   r3, [num_pte_not_present]
 1:
 #endif
-
 .endm
 
 ;-----------------------------------------------------------------
@@ -259,7 +292,12 @@ ex_saved_reg1:
 
 .macro COMMIT_ENTRY_TO_MMU
 #if (CONFIG_ARC_MMU_VER < 4)
-
+#ifdef CONFIG_EZNPS_MTM_EXT
+	; verify if entry for this vaddr+ASID already exists
+	sr    TLBProbe, [ARC_REG_TLBCOMMAND]
+	lr    r0, [ARC_REG_TLBINDEX]
+	bbit0 r0, 31, 88f
+#endif
 	/* Get free TLB slot: Set = computed from vaddr, way = random */
 	sr  TLBGetIndex, [ARC_REG_TLBCOMMAND]
 
@@ -273,6 +311,7 @@ ex_saved_reg1:
 #else
 	sr TLBInsertEntry, [ARC_REG_TLBCOMMAND]
 #endif
+88:
 .endm
 
 

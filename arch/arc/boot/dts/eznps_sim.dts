@@ -29,41 +29,69 @@
 * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 * SOFTWARE.
 */
+/dts-v1/;
 
-#include <linux/sched.h>
-#include <asm/arcregs.h>
-#include <plat/ctop.h>
-#ifdef CONFIG_HAVE_HW_BREAKPOINT
-#include <linux/hw_breakpoint.h>
-#endif
+/include/ "skeleton.dtsi"
 
-void dp_save_restore(struct task_struct *prev, struct task_struct *next)
-{
-	struct eznps_dp *prev_task_dp = &prev->thread.dp;
-	struct eznps_dp *next_task_dp = &next->thread.dp;
+/ {
+	compatible = "ezchip,arc-nps";
+	clock-frequency = <83333333>;	/* 83.333333 MHZ */
+	#address-cells = <1>;
+	#size-cells = <1>;
+	interrupt-parent = <&intc>;
+	present-cpus = "0-1,16-17";
+	possible-cpus = "0-4095";
+	init-possible-as-present = <1>;
 
-	/* Here we save all Data Plane related auxiliary registers */
-	cpu_relax();
-	prev_task_dp->dpc = read_aux_reg(CTOP_AUX_DPC);
-	write_aux_reg(CTOP_AUX_DPC, next_task_dp->dpc);
-	prev_task_dp->eflags = read_aux_reg(CTOP_AUX_EFLAGS);
-	write_aux_reg(CTOP_AUX_EFLAGS, next_task_dp->eflags);
-	prev_task_dp->gpa1 = read_aux_reg(CTOP_AUX_GPA1);
-	write_aux_reg(CTOP_AUX_GPA1, next_task_dp->gpa1);
-}
+	aliases {
+		ethernet0 = &nps_mgt_enet0;
+	};
+	
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32be,0xf7209000,115200n8 console=ttyS0,115200n8 rcupdate.rcu_cpu_stall_suppress=1";
+	};
 
-#ifdef CONFIG_HAVE_HW_BREAKPOINT
-void plat_update_bp_info(struct perf_event *bp)
-{
-	int tid;
-	struct arch_hw_breakpoint *info = counter_arch_bp(bp);
+	memory {
+		device_type = "memory";
+		reg = <0x80002000 0x20000000>;    /* 512M */
+	};
 
-	/* read thread id */
-	tid = read_aux_reg(CTOP_AUX_THREAD_ID);
+	fpga {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
 
-	/* update control fields*/
-	info->ctrl.tid = tid;
-	info->ctrl.tidmatch = 1;
-}
-#endif /* CONFIG_HAVE_HW_BREAKPOINT */
+		/* child and parent address space 1:1 mapped */
+		ranges;
 
+		intc: interrupt-controller {
+			compatible = "ezchip,arc700-intc";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
+		uart@f7209000 {
+			compatible = "snps,dw-apb-uart";
+			device_type = "serial";
+			reg = <0xf7209000 0x100>;
+			interrupts = <6>;
+			clock-frequency = <83333333>;
+			baud = <115200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			native-endian;
+		};
+
+		nps_mgt_enet0: ethernet@f7470000 {
+			compatible = "ezchip,nps-mgt-enet";
+			reg = <0xf7470000 0x1940>;
+			interrupts = <7>;
+			/* Filled in by U-Boot */
+			mac-address = [ 00 00 00 00 00 00 ];
+		};
+
+		arcpmu0: pmu {
+			compatible = "ezchip,nps-pct";
+		};
+	};
+};

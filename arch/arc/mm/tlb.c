@@ -57,6 +57,7 @@
 #include <asm/setup.h>
 #include <asm/mmu_context.h>
 #include <asm/mmu.h>
+#include <asm/mtm.h>
 
 /*			Need for ARC MMU v2
  *
@@ -100,7 +101,7 @@
 
 
 /* A copy of the ASID from the PID reg is kept in asid_cache */
-DEFINE_PER_CPU(unsigned int, asid_cache) = MM_CTXT_FIRST_CYCLE;
+DEFINE_PER_CPU(unsigned int, asid_cache);
 
 /*
  * Utility Routine to erase a J-TLB entry
@@ -243,8 +244,10 @@ noinline void local_flush_tlb_all(void)
 	unsigned long flags;
 	unsigned int entry;
 	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[smp_processor_id()].mmu;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	/* Load PD0 and PD1 with template for a Blank Entry */
 	write_aux_reg(ARC_REG_TLBPD1, 0);
@@ -258,6 +261,7 @@ noinline void local_flush_tlb_all(void)
 
 	utlb_invalidate();
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -300,6 +304,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 {
 	const unsigned int cpu = smp_processor_id();
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/* If range @start to @end is more than 32 TLB entries deep,
 	 * its better to move to a new ASID rather than searching for
@@ -321,6 +326,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 	start &= PAGE_MASK;
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	if (asid_mm(vma->vm_mm, cpu) != MM_CTXT_NO_ASID) {
 		while (start < end) {
@@ -331,6 +337,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 
 	utlb_invalidate();
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -343,6 +350,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/* exactly same as above, except for TLB entry not taking ASID */
 
@@ -354,6 +362,8 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 	start &= PAGE_MASK;
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
+
 	while (start < end) {
 		tlb_entry_erase(start);
 		start += PAGE_SIZE;
@@ -361,6 +371,7 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 
 	utlb_invalidate();
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -373,17 +384,20 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 {
 	const unsigned int cpu = smp_processor_id();
 	unsigned long flags;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/* Note that it is critical that interrupts are DISABLED between
 	 * checking the ASID and using it flush the TLB entry
 	 */
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	if (asid_mm(vma->vm_mm, cpu) != MM_CTXT_NO_ASID) {
 		tlb_entry_erase((page & PAGE_MASK) | hw_pid(vma->vm_mm, cpu));
 		utlb_invalidate();
 	}
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -468,6 +482,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 	unsigned long flags;
 	unsigned int asid_or_sasid, rwx;
 	unsigned long pd0, pd1;
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	/*
 	 * create_tlb() assumes that current->mm == vma->mm, since
@@ -498,6 +513,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 		return;
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	tlb_paranoid_check(asid_mm(vma->vm_mm, smp_processor_id()), address);
 
@@ -531,6 +547,7 @@ void create_tlb(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
 
 	tlb_entry_insert(pd0, pd1);
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 
@@ -575,7 +592,7 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddr_unaligned,
 
 			/* invalidate any existing icache lines */
 			if (vma->vm_flags & VM_EXEC)
-				__inv_icache_page(paddr, vaddr);
+				__inv_icache_page(vma, paddr, vaddr);
 		}
 	}
 }
@@ -670,9 +687,10 @@ char *arc_mmu_mumbojumbo(int cpu_id, char *buf, int len)
 void arc_mmu_init(void)
 {
 	char str[256];
-	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[smp_processor_id()].mmu;
+	const unsigned int cpu = smp_processor_id();
+	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[cpu].mmu;
 
-	printk(arc_mmu_mumbojumbo(0, str, sizeof(str)));
+	//printk(arc_mmu_mumbojumbo(0, str, sizeof(str)));
 
 	/* For efficiency sake, kernel is compile time built for a MMU ver
 	 * This must match the hardware it is running on.
@@ -689,6 +707,8 @@ void arc_mmu_init(void)
 
 	if (mmu->pg_sz_k != TO_KB(PAGE_SIZE))
 		panic("MMU pg size != PAGE_SIZE (%luk)\n", TO_KB(PAGE_SIZE));
+
+	asid_cpu(cpu) = asid_cpu_first(cpu);
 
 	/* Enable the MMU */
 	write_aux_reg(ARC_REG_PID, MMU_ENABLE);
@@ -734,8 +754,10 @@ void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
 	unsigned long flags, is_valid;
 	struct cpuinfo_arc_mmu *mmu = &cpuinfo_arc700[smp_processor_id()].mmu;
 	unsigned int pd0[mmu->ways], pd1[mmu->ways];
+	DEFINE_SCHD_FLAG(unsigned int, schd_flags);
 
 	local_irq_save(flags);
+	hw_schd_save(&schd_flags);
 
 	/* re-enable the MMU */
 	write_aux_reg(ARC_REG_PID, MMU_ENABLE | read_aux_reg(ARC_REG_PID));
@@ -787,6 +809,7 @@ void do_tlb_overlap_fault(unsigned long cause, unsigned long address,
 		}
 	}
 
+	hw_schd_restore(schd_flags);
 	local_irq_restore(flags);
 }
 

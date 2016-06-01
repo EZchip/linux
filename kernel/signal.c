@@ -684,6 +684,11 @@ int dequeue_signal(struct task_struct *tsk, sigset_t *mask, siginfo_t *info)
  */
 void signal_wake_up_state(struct task_struct *t, unsigned int state)
 {
+#ifdef CONFIG_TASK_ISOLATION
+	/* If the task is being killed, don't complain about task_isolation. */
+	if (state & TASK_WAKEKILL)
+		t->task_isolation_flags = 0;
+#endif
 	set_tsk_thread_flag(t, TIF_SIGPENDING);
 	/*
 	 * TASK_WAKEKILL also means wake it up in the stopped/traced/killable

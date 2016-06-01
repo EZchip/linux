@@ -15,6 +15,9 @@
 #include <linux/file.h>
 #include <asm/arcregs.h>
 #include <asm/irqflags.h>
+#ifdef CONFIG_ARC_PLAT_EZNPS
+#include <plat/smp.h>
+#endif
 
 /*
  * Common routine to print scratch regs (r0-r12) or callee regs (r13-r25)
@@ -55,6 +58,114 @@ static void show_callee_regs(struct callee_regs *cregs)
 {
 	print_reg_file(&(cregs->r13), 13);
 }
+
+#ifdef CONFIG_ARC_PLAT_EZNPS
+static int print_memory_exception(void)
+{
+	long long int memory_address;
+	unsigned int cpu, ciu_block_id, err_cap_1_value, err_sts_value;
+	unsigned int *err_cap_1_ptr, *err_cap_2_ptr, *err_sts_ptr;
+	struct nps_ciu_err_cap_2 err_cap_2;
+	
+	/* getting the registers values */
+	cpu = smp_processor_id();
+	ciu_block_id = NPS_CPU_TO_CORE_NUM(cpu) < 
+		NPS_CLUSTER_MIDDLE_CORE_NUMBER ? NPS_CIU_WEST_BLOCK_ID : 
+		NPS_CIU_EAST_BLOCK_ID;
+		
+	err_cap_1_ptr = nps_host_reg(cpu, ciu_block_id, NPS_CIU_ERR_CAP_1);
+	err_cap_1_value = *err_cap_1_ptr;
+	
+	err_cap_2_ptr = nps_host_reg(cpu, ciu_block_id,	NPS_CIU_ERR_CAP_2);
+	err_cap_2.value = *err_cap_2_ptr;
+	
+	err_sts_ptr = nps_host_reg(cpu, ciu_block_id, NPS_CIU_ERR_STS);
+	err_sts_value = *err_sts_ptr;
+	
+	/* returning 1 if the error is not caused by memory exception */
+	if (err_sts_value == 0)
+		return 1;
+
+	/* the 35th and 34th bits of the memory address are the first
+	 * two bits of ERR_CAP_2, bits 33 to 3 are contained in 
+	 * ERR_CAP_1 and the first two bits will be zero
+	*/
+	memory_address = (err_cap_2.addr <<
+		ERR_CAP_2_ADDRESS_SHIFT_LEFT_VALUE) | (err_cap_1_value <<
+		ERR_CAP_1_SHIFT_LEFT_VALUE);
+
+	pr_cont("Memory error exception");
+	pr_info("          MSID = 0x%lx\n", err_cap_2.msid);
+	pr_info("          Physical address = 0x%llx", memory_address);
+	pr_info("          Error code = 0x%lx => ", err_cap_2.erc);
+	
+	switch(err_cap_2.erc) {
+	case ERR_CAP_2_ERC_INVALID_MSID:
+		pr_cont("Invalid MSID");
+		break;
+	case ERR_CAP_2_ERC_ADDR_RANGE_VIOLATION:
+		pr_cont("Address range violation");
+		break;
+	case ERR_CAP_2_ERC_ALIGNMENT_SIZE:
+		pr_cont("Alignment/Size error");
+		break;
+	case ERR_CAP_2_ERC_BAD_TRANSACTION:
+		pr_cont("Bad transaction");
+		break;
+	case ERR_CAP_2_ERC_ILLEGAL_FIELD_VALUE:
+		pr_cont("Illegal field value");
+		break;
+	case ERR_CAP_2_ERC_WRITE_PRIVILAGE_VIOLATION:
+		pr_cont("Write protection privilege violation");
+		break;
+	case ERR_CAP_2_ERC_UNCORRECTABLE_ECC:
+		pr_cont("Uncorrectable ECC data error");
+		break;
+	default: 
+		pr_cont("Unknown error");
+	}
+
+	pr_info("          Transaction code = 0x%lx => ", err_cap_2.rqtc);
+	
+	switch(err_cap_2.rqtc) {
+	case ERR_CAP_2_RQTC_POST_WRITE:
+		pr_cont("Posted write-single or atomic write-update");
+		break;
+	case ERR_CAP_2_RQTC_NON_POST_WRITE:
+		pr_cont("Non-posted write-single or atomic write-update");
+		break;
+	case ERR_CAP_2_RQTC_POST_WIDE_WRITE:
+		pr_cont("Posted wide write-single or wide atomic write-update");
+		break;
+	case ERR_CAP_2_RQTC_NON_POST_WIDE_WRITE:
+		pr_cont("Non-posted wide write-single or wide atomic write-" \
+					"update");
+		break;
+	case ERR_CAP_2_RQTC_BURST_WRITE:
+		pr_cont("Burst write");
+		break;
+	case ERR_CAP_2_RQTC_BURST_WRITE_SAFE:
+		pr_cont("Burst write-safe");
+		break;
+	case ERR_CAP_2_RQTC_ADDR_BASE_MAINTENANCE:
+		pr_cont("Address based maintenance commands");
+		break;
+	case ERR_CAP_2_RQTC_SINGLE_READ:
+		pr_cont("Single read / atomic read-update");
+		break;
+	case ERR_CAP_2_RQTC_BURST_READ:
+		pr_cont("Burst read");
+		break;
+	case ERR_CAP_2_RQTC_BURST_L2_READ:
+		pr_cont("Burst read with L2 cache line");
+		break;
+	default:
+		pr_cont("Unknown RQTC");
+	}
+		
+	return 0;
+}
+#endif
 
 static void print_task_path_n_nm(struct task_struct *tsk, char *buf)
 {
@@ -137,9 +248,16 @@ static void show_ecr_verbose(struct pt_regs *regs)
 	} else if (vec == ECR_V_ITLB_MISS) {
 		pr_cont("Insn could not be fetched\n");
 	} else if (vec == ECR_V_MACH_CHK) {
-		pr_cont("%s\n", (cause_code == 0x0) ?
-					"Double Fault" : "Other Fatal Err");
-
+		if (cause_code == 0x0)
+			pr_cont("Double Fault");
+		else {
+#ifdef CONFIG_ARC_PLAT_EZNPS
+			if (print_memory_exception())
+				pr_cont("Other fatal error\n");
+#else
+			pr_cont("Other fatal error\n");
+#endif
+		}
 	} else if (vec == ECR_V_PROTV) {
 		if (cause_code == ECR_C_PROTV_INST_FETCH)
 			pr_cont("Execute from Non-exec Page\n");
@@ -347,3 +465,4 @@ static void __exit arc_debugfs_exit(void)
 module_exit(arc_debugfs_exit);
 
 #endif
+	

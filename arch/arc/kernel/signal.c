@@ -54,6 +54,7 @@
 #include <linux/syscalls.h>
 #include <linux/tracehook.h>
 #include <linux/context_tracking.h>
+#include <linux/isolation.h>
 #include <asm/ucontext.h>
 
 struct rt_sigframe {
@@ -357,7 +358,7 @@ handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 	signal_setup_done(failed, ksig, 0);
 }
 
-static void __do_signal(struct pt_regs *regs)
+void do_signal(struct pt_regs *regs)
 {
 	struct ksignal ksig;
 	int restart_scall;
@@ -390,28 +391,120 @@ static void __do_signal(struct pt_regs *regs)
 	restore_saved_sigmask();
 }
 
-void do_signal(struct pt_regs *regs)
+/*
+ * Addition for task_isolation_ready to keep waiting until timer irq is masked.
+ * Prevents a single hrtimer that may occur after returning to usermode.
+ */
+static bool _timer_isolation_ready(void)
 {
-	user_exit();
-
-	__do_signal(regs);
-
-	user_enter();
+	/* Request rescheduling if timer irq is not masked. */
+	if (read_aux_reg(AUX_IENABLE) & (1 << TIMER0_IRQ)) {
+		set_tsk_need_resched(current);
+		return false;
+	}
+	return true;
 }
 
-/* TODO: vineetg:
- * Please consider implementing all slow paths from resume_user_mode_begin
- * in do_notify_resume. see x86\mips for reference. */
-void do_notify_resume(struct pt_regs *regs)
+static inline bool timer_isolation_ready(void)
 {
-	user_exit();
+	return !task_isolation_enabled() || _timer_isolation_ready();
+}
 
-	/*
-	 * ASM glue gaurantees that this is only called when returning to
-	 * user mode
-	 */
-	if (test_and_clear_thread_flag(TIF_NOTIFY_RESUME))
-		tracehook_notify_resume(regs);
+void save_callee (struct pt_regs *regs, struct callee_regs *cregs)
+{
+	struct task_struct *tsk = current;
+
+	__asm__ __volatile__(
+#ifdef CONFIG_ARC_CURR_IN_REG
+	"st    %1, [%0, 0]     \n\t"
+#else
+	"st    r25, [%0, 0]    \n\t"
+#endif
+	"st    r24, [%0, 4]    \n\t"
+	"st    r23, [%0, 8]    \n\t"
+	"st    r22, [%0, 12]   \n\t"
+	"st    r21, [%0, 16]   \n\t"
+	"st    r20, [%0, 20]   \n\t"
+	"st    r19, [%0, 24]   \n\t"
+	"st    r18, [%0, 28]   \n\t"
+	"st    r17, [%0, 32]   \n\t"
+	"st    r16, [%0, 36]   \n\t"
+	"st    r15, [%0, 40]   \n\t"
+	"st    r14, [%0, 44]   \n\t"
+	"st    r13, [%0, 48]   \n\t"
+	:
+	: "r"(cregs)
+#ifdef CONFIG_ARC_CURR_IN_REG
+	, "r"(regs->user_r25)
+#endif
+	: "memory"
+	);
+
+	tsk->thread.callee_reg = (unsigned long)cregs;
+}
+
+void restore_callee (struct pt_regs *regs, struct callee_regs *cregs)
+{
+	__asm__ __volatile__(
+#ifdef CONFIG_ARC_CURR_IN_REG
+	"ld    r13, [%0, 0]     \n\t"
+	"st    r13, [%1, 0]     \n\t"
+#else
+	"ld    r25, [%0, 0]    \n\t"
+#endif
+	"ld    r24, [%0, 4]    \n\t"
+	"ld    r23, [%0, 8]    \n\t"
+	"ld    r22, [%0, 12]   \n\t"
+	"ld    r21, [%0, 16]   \n\t"
+	"ld    r20, [%0, 20]   \n\t"
+	"ld    r19, [%0, 24]   \n\t"
+	"ld    r18, [%0, 28]   \n\t"
+	"ld    r17, [%0, 32]   \n\t"
+	"ld    r16, [%0, 36]   \n\t"
+	"ld    r15, [%0, 40]   \n\t"
+	"ld    r14, [%0, 44]   \n\t"
+	"ld    r13, [%0, 48]   \n\t"
+	:
+	: "r"(cregs)
+#ifdef CONFIG_ARC_CURR_IN_REG
+	 ,"r"(&regs->user_r25)
+#endif
+	: "r13", "r14", "r15", "r16", "r17",
+	  "r20", "r21", "r22", "r23", "r24",
+	  "r25", "memory"
+	);
+}
+
+asmlinkage void prepare_exit_to_usermode(struct pt_regs *regs,
+					 unsigned int thread_flags)
+{
+	struct callee_regs cregs;
+
+	do {
+		local_irq_enable();
+
+		if (thread_flags & _TIF_NEED_RESCHED)
+			schedule();
+
+		if (thread_flags & _TIF_SIGPENDING) {
+			save_callee(regs, &cregs);
+			do_signal(regs);
+			restore_callee(regs, &cregs);
+		}
+
+		if (thread_flags & _TIF_NOTIFY_RESUME) {
+			clear_thread_flag(TIF_NOTIFY_RESUME);
+			tracehook_notify_resume(regs);
+		}
+
+		task_isolation_enter();
+
+		local_irq_disable();
+
+		thread_flags = READ_ONCE(current_thread_info()->flags) &
+				 _TIF_WORK_LOOP_MASK;
+
+	} while (thread_flags || !task_isolation_ready() || !timer_isolation_ready());
 
 	user_enter();
 }

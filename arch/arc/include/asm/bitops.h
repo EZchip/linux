@@ -48,7 +48,8 @@ static inline int test_and_##op##_bit(unsigned long nr, volatile unsigned long *
 									\
 	m += nr >> 5;							\
 									\
-	old = (1UL << (nr & 0x1f));					\
+	nr = (1UL << (nr & 0x1f));					\
+	old = nr;							\
 	if (asm_op == CTOP_INST_AAND_DI_R2_R2_R3)			\
 		old = ~old;						\
 									\
@@ -61,7 +62,7 @@ static inline int test_and_##op##_bit(unsigned long nr, volatile unsigned long *
 	: "r"(m), "i"(asm_op)						\
 	: "r2", "r3", "memory");					\
 									\
-	return (old & (1 << nr)) != 0;					\
+	return (old & nr) != 0;						\
 }
 #else /* CONFIG_ARC_PLAT_EZNPS */
 #if defined(CONFIG_ARC_HAS_LLSC)

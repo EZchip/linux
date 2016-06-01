@@ -54,8 +54,16 @@ config GENERIC_CSUM
 config RWSEM_GENERIC_SPINLOCK
 	def_bool y
 
+config ARCH_DISCONTIGMEM_ENABLE
+	def_bool y
+	depends on ARC_PLAT_EZNPS
+
 config ARCH_FLATMEM_ENABLE
 	def_bool y
+
+config ARCH_DISCONTIGMEM_DEFAULT
+	def_bool y
+	depends on ARCH_DISCONTIGMEM_ENABLE
 
 config MMU
 	def_bool y
@@ -191,6 +199,33 @@ config NR_CPUS
 	range 2 4096
 	default "4"
 
+config NPS_CPU_TOPOLOGY
+	bool "Support cpu topology definition"
+	depends on EZNPS_MTM_EXT
+	default y
+	help
+	  Support NPS cpu topology definition.
+	  NPS got 16 clusters of cores.
+	  NPS cluster got 16 cores.
+	  NPS core got 16 symetrical threads.
+	  Totally there are such 4096 threads (NR_CPUS=4096)
+
+config SCHED_MC
+	bool "Multi-core scheduler support"
+	depends on NPS_CPU_TOPOLOGY
+	help
+	  Multi-core scheduler support improves the CPU scheduler's decision
+	  making when dealing with multi-core CPU chips at a cost of slightly
+	  increased overhead in some places. If unsure say N here.
+
+config SCHED_SMT
+	bool "SMT scheduler support"
+	depends on NPS_CPU_TOPOLOGY
+	help
+	  Improves the CPU scheduler's decision making when dealing with
+	  MultiThreading at a cost of slightly increased overhead in some
+	  places. If unsure say N here.
+
 endif	#SMP
 
 menuconfig ARC_CACHE
@@ -324,6 +359,22 @@ config ARC_PAGE_SIZE_4K
 
 endchoice
 
+config NUMA
+	bool "NUMA Memory Allocation and Scheduler Support"
+	depends on SMP && DISCONTIGMEM
+	default y
+	---help---
+	  NUMA memory allocation is required for NPS400 processors.
+	  It is recommended that this option always be enabled.
+
+config NODES_SHIFT
+	int "Maximum NUMA Nodes (as a power of 2)" if ARC_PLAT_EZNPS
+	default "1"
+	depends on NEED_MULTIPLE_NODES
+	---help---
+	  Specify the maximum number of NUMA Nodes available on the target
+	  system.  Increases memory reserved to accommodate various tables.
+
 if ISA_ARCOMPACT
 
 config ARC_COMPACT_IRQ_LEVELS
@@ -428,6 +479,13 @@ config LINUX_LINK_BASE
 	  However some customers have peripherals mapped at this addr, so
 	  Linux needs to be scooted a bit.
 	  If you don't know what the above means, leave this setting alone.
+
+config HIGHMEM
+	bool "High Memory Support"
+	help
+	  With ARC 2G:2G address split, only upper 2G is directly addressable by
+	  kernel. Enable this to potentially allow access to rest of 2G and PAE
+	  in future
 
 config ARC_VMALLOC_SIZE
 	hex "Vmalloc size (MB)"

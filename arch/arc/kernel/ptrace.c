@@ -14,6 +14,7 @@
 #include <linux/hw_breakpoint.h>
 #include <linux/user.h>
 #include <linux/context_tracking.h>
+#include <linux/isolation.h>
 #include <linux/thread_info.h>
 
 static struct callee_regs *task_callee_regs(struct task_struct *tsk)
@@ -51,6 +52,8 @@ static int genregs_get(struct task_struct *target,
 			offsetof(struct user_regs_struct, LOC) + 4);
 
 	REG_O_ZERO(pad);
+	REG_O_ONE(scratch.eflags, &ptregs->eflags);
+	REG_O_ONE(scratch.gpa1, &ptregs->gpa1);
 	REG_O_ONE(scratch.bta, &ptregs->bta);
 	REG_O_ONE(scratch.lp_start, &ptregs->lp_start);
 	REG_O_ONE(scratch.lp_end, &ptregs->lp_end);
@@ -139,6 +142,8 @@ static int genregs_set(struct task_struct *target,
 
 	REG_IGNORE_ONE(pad);
 
+	REG_IN_ONE(scratch.eflags, &ptregs->eflags);
+	REG_IN_ONE(scratch.gpa1, &ptregs->gpa1);
 	REG_IN_ONE(scratch.bta, &ptregs->bta);
 	REG_IN_ONE(scratch.lp_start, &ptregs->lp_start);
 	REG_IN_ONE(scratch.lp_end, &ptregs->lp_end);
@@ -399,11 +404,22 @@ long arch_ptrace(struct task_struct *child, long request,
 
 asmlinkage int syscall_trace_entry(struct pt_regs *regs)
 {
-	user_exit();
+	u32 work = ACCESS_ONCE(current_thread_info()->flags);
 
-	if ((test_thread_flag(TIF_SYSCALL_TRACE)) &&
-	    tracehook_report_syscall_entry(regs))
-		return ULONG_MAX;
+	/*
+	 * context_tracking_user_exit was called by the callee.
+	 * If TIF_NOHZ is set, we should be in RCU kernel mode before
+	 * doing anything that could touch RCU.
+	 */
+	if (work & _TIF_NOHZ) {
+		if (task_isolation_check_syscall(regs->r8))
+			return -1;
+	}
+
+	if (work & _TIF_SYSCALL_TRACE) {
+		if (tracehook_report_syscall_entry(regs))
+			regs->r8 = -1;
+	}
 
 	return regs->r8;
 }
@@ -415,10 +431,6 @@ asmlinkage void syscall_trace_exit(struct pt_regs *regs)
 	 * or do_notify_resume(), in which case we can be in RCU
 	 * user mode.
 	 */
-	user_exit();
-
 	if (test_thread_flag(TIF_SYSCALL_TRACE))
 		tracehook_report_syscall_exit(regs, 0);
-
-	user_enter();
 }

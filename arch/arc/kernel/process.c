@@ -44,12 +44,16 @@ SYSCALL_DEFINE0(arc_gettls)
 
 void arch_cpu_idle(void)
 {
+#ifdef CONFIG_EZNPS_HAS_SCHD_WFT
+	__asm__("nop\n	schd.wft.ie12");
+#else
 	/* sleep, but enable all interrupts before committing */
 	if (is_isa_arcompact()) {
 		__asm__("sleep 0x3");
 	} else {
 		__asm__("sleep 0x10");
 	}
+#endif
 }
 
 asmlinkage void ret_from_fork(void);
@@ -174,6 +178,10 @@ void start_thread(struct pt_regs * regs, unsigned long pc, unsigned long usp)
 	 * Interrupts enabled
 	 */
 	regs->status32 = STATUS_U_MASK | STATUS_L_MASK | ISA_INIT_STATUS_BITS;
+
+#ifdef CONFIG_EZNPS_MTM_EXT
+	regs->eflags = 0;
+#endif
 
 	/* bogus seed values for debugging */
 	regs->lp_start = 0x10;

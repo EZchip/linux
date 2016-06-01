@@ -2286,6 +2286,15 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			and gids from such clients.  This is intended to ease
 			migration from NFSv2/v3.
 
+	nps_mtm_hs_ctr= [KNL,ARC]
+			This parameter sets the maximum duration, in
+			cycles, each HW thread of the CTOP can run
+			without interruptions, before HW switches it.
+			The actual maximum duration is 16 times this
+			parameter's value.
+			Format: integer between 1 and 255
+			Default: 255
+
 	objlayoutdriver.osd_login_prog=
 			[NFS] [OBJLAYOUT] sets the pathname to the program which
 			is used to automatically discover and login into new
@@ -3594,6 +3603,22 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			Ignore sysrq setting - this boot parameter will
 			neutralize any effect of /proc/sys/kernel/sysrq.
 			Useful for debugging.
+
+	task_isolation=	[KNL]
+			In kernels built with CONFIG_TASK_ISOLATION=y, set
+			the specified list of CPUs where cpus will be able
+			to use prctl(PR_SET_TASK_ISOLATION) to set up task
+			isolation mode.  Setting this boot flag implicitly
+			also sets up nohz_full and isolcpus mode for the
+			listed set of cpus.
+
+	task_isolation_debug	[KNL]
+			In kernels built with CONFIG_TASK_ISOLATION
+			and booted in task_isolation= mode, this
+			setting will generate console backtraces when
+			the kernel is about to interrupt a task that
+			has requested PR_TASK_ISOLATION_ENABLE and is
+			running on a task_isolation core.
 
 	tcpmhash_entries= [KNL,NET]
 			Set the number of tcp_metrics_hash slots.

@@ -38,6 +38,7 @@
 #include <asm/page.h>
 #include <asm/mmu.h>
 #include <asm-generic/pgtable-nopmd.h>
+#include <linux/const.h>
 
 /**************************************************************************
  * Page Table Flags
@@ -201,15 +202,21 @@
 #define BITS_FOR_PGD	(32 - BITS_FOR_PTE - BITS_IN_PAGE)
 
 #define PGDIR_SHIFT	(BITS_FOR_PTE + BITS_IN_PAGE)
+#ifdef __ASSEMBLY__
+#define PGDIR_SIZE	_BITUL(PGDIR_SHIFT)	/* vaddr span, not PDG sz */
+#else
 #define PGDIR_SIZE	(1UL << PGDIR_SHIFT)	/* vaddr span, not PDG sz */
+#endif
 #define PGDIR_MASK	(~(PGDIR_SIZE-1))
 
 #ifdef __ASSEMBLY__
-#define	PTRS_PER_PTE	(1 << BITS_FOR_PTE)
-#define	PTRS_PER_PGD	(1 << BITS_FOR_PGD)
+#define	PTRS_PER_PTE		_BITUL(BITS_FOR_PTE)
+#define PTRS_HIGHMEM_PTE	_BITUL(13)
+#define	PTRS_PER_PGD		_BITUL(BITS_FOR_PGD)
 #else
-#define	PTRS_PER_PTE	(1UL << BITS_FOR_PTE)
-#define	PTRS_PER_PGD	(1UL << BITS_FOR_PGD)
+#define	PTRS_PER_PTE		(1UL << BITS_FOR_PTE)
+#define	PTRS_HIGHMEM_PTE	(1UL << 13)
+#define	PTRS_PER_PGD		(1UL << BITS_FOR_PGD)
 #endif
 /*
  * Number of entries a user land program use.
@@ -266,21 +273,16 @@ static inline void pmd_set(pmd_t *pmdp, pte_t *ptep)
 #define pmd_present(x)			(pmd_val(x))
 #define pmd_clear(xp)			do { pmd_val(*(xp)) = 0; } while (0)
 
-#define pte_page(x) (mem_map + \
-		(unsigned long)(((pte_val(x) - CONFIG_LINUX_LINK_BASE) >> \
-				PAGE_SHIFT)))
+#define pte_page(pte)  pfn_to_page(pte_pfn(pte))
 
-#define mk_pte(page, pgprot)						\
-({									\
-	pte_t pte;							\
-	pte_val(pte) = __pa(page_address(page)) + pgprot_val(pgprot);	\
-	pte;								\
-})
-
+#define mk_pte(page, prot)	pfn_pte(page_to_pfn(page), prot)
 #define pte_pfn(pte)		(pte_val(pte) >> PAGE_SHIFT)
 #define pfn_pte(pfn, prot)	(__pte(((pfn) << PAGE_SHIFT) | pgprot_val(prot)))
+#ifdef CONFIG_HIGHMEM
+#define __pte_index(addr)	((addr >= VMALLOC_END) ? (((addr) >> PAGE_SHIFT) & (PTRS_HIGHMEM_PTE - 1)) : (((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1)))
+#else
 #define __pte_index(addr)	(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
-
+#endif
 /*
  * pte_offset gets a @ptr to PMD entry (PGD in our 2-tier paging system)
  * and returns ptr to PTE entry corresponding to @addr
@@ -357,7 +359,6 @@ static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
 #define pgd_offset_fast(mm, addr)	pgd_offset(mm, addr)
 #endif
 
-extern void paging_init(void);
 extern pgd_t swapper_pg_dir[] __aligned(PAGE_SIZE);
 void update_mmu_cache(struct vm_area_struct *vma, unsigned long address,
 		      pte_t *ptep);

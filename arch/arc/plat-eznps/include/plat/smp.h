@@ -1,20 +1,34 @@
-/*******************************************************************************
-
-  Copyright(c) 2015 EZchip Technologies.
-
-  This program is free software; you can redistribute it and/or modify it
-  under the terms and conditions of the GNU General Public License,
-  version 2, as published by the Free Software Foundation.
-
-  This program is distributed in the hope it will be useful, but WITHOUT
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-  more details.
-
-  The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-*******************************************************************************/
+/*
+* Copyright (c) 2016, Mellanox Technologies. All rights reserved.
+*
+* This software is available to you under a choice of one of two
+* licenses.  You may choose to be licensed under the terms of the GNU
+* General Public License (GPL) Version 2, available from the file
+* COPYING in the main directory of this source tree, or the
+* OpenIB.org BSD license below:
+*
+*     Redistribution and use in source and binary forms, with or
+*     without modification, are permitted provided that the following
+*     conditions are met:
+*
+*      - Redistributions of source code must retain the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer.
+*
+*      - Redistributions in binary form must reproduce the above
+*        copyright notice, this list of conditions and the following
+*        disclaimer in the documentation and/or other materials
+*        provided with the distribution.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+* BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+* ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+* CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
 
 #ifndef __PLAT_EZNPS_SMP_H
 #define __PLAT_EZNPS_SMP_H
@@ -38,14 +52,42 @@ struct global_id {
 	};
 };
 
-#define IPI_IRQ				5
+#define IPI_IRQ						5
 
-#define ARC_PLAT_START_PC_ALIGN		1024
+#define ARC_PLAT_START_PC_ALIGN				1024
 
-#define NPS_MSU_BLKID			0x18
-#define NPS_MSU_TICK_LOW		0xC8
-#define NPS_MSU_TICK_HIGH		0xC9
-#define NPS_MTM_CPU_CFG			0x90
+/* CIU registers */
+#define NPS_CIU_WEST_BLOCK_ID				0x8
+#define NPS_CIU_EAST_BLOCK_ID				0x28
+#define NPS_CIU_ERR_CAP_1				0xD0
+#define NPS_CIU_ERR_CAP_2				0xD1
+#define NPS_CIU_ERR_STS					0xD2
+#define NPS_CLUSTER_MIDDLE_CORE_NUMBER			8
+#define ERR_CAP_2_RQTC_POST_WRITE			0x0
+#define ERR_CAP_2_RQTC_NON_POST_WRITE			0x1
+#define ERR_CAP_2_RQTC_POST_WIDE_WRITE			0x2
+#define ERR_CAP_2_RQTC_NON_POST_WIDE_WRITE		0x3
+#define ERR_CAP_2_RQTC_BURST_WRITE			0x4
+#define ERR_CAP_2_RQTC_BURST_WRITE_SAFE			0x5
+#define ERR_CAP_2_RQTC_ADDR_BASE_MAINTENANCE		0x7
+#define ERR_CAP_2_RQTC_SINGLE_READ			0x8
+#define ERR_CAP_2_RQTC_BURST_READ			0xC
+#define ERR_CAP_2_RQTC_BURST_L2_READ			0xD
+#define ERR_CAP_2_ERC_INVALID_MSID			0x0
+#define ERR_CAP_2_ERC_ADDR_RANGE_VIOLATION		0x1
+#define ERR_CAP_2_ERC_ALIGNMENT_SIZE			0x2
+#define ERR_CAP_2_ERC_BAD_TRANSACTION			0x4
+#define	ERR_CAP_2_ERC_ILLEGAL_FIELD_VALUE		0x5
+#define ERR_CAP_2_ERC_WRITE_PRIVILAGE_VIOLATION		0x6
+#define ERR_CAP_2_ERC_UNCORRECTABLE_ECC			0xF
+#define ERR_CAP_2_ADDRESS_SHIFT_LEFT_VALUE		34
+#define ERR_CAP_1_SHIFT_LEFT_VALUE			2
+
+#define NPS_MSU_BLKID					0x18
+#define NPS_MSU_EN_CFG					0x80
+#define NPS_MSU_TICK_LOW				0xC8
+#define NPS_MSU_TICK_HIGH				0xC9
+#define NPS_MTM_CPU_CFG					0x90
 
 /*
  * Convert logical to physical CPU IDs
@@ -99,6 +141,16 @@ struct nps_host_reg_address {
 	};
 };
 
+struct nps_ciu_err_cap_2 {
+	union {
+		struct {
+			u32 msid:8, erc:4, rqtc:4, tt:12,
+			reserved:2, addr:2;
+		};
+		u32 value;
+	};
+};
+
 static inline void *nps_host_reg(u32 cpu, u32 blkid, u32 reg)
 {
 	struct nps_host_reg_address reg_address;
@@ -120,6 +172,22 @@ static inline void *nps_mtm_reg_addr(u32 cpu, u32 reg)
 
 	return nps_host_reg(cpu, blkid, reg);
 }
+
+struct nps_host_reg_msu_en_cfg {
+	union {
+		struct {
+			u32	__reserved1:11,
+			rtc_en:1, ipc_en:1, gim_1_en:1,
+			gim_0_en:1, ipi_en:1, buff_e_rls_bmuw:1,
+			buff_e_alc_bmuw:1, buff_i_rls_bmuw:1, buff_i_alc_bmuw:1,
+			buff_e_rls_bmue:1, buff_e_alc_bmue:1, buff_i_rls_bmue:1,
+			buff_i_alc_bmue:1, __reserved2:1, buff_e_pre_en:1,
+			buff_i_pre_en:1, pmuw_ja_en:1, pmue_ja_en:1,
+			pmuw_nj_en:1, pmue_nj_en:1, msu_en:1;
+		};
+		u32 value;
+	};
+};
 
 static inline void *nps_msu_reg_addr(u32 cpu, u32 reg)
 {
