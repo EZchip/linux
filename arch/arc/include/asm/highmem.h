@@ -17,13 +17,13 @@
 
 /* start after vmalloc area */
 #define FIXMAP_BASE		(PAGE_OFFSET - FIXMAP_SIZE - PKMAP_SIZE)
-#define FIXMAP_SIZE		PGDIR_SIZE	/* only 1 PGD worth */
-#define KM_TYPE_NR		((FIXMAP_SIZE >> PAGE_SHIFT)/NR_CPUS)
+#define FIXMAP_SIZE		(PGDIR_SIZE * _BITUL(CONFIG_HIGHMEM_PGDS_SHIFT))
+#define KM_TYPE_NR		(((FIXMAP_SIZE >> PAGE_SHIFT)/NR_CPUS) > 2?: 2)
 #define FIXMAP_ADDR(nr)		(FIXMAP_BASE + ((nr) << PAGE_SHIFT))
 
 /* start after fixmap area */
 #define PKMAP_BASE		(FIXMAP_BASE + FIXMAP_SIZE)
-#define PKMAP_SIZE		PGDIR_SIZE
+#define PKMAP_SIZE		(PGDIR_SIZE * _BITUL(CONFIG_HIGHMEM_PGDS_SHIFT))
 #define LAST_PKMAP		(PKMAP_SIZE >> PAGE_SHIFT)
 #define LAST_PKMAP_MASK		(LAST_PKMAP - 1)
 #define PKMAP_ADDR(nr)		(PKMAP_BASE + ((nr) << PAGE_SHIFT))
@@ -32,6 +32,7 @@
 #define kmap_prot		PAGE_KERNEL
 
 
+#ifndef __ASSEMBLY__
 #include <asm/cacheflush.h>
 
 extern void *kmap(struct page *page);
@@ -54,6 +55,7 @@ static inline void kunmap(struct page *page)
 		return;
 	kunmap_high(page);
 }
+#endif /* __ASSEMBLY__  */
 
 
 #endif

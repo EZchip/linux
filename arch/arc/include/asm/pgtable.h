@@ -223,6 +223,8 @@
 #define	PTRS_PER_PTE	_BITUL(BITS_FOR_PTE)
 #define	PTRS_PER_PGD	_BITUL(BITS_FOR_PGD)
 
+#define PTRS_HMEM_PTE	_BITUL(BITS_FOR_PTE + CONFIG_HIGHMEM_PGDS_SHIFT)
+
 /*
  * Number of entries a user land program use.
  * TASK_SIZE is the maximum vaddr that can be used by a userland program.
@@ -284,7 +286,14 @@ static inline void pmd_set(pmd_t *pmdp, pte_t *ptep)
 
 /* Don't use virt_to_pfn for macros below: could cause truncations for PAE40*/
 #define pte_pfn(pte)		(pte_val(pte) >> PAGE_SHIFT)
+#if CONFIG_HIGHMEM_PGDS_SHIFT
+#define __pte_index(addr)	(((addr) >= VMALLOC_END) ?		       \
+				(((addr) >> PAGE_SHIFT) & (PTRS_HMEM_PTE - 1)) \
+				:					       \
+				(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1)))
+#else
 #define __pte_index(addr)	(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
+#endif
 
 /*
  * pte_offset gets a @ptr to PMD entry (PGD in our 2-tier paging system)

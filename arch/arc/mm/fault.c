@@ -17,6 +17,7 @@
 #include <linux/perf_event.h>
 #include <asm/pgalloc.h>
 #include <asm/mmu.h>
+#include <asm/highmem.h>
 
 /*
  * kernel virtual address is required to implement vmalloc/pkmap/fixmap
@@ -34,6 +35,13 @@ noinline static int handle_kernel_vaddr_fault(unsigned long address)
 	pgd_t *pgd, *pgd_k;
 	pud_t *pud, *pud_k;
 	pmd_t *pmd, *pmd_k;
+
+#if defined(CONFIG_HIGHMEM) && (CONFIG_HIGHMEM_PGDS_SHIFT)
+	if (address > FIXMAP_BASE && address < (FIXMAP_BASE + FIXMAP_SIZE))
+		address = FIXMAP_BASE;
+	else if ( address > PKMAP_BASE && address < (PKMAP_BASE + PKMAP_SIZE))
+		address = PKMAP_BASE;
+#endif
 
 	pgd = pgd_offset_fast(current->active_mm, address);
 	pgd_k = pgd_offset_k(address);

@@ -44,6 +44,7 @@
 #include <asm/processor.h>
 #include <asm/tlb-mmu1.h>
 #include <asm/mtm.h>
+#include <asm/highmem.h>
 
 #ifdef CONFIG_ISA_ARCOMPACT
 ;-----------------------------------------------------------------
@@ -207,6 +208,12 @@ ex_saved_reg1:
 	ld  r1, [r1, MM_PGD]
 #endif
 
+#if defined(CONFIG_HIGHMEM) && (CONFIG_HIGHMEM_PGDS_SHIFT)
+	; handle pkmap/fixmap with more then on pte table
+	cmp_s   r2, VMALLOC_END
+	b.hs    4f
+#endif
+
 	lsr     r0, r2, PGDIR_SHIFT     ; Bits for indexing into PGD
 	ld.as   r3, [r1, r0]            ; PGD entry corresp to faulting addr
 	tst	r3, r3
@@ -239,6 +246,30 @@ ex_saved_reg1:
 					; r1: PTE ptr
 
 2:
+
+#if defined(CONFIG_HIGHMEM) && (CONFIG_HIGHMEM_PGDS_SHIFT)
+	b       6f
+
+4:
+	lsr     r0, r2, PGDIR_SHIFT         ; Bits for indexing into KMAP_PGD
+	and     r0, r0, ~(_BITUL(CONFIG_HIGHMEM_PGDS_SHIFT) - 1)
+	ld.as   r1, [r1, r0]                ; PGD entry corresp to faulting addr
+	tst     r1, r1
+	bz      do_slow_path_pf             ; if no Page Table, do page fault
+	and     r1, r1, PAGE_MASK
+
+	cmp_s   r2, PKMAP_BASE
+	mov.hs  r0, ( PKMAP_BASE >> PAGE_SHIFT )
+	b.hs    5f
+	mov     r0, ( FIXMAP_BASE >> PAGE_SHIFT )
+
+5:
+	lsr     r3, r2, PAGE_SHIFT
+	sub     r0, r3, r0
+	asl     r0, r0, PTE_SIZE_LOG
+	ld.aw   r0, [r1, r0]
+6:
+#endif
 
 #ifdef CONFIG_ARC_DBG_TLB_MISS_COUNT
 	and.f 0, r0, _PAGE_PRESENT

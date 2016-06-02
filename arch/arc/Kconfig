@@ -491,6 +491,17 @@ config ARC_HAS_PAE40
 	  Enable access to physical memory beyond 4G, only supported on
 	  ARC cores with 40 bit Physical Addressing support
 
+config HIGHMEM_PGDS_SHIFT
+	int "log num of PGDs for HIGHMEM"
+	range 0 5
+	default "0" if !ARC_PLAT_EZNPS || !HIGHMEM
+	default "5" if ARC_PLAT_EZNPS
+	help
+	  This way we can map more pages for HIGHMEM.
+	  Single PGD (2M) is supporting 256 PTEs (8K PAGE_SIZE)
+	  For FIXMAP where at least 2 PTEs are needed per CPU
+	  large NR_CPUS e.g. 4096 will consume 32 PGDs
+
 config ARCH_PHYS_ADDR_T_64BIT
 	def_bool ARC_HAS_PAE40
 
