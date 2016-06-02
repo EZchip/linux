@@ -68,6 +68,9 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 {
 	int i;
 
+	init_cpu_topology();
+	store_cpu_topology(smp_processor_id());
+
 	/*
 	 * if platform didn't set the present map already, do it now
 	 * boot cpu is set to present already by init/main.c
@@ -151,6 +154,8 @@ void start_kernel_secondary(void)
 
 	if (machine_desc->init_per_cpu)
 		machine_desc->init_per_cpu(cpu);
+
+	store_cpu_topology(cpu);
 
 	notify_cpu_starting(cpu);
 	set_cpu_online(cpu, true);
