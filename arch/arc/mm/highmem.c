@@ -112,7 +112,8 @@ void __kunmap_atomic(void *kv)
 }
 EXPORT_SYMBOL(__kunmap_atomic);
 
-static noinline pte_t * __init alloc_kmap_pgtable(unsigned long kvaddr)
+static noinline pte_t * __init alloc_kmap_pgtable(unsigned long kvaddr,
+						  unsigned long pgnum)
 {
 	pgd_t *pgd_k;
 	pud_t *pud_k;
@@ -123,19 +124,24 @@ static noinline pte_t * __init alloc_kmap_pgtable(unsigned long kvaddr)
 	pud_k = pud_offset(pgd_k, kvaddr);
 	pmd_k = pmd_offset(pud_k, kvaddr);
 
-	pte_k = (pte_t *)alloc_bootmem_low_pages(PAGE_SIZE);
+	pte_k = (pte_t *)alloc_bootmem_low_pages(pgnum * PAGE_SIZE);
 	pmd_populate_kernel(&init_mm, pmd_k, pte_k);
 	return pte_k;
 }
 
 void __init kmap_init(void)
 {
+	unsigned int pgnum;
+
 	/* Due to recursive include hell, we can't do this in processor.h */
 	BUILD_BUG_ON(PAGE_OFFSET < (VMALLOC_END + FIXMAP_SIZE + PKMAP_SIZE));
 
 	BUILD_BUG_ON(KM_TYPE_NR > PTRS_PER_PTE);
-	pkmap_page_table = alloc_kmap_pgtable(PKMAP_BASE);
+	pgnum = DIV_ROUND_UP(PKMAP_SIZE, PAGE_SIZE * PTRS_PER_PTE);
+	pkmap_page_table = alloc_kmap_pgtable(PKMAP_BASE, pgnum);
 
-	BUILD_BUG_ON(LAST_PKMAP > PTRS_PER_PTE);
-	fixmap_page_table = alloc_kmap_pgtable(FIXMAP_BASE);
+	BUILD_BUG_ON(LAST_PKMAP > PTRS_PER_PTE *
+					_BITUL(CONFIG_HIGHMEM_PGDS_SHIFT));
+	pgnum = DIV_ROUND_UP(FIXMAP_SIZE, PAGE_SIZE * PTRS_PER_PTE);
+	fixmap_page_table = alloc_kmap_pgtable(FIXMAP_BASE, pgnum);
 }
