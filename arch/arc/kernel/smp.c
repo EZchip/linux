@@ -69,6 +69,9 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 	int i;
 	unsigned long dt_root = of_get_flat_dt_root();
 
+	init_cpu_topology();
+	store_cpu_topology(smp_processor_id());
+
 	if (of_get_flat_dt_prop(dt_root, "init-possible-as-present", NULL))
 		return;
 
@@ -138,6 +141,8 @@ void start_kernel_secondary(void)
 
 	if (machine_desc->init_per_cpu)
 		machine_desc->init_per_cpu(cpu);
+
+	store_cpu_topology(cpu);
 
 	notify_cpu_starting(cpu);
 	set_cpu_online(cpu, true);

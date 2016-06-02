@@ -532,14 +532,14 @@ const struct seq_operations cpuinfo_op = {
 	.show	= show_cpuinfo
 };
 
-static DEFINE_PER_CPU(struct cpu, cpu_topology);
+static DEFINE_PER_CPU(struct cpu, cpu_topo_info);
 
 static int __init topology_init(void)
 {
 	int cpu;
 
 	for_each_present_cpu(cpu)
-	    register_cpu(&per_cpu(cpu_topology, cpu), cpu);
+	    register_cpu(&per_cpu(cpu_topo_info, cpu), cpu);
 
 	return 0;
 }

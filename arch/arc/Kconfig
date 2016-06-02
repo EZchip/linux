@@ -211,6 +211,33 @@ config ARC_SMP_HALT_ON_RESET
 	  at designated entry point. For other case, all jump to common
 	  entry point and spin wait for Master's signal.
 
+config NPS_CPU_TOPOLOGY
+	bool "Support cpu topology definition"
+	depends on EZNPS_MTM_EXT
+	default y
+	help
+	  Support NPS cpu topology definition.
+	  NPS400 got 16 clusters of cores.
+	  NPS400 cluster got 16 cores.
+	  NPS core got 16 symetrical threads.
+	  Totally there are such 4096 threads (NR_CPUS=4096)
+
+config SCHED_MC
+	bool "Multi-core scheduler support"
+	depends on NPS_CPU_TOPOLOGY
+	help
+	  Multi-core scheduler support improves the CPU scheduler's decision
+	  making when dealing with multi-core CPU chips at a cost of slightly
+	  increased overhead in some places. If unsure say N here.
+
+config SCHED_SMT
+	bool "SMT scheduler support"
+	depends on NPS_CPU_TOPOLOGY
+	help
+	  Improves the CPU scheduler's decision making when dealing with
+	  MultiThreading at a cost of slightly increased overhead in some
+	  places. If unsure say N here.
+
 endif	#SMP
 
 menuconfig ARC_CACHE
