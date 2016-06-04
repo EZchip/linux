@@ -53,6 +53,7 @@
 #include <linux/uaccess.h>
 #include <linux/syscalls.h>
 #include <linux/tracehook.h>
+#include <linux/context_tracking.h>
 #include <asm/ucontext.h>
 
 struct rt_sigframe {
@@ -389,12 +390,30 @@ void do_signal(struct pt_regs *regs)
 	restore_saved_sigmask();
 }
 
-void do_notify_resume(struct pt_regs *regs)
+asmlinkage void do_notify_resume(struct pt_regs *regs,
+					  unsigned int thread_flags)
 {
-	/*
-	 * ASM glue gaurantees that this is only called when returning to
-	 * user mode
-	 */
-	if (test_and_clear_thread_flag(TIF_NOTIFY_RESUME))
-		tracehook_notify_resume(regs);
+	do {
+		if (thread_flags & _TIF_NEED_RESCHED) {
+			schedule();
+		} else {
+			local_irq_enable();
+
+			if (thread_flags & _TIF_SIGPENDING)
+				do_signal(regs);
+
+			if (thread_flags & _TIF_NOTIFY_RESUME) {
+				clear_thread_flag(TIF_NOTIFY_RESUME);
+				tracehook_notify_resume(regs);
+			}
+
+		}
+
+		local_irq_disable();
+
+		thread_flags = READ_ONCE(current_thread_info()->flags);
+
+	} while (thread_flags & _TIF_WORK_MASK);
+
+	user_enter();
 }

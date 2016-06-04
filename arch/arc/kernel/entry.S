@@ -315,24 +315,9 @@ resume_user_mode_begin:
 	; interim IRQ).
 	IRQ_DISABLE	r10
 
-	; Fast Path return to user mode if no pending work
-	GET_CURR_THR_INFO_FLAGS   r9
-	and.f  0,  r9, _TIF_WORK_MASK
-	bz     .Lrestore_regs
+	mov  r0, sp	; pt_regs for arg to do_signal()/do_notify_resume()
 
-	; --- (Slow Path #1) task preemption ---
-	bbit0  r9, TIF_NEED_RESCHED, .Lchk_pend_signals
-	mov    blink, resume_user_mode_begin  ; tail-call to U mode ret chks
-	j      @schedule 	; BTST+Bnz causes relo error in link
-
-.Lchk_pend_signals:
-	IRQ_ENABLE	r10
-
-	; --- (Slow Path #2) pending signal  ---
-	mov r0, sp	; pt_regs for arg to do_signal()/do_notify_resume()
-
-	GET_CURR_THR_INFO_FLAGS   r9
-	bbit0  r9, TIF_SIGPENDING, .Lchk_notify_resume
+	GET_CURR_THR_INFO_FLAGS   r1
 
 	; Normal Trap/IRQ entry only saves Scratch (caller-saved) regs
 	; in pt_reg since the "C" ABI (kernel code) will automatically
@@ -350,20 +335,13 @@ resume_user_mode_begin:
 	GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
 	st  sp, [r10, THREAD_CALLEE_REG]
 
-	bl  @do_signal
+	bl  @do_notify_resume
 
 	; Ideally we want to discard the Callee reg above, however if this was
 	; a tracing signal, tracer could have done a POKEUSR(CALLEE reg)
 	RESTORE_CALLEE_SAVED_USER
 
-	b      resume_user_mode_begin	; loop back to start of U mode ret
-
-	; --- (Slow Path #3) notify_resume ---
-.Lchk_notify_resume:
-	btst   r9, TIF_NOTIFY_RESUME
-	blnz   @do_notify_resume
-	b      resume_user_mode_begin	; unconditionally back to U mode ret chks
-					; for single exit point from this block
+	b      .Lrestore_regs
 
 resume_kernel_mode:
 
