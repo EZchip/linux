@@ -88,6 +88,10 @@ ENTRY(EV_MachineCheck)
 
 	EXCEPTION_PROLOGUE
 
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
+
 	lr  r2, [ecr]
 	lr  r0, [efa]
 	mov r1, sp
@@ -117,6 +121,10 @@ ENTRY(EV_PrivilegeV)
 
 	EXCEPTION_PROLOGUE
 
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
+
 	lr  r2, [ecr]
 	lr  r0, [efa]
 	mov r1, sp
@@ -144,6 +152,10 @@ END(EV_PrivilegeV)
 ENTRY(EV_Extension)
 
 	EXCEPTION_PROLOGUE
+
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
 
 	lr  r0, [efa]
 	mov r1, sp
@@ -239,6 +251,12 @@ trap_with_param:
 ENTRY(EV_Trap)
 
 	EXCEPTION_PROLOGUE
+
+#ifdef CONFIG_CONTEXT_TRACKING
+	SAVE_R0_TO_R12
+	bl context_tracking_user_exit
+	RESTORE_R12_TO_R0
+#endif
 
 	;============ TRAP 1   :breakpoints
 	; Check ECR for trap with arg (PROLOGUE ensures r9 has ECR)
