@@ -791,9 +791,16 @@ void __sync_icache_dcache(phys_addr_t paddr, unsigned long vaddr, int len)
 }
 
 /* wrapper to compile time eliminate alignment checks in flush loop */
-void __inv_icache_page(phys_addr_t paddr, unsigned long vaddr)
+void __inv_icache_page(struct vm_area_struct *vma,
+		       phys_addr_t paddr, unsigned long vaddr)
 {
-	__ic_line_inv_vaddr(paddr, vaddr, PAGE_SIZE);
+	struct ic_inv_args ic_inv = {
+		.paddr	= paddr,
+		.vaddr	= vaddr,
+		.sz	= PAGE_SIZE
+	};
+
+	on_each_cpu_mask(mm_cpumask(vma->vm_mm), __ic_line_inv_vaddr_helper, &ic_inv, 1);
 }
 
 /*
