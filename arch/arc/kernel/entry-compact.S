@@ -184,6 +184,11 @@ ENTRY(handle_interrupt_level2)
 	st      r9, [r10, THREAD_INFO_PREEMPT_COUNT]
 
 1:
+
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
+
 	;------------------------------------------------------
 	; setup params for Linux common ISR and invoke it
 	;------------------------------------------------------
@@ -210,6 +215,10 @@ ENTRY(mem_service)
 
 	INTERRUPT_PROLOGUE 2
 
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
+
 	mov r0, ilink2
 	mov r1, sp
 
@@ -223,6 +232,7 @@ ENTRY(mem_service)
 	mov ilink2, 1f
 	rtie
 1:
+
 	bl  do_memory_error
 	b   ret_from_exception
 END(mem_service)
@@ -233,6 +243,10 @@ END(mem_service)
 ENTRY(handle_interrupt_level1)
 
 	INTERRUPT_PROLOGUE 1
+
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
 
 	lr  r0, [icause1]
 	and r0, r0, 0x1f
@@ -263,6 +277,10 @@ END(handle_interrupt_level1)
 ENTRY(EV_TLBProtV)
 
 	EXCEPTION_PROLOGUE
+
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
 
 	lr  r2, [ecr]
 	lr  r0, [efa]	; Faulting Data address (not part of pt_regs saved above)
@@ -311,6 +329,10 @@ END(EV_TLBProtV)
 ENTRY(EV_PerfMon)
 	EXCEPTION_PROLOGUE
 
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
+
 	mov r0, sp
 
 	bl  do_perfmon
@@ -331,6 +353,11 @@ END(EV_PerfMon)
 ENTRY(call_do_page_fault)
 
 	EXCEPTION_PROLOGUE
+
+#ifdef CONFIG_CONTEXT_TRACKING
+	bl context_tracking_user_exit
+#endif
+
 	lr  r0, [efa]	; Faulting Data address
 	mov   r1, sp
 	FAKE_RET_FROM_EXCPN
