@@ -24,6 +24,7 @@
 #include <linux/reboot.h>
 #include <linux/irq_work.h>
 #include <linux/of_fdt.h>
+#include <linux/isolation.h>
 #include <asm/processor.h>
 #include <asm/setup.h>
 #include <asm/mach_desc.h>
@@ -233,6 +234,8 @@ static void ipi_send_msg_one(int cpu, enum ipi_msg_type msg)
 	pr_debug("%d Sending msg [%d] to %d\n", smp_processor_id(), msg, cpu);
 
 	local_irq_save(flags);
+
+	task_isolation_debug(cpu, "send IPI");
 
 	/*
 	 * Atomically write new msg bit (in case others are writing too),

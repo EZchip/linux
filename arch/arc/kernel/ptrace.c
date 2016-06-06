@@ -14,6 +14,7 @@
 #include <linux/hw_breakpoint.h>
 #include <linux/user.h>
 #include <linux/thread_info.h>
+#include <linux/isolation.h>
 
 static struct callee_regs *task_callee_regs(struct task_struct *tsk)
 {
@@ -402,6 +403,12 @@ long arch_ptrace(struct task_struct *child, long request,
 asmlinkage int syscall_trace_entry(struct pt_regs *regs)
 {
 	u32 work = ACCESS_ONCE(current_thread_info()->flags);
+
+	/* In isolation mode, we may prevent the syscall from running. */
+	if (work & _TIF_TASK_ISOLATION) {
+		if (task_isolation_syscall(regs->r8) == -1)
+			return -1;
+	}
 
 	if (work & _TIF_SYSCALL_TRACE) {
 		if (tracehook_report_syscall_entry(regs))

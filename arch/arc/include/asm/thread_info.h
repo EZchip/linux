@@ -92,6 +92,7 @@ static inline __attribute_const__ struct thread_info *current_thread_info(void)
 
 /* in adaptive nohz mode */
 #define TIF_NOHZ		17
+#define TIF_TASK_ISOLATION	18	/* in task isolation mode */
 
 #define _TIF_SYSCALL_TRACE	(1<<TIF_SYSCALL_TRACE)
 #define _TIF_NOTIFY_RESUME	(1<<TIF_NOTIFY_RESUME)
@@ -100,10 +101,11 @@ static inline __attribute_const__ struct thread_info *current_thread_info(void)
 #define _TIF_SYSCALL_AUDIT	(1<<TIF_SYSCALL_AUDIT)
 #define _TIF_MEMDIE		(1<<TIF_MEMDIE)
 #define _TIF_NOHZ		(1<<TIF_NOHZ)
+#define _TIF_TASK_ISOLATION	(1<<TIF_TASK_ISOLATION)
 
 /* work to do on interrupt/exception return */
 #define _TIF_WORK_MASK		(_TIF_NEED_RESCHED | _TIF_SIGPENDING | \
-				 _TIF_NOTIFY_RESUME)
+				 _TIF_NOTIFY_RESUME| _TIF_TASK_ISOLATION)
 
 /*
  * _TIF_ALLWORK_MASK includes SYSCALL_TRACE, but we don't need it.

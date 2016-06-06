@@ -15,6 +15,7 @@
 #include <linux/uaccess.h>
 #include <linux/kdebug.h>
 #include <linux/perf_event.h>
+#include <linux/isolation.h>
 #include <asm/pgalloc.h>
 #include <asm/mmu.h>
 #include <asm/highmem.h>
@@ -124,6 +125,10 @@ retry:
 	 */
 good_area:
 	info.si_code = SEGV_ACCERR;
+
+	/* No signal was generated, but notify task-isolation tasks. */
+	if (flags & FAULT_FLAG_USER)
+		task_isolation_quiet_exception("page fault at %#lx", address);
 
 	/* Handle protection violation, execute on heap or stack */
 

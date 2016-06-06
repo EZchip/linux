@@ -15,6 +15,7 @@
 #include <linux/perf_event.h>
 #include <linux/ptrace.h>
 #include <linux/uaccess.h>
+#include <linux/isolation.h>
 #include <asm/disasm.h>
 
 #ifdef CONFIG_CPU_BIG_ENDIAN
@@ -208,6 +209,8 @@ int misaligned_fixup(unsigned long address, struct pt_regs *regs,
 	/* handle user mode only and only if enabled by sysadmin */
 	if (!user_mode(regs) || !unaligned_enabled)
 		return 1;
+
+	task_isolation_quiet_exception("unaligned at %#lx", regs->ret);
 
 	if (no_unaligned_warning) {
 		pr_warn_once("%s(%d) made unaligned access which was emulated"
