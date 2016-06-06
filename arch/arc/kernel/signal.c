@@ -55,6 +55,7 @@
 #include <linux/tracehook.h>
 #include <linux/sched/task_stack.h>
 #include <linux/context_tracking.h>
+#include <linux/isolation.h>
 
 #include <asm/ucontext.h>
 
@@ -409,11 +410,18 @@ asmlinkage void do_notify_resume(struct pt_regs *regs,
 				tracehook_notify_resume(regs);
 			}
 
+			if (thread_flags & _TIF_TASK_ISOLATION)
+				task_isolation_prepare();
 		}
 
 		local_irq_disable();
 
 		thread_flags = READ_ONCE(current_thread_info()->flags);
+
+		/* Clear task isolation from cached_flags manually. */
+		if ((thread_flags & _TIF_TASK_ISOLATION) &&
+		     task_isolation_ready())
+			thread_flags &= ~_TIF_TASK_ISOLATION;
 
 	} while (thread_flags & _TIF_WORK_MASK);
 
