@@ -23,6 +23,9 @@
 
 #include <soc/nps/common.h>
 
+#define pr_err_with_indent(format, params)	\
+	pr_info("          " format, params)
+
 /* core auxiliary registers */
 #ifdef __ASSEMBLY__
 #define CTOP_AUX_BASE				(-0x800)
@@ -45,6 +48,31 @@
 #define CTOP_AUX_IACK				(CTOP_AUX_BASE + 0x088)
 #define CTOP_AUX_GPA1				(CTOP_AUX_BASE + 0x08C)
 #define CTOP_AUX_UDMC				(CTOP_AUX_BASE + 0x300)
+
+/* CIU registers */
+#define NPS_CIU_WEST_BLOCK_ID			0x8
+#define NPS_CIU_EAST_BLOCK_ID			0x28
+#define NPS_CIU_ERR_CAP_1			0xD0
+#define NPS_CIU_ERR_CAP_2			0xD1
+#define NPS_CIU_ERR_STS				0xD2
+#define NPS_CLUSTER_MIDDLE_CORE_NUMBER		8
+#define ERR_CAP_2_ADDRESS_SHIFT_LEFT_VALUE	2
+#define ERR_CAP_1_SHIFT_LEFT_VALUE		2
+#define ERR_CAP_1_SHIFT_RIGHT_VALUE		30
+
+/* general macros */
+#define NPS_CPU_TO_CORE_NUM(cpu) \
+	({ struct global_id gid; gid.value = cpu; gid.core; })
+
+/* cluster blocks macros */
+
+/*
+ * There are two CIU blocks in a cluster, and so cores 0-7 access the west one
+ * and core 8-15 access the east one
+ */
+#define NPS_CPU_TO_CIU_ID(cpu) \
+	(NPS_CPU_TO_CORE_NUM(cpu) < NPS_CLUSTER_MIDDLE_CORE_NUMBER ? \
+	NPS_CIU_WEST_BLOCK_ID : NPS_CIU_EAST_BLOCK_ID)
 
 /* EZchip core instructions */
 #define CTOP_INST_HWSCHD_WFT_IE12		0x3E6F7344
@@ -182,6 +210,17 @@ struct nps_host_reg_aux_lpc {
 	};
 };
 
+/* CIU registers */
+struct nps_ciu_err_cap_2 {
+	union {
+		struct {
+			u32 msid:8, erc:4, rqtc:4, tt:12,
+		reserved:2, addr:2;
+		};
+		u32 value;
+	};
+};
+
 /* CRG registers */
 #define REG_GEN_PURP_0          nps_host_reg_non_cl(NPS_CRG_BLKID, 0x1BF)
 
@@ -194,6 +233,8 @@ struct nps_host_reg_aux_lpc {
 #define REG_GIM_P_INT_DST_11    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x13B)
 #define REG_GIM_P_INT_DST_25    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x149)
 #define REG_GIM_P_INT_DST_26    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x14A)
+
+int print_memory_exception(void);
 
 #else
 

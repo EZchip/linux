@@ -15,6 +15,9 @@
 #include <linux/file.h>
 #include <asm/arcregs.h>
 #include <asm/irqflags.h>
+#ifdef CONFIG_ARC_PLAT_EZNPS
+#include <plat/ctop.h>
+#endif
 
 /*
  * Common routine to print scratch regs (r0-r12) or callee regs (r13-r25)
@@ -137,9 +140,13 @@ static void show_ecr_verbose(struct pt_regs *regs)
 	} else if (vec == ECR_V_ITLB_MISS) {
 		pr_cont("Insn could not be fetched\n");
 	} else if (vec == ECR_V_MACH_CHK) {
-		pr_cont("%s\n", (cause_code == 0x0) ?
-					"Double Fault" : "Other Fatal Err");
-
+		if (cause_code == 0x0)
+			pr_cont("Double Fault");
+		else
+#ifdef CONFIG_ARC_PLAT_EZNPS
+			if (print_memory_exception())
+#endif
+				pr_cont("Other fatal error\n");
 	} else if (vec == ECR_V_PROTV) {
 		if (cause_code == ECR_C_PROTV_INST_FETCH)
 			pr_cont("Execute from Non-exec Page\n");
