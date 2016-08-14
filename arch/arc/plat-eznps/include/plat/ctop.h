@@ -26,6 +26,11 @@
 #define pr_err_with_indent(format, params)	\
 	pr_info("          " format, params)
 
+/* virtual addresses */
+#define CMEM_BASE			0x57F00000
+#define CMEM_SHARED_BASE		0x57F08000
+#define CMEM_SIZE			(1024 * 16)
+
 /* core auxiliary registers */
 #ifdef __ASSEMBLY__
 #define CTOP_AUX_BASE				(-0x800)
@@ -48,6 +53,11 @@
 #define CTOP_AUX_IACK				(CTOP_AUX_BASE + 0x088)
 #define CTOP_AUX_GPA1				(CTOP_AUX_BASE + 0x08C)
 #define CTOP_AUX_UDMC				(CTOP_AUX_BASE + 0x300)
+#define CTOP_AUX_CMPC				(CTOP_AUX_BASE + 0x304)
+
+/* core auxiliary registers properties */
+#define CTOP_AUX_UDMC_DCAS_MAX_VALUE	5
+#define CTOP_AUX_UDMC_NAT_MAX_VALUE	4
 
 /* CIU registers */
 #define NPS_CIU_WEST_BLOCK_ID			0x8
@@ -104,6 +114,30 @@
 #define NPS_GIM_DBG_LAN_WEST_RX_RDY_LINE	_BITUL(26)
 
 #ifndef __ASSEMBLY__
+/* CMEM size macros */
+
+/*
+ * cmpc is an auxiliary register that contains the number of cmem blocks in
+ * possesion of the core: the nlb field represents the number of 128 byte
+ * blocks, the nmb field represents the number of 64 byte blocks and the nsb
+ * field represents the number of 32 byte blocks
+ */
+#define GET_PRIVATE_CMEM_SIZE(cmpc) \
+	(cmpc.nlb * 128 + cmpc.nmb * 64 + cmpc.nsb * 32)
+
+#define GET_SHARED_CMEM_SIZE(private_size, dcache_size, nat) \
+	(CMEM_SIZE - dcache_size - private_size * nat)
+
+/*
+ * the dcas field in the udmc auxiliary register represents the size of the
+ * data cache in 1KB granularity
+ */
+#define GET_DATA_CACHE_SIZE(udmc) \
+	((1 << (udmc.dcas - 1)) * 1024)
+
+#define GET_ACTIVE_THREADS(udmc) \
+	(1 << udmc.nat)
+
 /* Functional registers definition */
 struct nps_host_reg_mtm_cfg {
 	union {
@@ -171,11 +205,30 @@ struct nps_host_reg_gim_p_int_dst {
 };
 
 /* AUX registers definition */
+struct nps_host_reg_aux_dpc {
+	union {
+		struct {
+			u32 ien:1, men:1, hen:1, reserved:29;
+		};
+		u32 value;
+	};
+};
+
 struct nps_host_reg_aux_udmc {
 	union {
 		struct {
 			u32 dcp:1, cme:1, __reserved:19, nat:3,
 			__reserved2:5, dcas:3;
+		};
+		u32 value;
+	};
+};
+
+struct nps_host_reg_aux_cmpc {
+	union {
+		struct {
+			u32 reserved31:1, nlb:7, reserved23_20:4,
+			nmb:8, reserved11_8:4, nsb:8;
 		};
 		u32 value;
 	};
@@ -234,6 +287,7 @@ struct nps_ciu_err_cap_2 {
 #define REG_GIM_P_INT_DST_25    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x149)
 #define REG_GIM_P_INT_DST_26    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x14A)
 
+int provide_nps_mapping_information(unsigned long);
 int print_memory_exception(void);
 
 #else

@@ -144,6 +144,7 @@ extern unsigned int get_wchan(struct task_struct *p);
 #define USER_KERNEL_GUTTER    (VMALLOC_START - TASK_SIZE)
 
 #ifdef CONFIG_ARC_PLAT_EZNPS
+#define FMT_START	0x58000000
 /* NPS architecture defines special window of 129M in user address space for
  * special memory areas, when accessing this window the MMU do not use TLB.
  * Instead MMU direct the access to:

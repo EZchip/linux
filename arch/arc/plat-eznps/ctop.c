@@ -183,6 +183,118 @@ void dp_save_restore(struct task_struct *prev, struct task_struct *next)
 	write_aux_reg(CTOP_AUX_GPA1, next_task_dp->gpa1);
 }
 
+/*
+ * Provide information about the sizes of the cmem private section,
+ * shared section and data cache section, and also about the access
+ * (whether it was on private section, etc...)
+ */
+static int provide_cmem_sizes_information(unsigned long address,
+		struct nps_host_reg_aux_udmc udmc)
+{
+	struct nps_host_reg_aux_cmpc cmpc;
+	unsigned int private_cmem_size;
+	unsigned int shared_cmem_size;
+	unsigned int data_cache_size;
+	unsigned int active_threads;
+	unsigned int private_cmem_offset = 0;
+	unsigned int shared_cmem_offset = 0;
+
+	cmpc.value = read_aux_reg(CTOP_AUX_CMPC);
+
+	pr_info("invalid CMEM access\n");
+	pr_info("virtual address: 0x%lx\n", address);
+
+	/* parsing the CMEM information for the user */
+	if (address < CMEM_SHARED_BASE) {
+		/* in private area */
+		private_cmem_offset = address - CMEM_BASE;
+		pr_info("private CMEM, offset: 0x%x", private_cmem_offset);
+	} else {
+		/* in shared area */
+		shared_cmem_offset = address - CMEM_SHARED_BASE;
+		pr_info("shared CMEM, offset: 0x%x", shared_cmem_offset);
+	}
+
+	private_cmem_size = GET_PRIVATE_CMEM_SIZE(cmpc);
+	pr_info("private CMEM start address: 0x%x\n", CMEM_BASE);
+	pr_info("private CMEM size: 0x%x bytes\n", private_cmem_size);
+	pr_info("maximum allowed private CMEM access: 0x%x (offset of 0x%x)\n",
+		CMEM_BASE + private_cmem_size, private_cmem_size);
+
+	/* parsing the size of the data cache */
+	if (udmc.dcas == 0)
+		data_cache_size = 0;
+	else if (udmc.dcas <= CTOP_AUX_UDMC_DCAS_MAX_VALUE)
+		data_cache_size = GET_DATA_CACHE_SIZE(udmc);
+	else {
+		pr_err("invalid dcas field in udmc register: %d\n", udmc.dcas);
+
+		/* sending SIGSEGV */
+		return 1;
+	}
+
+	/* parsing the number of active threads */
+	active_threads = GET_ACTIVE_THREADS(udmc);
+	if (udmc.nat > CTOP_AUX_UDMC_NAT_MAX_VALUE) {
+		pr_err("invalid nat field in udmc register: %d\n", udmc.nat);
+
+		/* sending SIGSEGV */
+		return 1;
+	}
+
+	shared_cmem_size = GET_SHARED_CMEM_SIZE(private_cmem_size,
+				data_cache_size,
+				active_threads);
+
+	pr_info("shared CMEM start address: 0x%x\n", CMEM_SHARED_BASE);
+	pr_info("shared CMEM size: 0x%x bytes\n", shared_cmem_size);
+	pr_info("maximum allowed shared CMEM access: 0x%x (offset of 0x%x)\n",
+			CMEM_SHARED_BASE + shared_cmem_size, shared_cmem_size);
+	pr_info("data cache size: 0x%x bytes\n", data_cache_size);
+
+	if (!shared_cmem_offset &&
+		private_cmem_offset >= private_cmem_size)
+		pr_info("offset exceeding private cmem size\n");
+	else if (!private_cmem_offset &&
+		shared_cmem_offset >= shared_cmem_size)
+		pr_info("offset exceeding shared cmem size\n");
+
+	/* sending SIGSEGV */
+	return 1;
+}
+
+/*
+ * Provide information about a tlb miss and returns and integer
+ * indicating in what way to handle this exception from fault.c
+ */
+int provide_nps_mapping_information(unsigned long address)
+{
+	struct nps_host_reg_aux_dpc dpc;
+
+	dpc.value = read_aux_reg(CTOP_AUX_DPC);
+	if (!dpc.men)
+		/*
+		 * dp application memory transactions are not available, so
+		 * no relevant information may be parsed
+		 */
+		return 0;
+
+	if (address < FMT_START) { /* CMEM */
+		struct nps_host_reg_aux_udmc udmc;
+
+		udmc.value = read_aux_reg(CTOP_AUX_UDMC);
+		/*
+		 * if CMEM isn't valid, then we treat this as a
+		 * regular tlb miss
+		 */
+		if (udmc.cme)
+			return provide_cmem_sizes_information(address, udmc);
+	}
+
+	/* nothing to be done */
+	return 0;
+}
+
 #ifdef CONFIG_HAVE_HW_BREAKPOINT
 void plat_update_bp_info(struct perf_event *bp)
 {

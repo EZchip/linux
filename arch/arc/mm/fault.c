@@ -19,6 +19,9 @@
 #include <asm/pgalloc.h>
 #include <asm/mmu.h>
 #include <asm/highmem.h>
+#ifdef CONFIG_ARC_PLAT_EZNPS
+#include <plat/ctop.h>
+#endif
 
 /*
  * kernel virtual address is required to implement vmalloc/pkmap/fixmap
@@ -95,6 +98,14 @@ void do_page_fault(unsigned long address, struct pt_regs *regs)
 		else
 			return;
 	}
+
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	if (address >= STACK_TOP && user_mode(regs)) {
+		ret = provide_nps_mapping_information(address);
+		if (ret)
+			goto bad_area_nosemaphore;
+	}
+#endif
 
 	info.si_code = SEGV_MAPERR;
 
