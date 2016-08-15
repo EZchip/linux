@@ -52,6 +52,7 @@
 #define CTOP_AUX_EFLAGS				(CTOP_AUX_BASE + 0x080)
 #define CTOP_AUX_IACK				(CTOP_AUX_BASE + 0x088)
 #define CTOP_AUX_GPA1				(CTOP_AUX_BASE + 0x08C)
+#define CTOP_FMTP_BASE				(CTOP_AUX_BASE + 0x0C0)
 #define CTOP_AUX_UDMC				(CTOP_AUX_BASE + 0x300)
 #define CTOP_AUX_CMPC				(CTOP_AUX_BASE + 0x304)
 
@@ -139,6 +140,16 @@
 	(1 << udmc.nat)
 
 /* Functional registers definition */
+struct nps_host_reg_fmtp {
+	union {
+		struct {
+			u32 v:1, c:1, uw:1, reserved28_11:11, seq:2,
+			reserved15_4:12, msid:4;
+		};
+		u32 value;
+	};
+};
+
 struct nps_host_reg_mtm_cfg {
 	union {
 		struct {

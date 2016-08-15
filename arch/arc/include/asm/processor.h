@@ -145,6 +145,20 @@ extern unsigned int get_wchan(struct task_struct *p);
 
 #ifdef CONFIG_ARC_PLAT_EZNPS
 #define FMT_START	0x58000000
+#define FMT_SHIFT	23
+#define FMT_SIZE	4
+
+/*
+ * The 4 bits between the 23rd bit and the 26th bit of the virtual address
+ * represent the fmt slot to use for address translation
+ */
+#define FMT_MASK	GENMASK((FMT_SHIFT + FMT_SIZE - 1), FMT_SHIFT)
+
+/*
+ * The fmtp auxiliary register address is in 4 byte granularity
+ */
+#define GET_FMT_AUX_REG_ADDR(address) \
+	((address & FMT_MASK) >> (FMT_SHIFT - 2))
 /* NPS architecture defines special window of 129M in user address space for
  * special memory areas, when accessing this window the MMU do not use TLB.
  * Instead MMU direct the access to:

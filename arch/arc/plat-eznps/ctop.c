@@ -45,6 +45,98 @@ enum {
 	uncorrectable_ecc                               = 15,
 };
 
+enum {
+	private_imem					= 0,
+	stack_imem					= 1,
+	half_cluster_data				= 2,
+	half_cluster_code				= 3,
+	x1_cluster_data					= 4,
+	x1_cluster_code					= 5,
+	x2_cluster_data					= 6,
+	x2_cluster_code					= 7,
+	x4_cluster_data					= 8,
+	x4_cluster_code					= 9,
+	x16_cluster_data				= 10,
+	x16_cluster_code				= 11,
+	all_cluster_data				= 12,
+	all_cluster_code				= 13,
+	global_io_all_cluster_code			= 14,
+	emem						= 15,
+};
+
+/*
+ * Parse the type of the memory space by the msid, which should be lower
+ * than 16
+ */
+static void print_memory_space_type(unsigned int msid)
+{
+	switch (msid) {
+	case private_imem:
+		pr_cont("private ");
+		break;
+	case stack_imem:
+		pr_cont("stack ");
+		break;
+	case half_cluster_data:
+		pr_cont("half cluster data ");
+		break;
+	case half_cluster_code:
+		pr_cont("half cluster code ");
+		break;
+	case x1_cluster_data:
+		pr_cont("x1 cluster data ");
+		break;
+	case x1_cluster_code:
+		pr_cont("x1 cluster code ");
+		break;
+	case x2_cluster_data:
+		pr_cont("x2 cluster data ");
+		break;
+	case x2_cluster_code:
+		pr_cont("x2 cluster code ");
+		break;
+	case x4_cluster_data:
+		pr_cont("x4 cluster data ");
+		break;
+	case x4_cluster_code:
+		pr_cont("x4 cluster code ");
+		break;
+	case x16_cluster_data:
+		pr_cont("x16 cluster data ");
+		break;
+	case x16_cluster_code:
+		pr_cont("x16 cluster code ");
+		break;
+
+	/*
+	 * those memory spaces designed in case the chip
+	 * should have a bigger number of clusters in
+	 * the future
+	*/
+	case all_cluster_data:
+		pr_cont("all cluster data ");
+		break;
+	case all_cluster_code:
+		pr_cont("all cluster code ");
+		break;
+
+	/*
+	 * memory space containing for the buffers of the
+	 * crossbars in the sides of the chip, also for all
+	 * the clusters
+	*/
+	case global_io_all_cluster_code:
+		pr_cont("global IO all cluster code ");
+		break;
+
+	case emem:
+		pr_cont("emem\n");
+	}
+
+	if (msid < emem)
+		pr_cont("imem\n");
+}
+
 /*
  * Print memory information after a machine check exception, by
  * parsing the err_cap_1, err_cap_2 and err_sts registers
@@ -264,6 +356,44 @@ static int provide_cmem_sizes_information(unsigned long address,
 }
 
 /*
+ * Provide information about the fmt slot
+ */
+static int provide_fmt_slot_information(unsigned long address)
+{
+	struct nps_host_reg_fmtp fmtp;
+
+	/* each slot is 4 bytes long */
+	unsigned int slot_offset = GET_FMT_AUX_REG_ADDR(address);
+
+	fmtp.value = read_aux_reg(CTOP_FMTP_BASE + slot_offset);
+
+	/*
+	 * if FMT isn't valid, then we treat this as a
+	 * regular tlb miss
+	 */
+	if (fmtp.v) {
+		pr_info("invalid memory access\n");
+		pr_info("virtual address: 0x%lx\n", address);
+		pr_info("MSID = %d => ", fmtp.msid);
+		print_memory_space_type(fmtp.msid);
+		pr_info("offset: 0x%lx\n", address & GENMASK(FMT_SHIFT - 1, 0));
+
+		/*
+		 * we assume that the fmt slot has write privilege, otherwise
+		 * there's no reason a tlb miss exception would be generated
+		 * when the fmt slot is valid
+		 */
+		pr_info("write from this fmt slot is not allowed\n");
+
+		/* sending SIGSEGV */
+		return 1;
+	}
+
+	/* nothing to be done */
+	return 0;
+}
+
+/*
  * Provide information about a tlb miss and returns and integer
  * indicating in what way to handle this exception from fault.c
  */
@@ -289,7 +419,8 @@ int provide_nps_mapping_information(unsigned long address)
 		 */
 		if (udmc.cme)
 			return provide_cmem_sizes_information(address, udmc);
-	}
+	} else /* FMT SLOTS */
+		return provide_fmt_slot_information(address);
 
 	/* nothing to be done */
 	return 0;
