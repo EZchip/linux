@@ -23,7 +23,9 @@
 
 #include <soc/nps/common.h>
 
-#define pr_err_with_indent(format, params)	\
+#define pr_err_with_indent(str)			\
+	pr_info("          " str)
+#define pr_err_fmt_with_indent(format, params)	\
 	pr_info("          " format, params)
 
 /* virtual addresses */
@@ -63,6 +65,7 @@
 /* CIU registers */
 #define NPS_CIU_WEST_BLOCK_ID			0x8
 #define NPS_CIU_EAST_BLOCK_ID			0x28
+#define NPS_CIU_FMT_MSID_CFG_BASE		0x86
 #define NPS_CIU_ERR_CAP_1			0xD0
 #define NPS_CIU_ERR_CAP_2			0xD1
 #define NPS_CIU_ERR_STS				0xD2
@@ -71,11 +74,24 @@
 #define ERR_CAP_1_SHIFT_LEFT_VALUE		2
 #define ERR_CAP_1_SHIFT_RIGHT_VALUE		30
 
+/* MTM registers */
+#define NPS_MTM_MSID_CFG_BASE			0xA0
+
 /* general macros */
 #define NPS_CPU_TO_CORE_NUM(cpu) \
 	({ struct global_id gid; gid.value = cpu; gid.core; })
 
 /* cluster blocks macros */
+
+/*
+ * There are 16 MTM blocks in a cluster, with the block ids 0x0, 0x1, 0x2, 0x3,
+ * 0x10, 0x11, 0x12, 0x13, 0x20, 0x21, 0x22, 0x23, 0x30, 0x31, 0x32, 0x33
+ * respectively to the cores in the cluster (i.e. core 0 accesses the MTM with
+ * id 0x0, core 5 accesses the MTM with id 0x11 etc...)
+ */
+#define NPS_CPU_TO_MTM_ID(cpu) \
+	(((NPS_CPU_TO_CORE_NUM(cpu) / 4) << 4) + \
+		NPS_CPU_TO_CORE_NUM(cpu) % 4)
 
 /*
  * There are two CIU blocks in a cluster, and so cores 0-7 access the west one
@@ -274,12 +290,55 @@ struct nps_host_reg_aux_lpc {
 	};
 };
 
+/* MTM registers */
+struct nps_mtm_msid_cfg0_1 {
+	union {
+		struct {
+			u32 en:1, reserved30_29:2, wp:1,
+			reserved27_23:5, ims22_20:3, reserved19_12:8,
+			bad11_1:11, reserved0:1;
+		};
+		u32 value;
+	};
+};
+
+struct nps_mtm_msid_cfg2_5 {
+	union {
+		struct {
+			u32 en:1, reserved30_29:2, wp:1,
+			reserved27_24:4, ims:11, reserved12:1,
+			bad:11, reserved0:1;
+		};
+		u32 value;
+	};
+};
+
 /* CIU registers */
 struct nps_ciu_err_cap_2 {
 	union {
 		struct {
-			u32 msid:8, erc:4, rqtc:4, tt:12,
-		reserved:2, addr:2;
+			u32 emem_bits:2, msid:6, erc:4, rqtc:4, tt:12,
+			reserved:2, addr:2;
+		};
+		u32 value;
+	};
+};
+
+struct nps_ciu_fmt_msid_cfg {
+	union {
+		struct {
+			u32 en:1, def_en:1, reserved29:1, wp:1,
+			reserved27_24:4, ims:11, bad:11, reserved0:1;
+		};
+		u32 value;
+	};
+};
+
+struct nps_ciu_fmt_msid_cfg_15 {
+	union {
+		struct {
+			u32 en:1, def_en:1, reserved29:1, wp:1,
+			msid:8, l2_bp:1, gs:3, nt:2, sd:2, size:12;
 		};
 		u32 value;
 	};

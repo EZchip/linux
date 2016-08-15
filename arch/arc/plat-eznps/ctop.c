@@ -64,9 +64,20 @@ enum {
 	emem						= 15,
 };
 
+static void check_en_or_wp(unsigned int en, unsigned int wp)
+{
+	if (!en)
+		pr_err_with_indent("This memory space is not enabled\n");
+
+	if (!wp) {
+		pr_err_with_indent("Write to this memory space is not ");
+		pr_cont("allowed\n");
+	}
+}
+
 /*
- * Parse the type of the memory space by the msid, which should be lower
- * than 16
+ * Parse the type of the memory space by the msid, which should be lower than
+ * 16
  */
 static void print_memory_space_type(unsigned int msid)
 {
@@ -139,7 +150,8 @@ static void print_memory_space_type(unsigned int msid)
 
 /*
  * Print memory information after a machine check exception, by
- * parsing the err_cap_1, err_cap_2 and err_sts registers
+ * parsing the err_cap_1, err_cap_2, err_sts and various other
+ * registers found in the CIU or MTM
  */
 int print_memory_exception(void)
 {
@@ -185,9 +197,60 @@ int print_memory_exception(void)
 	memory_offset |= lsb_memory_offset;
 
 	pr_cont("Memory error exception");
-	pr_err_with_indent("MSID = %d\n", err_cap_2.msid);
-	pr_err_with_indent("Offset: 0x%llx\n", memory_offset);
-	pr_err_with_indent("Error code = 0x%x => ", err_cap_2.erc);
+	pr_err_fmt_with_indent("MSID = %d => ", err_cap_2.msid);
+
+	if (err_cap_2.emem_bits)
+		pr_cont("EMEM memory space with msid index %d\n",
+			err_cap_2.msid);
+	else if (err_cap_2.msid > emem)
+		pr_cont("default msid\n");
+	else {
+		int relevant_block_id;
+		unsigned int mtm_block_id = NPS_CPU_TO_MTM_ID(cpu);
+		struct nps_mtm_msid_cfg0_1 *ms0_1 =
+			(struct nps_mtm_msid_cfg0_1 *) (nps_host_reg(cpu,
+				mtm_block_id,
+				NPS_MTM_MSID_CFG_BASE + err_cap_2.msid));
+
+		struct nps_mtm_msid_cfg2_5 *ms2_5 =
+			(struct nps_mtm_msid_cfg2_5 *) (nps_host_reg(cpu,
+			mtm_block_id,
+			NPS_MTM_MSID_CFG_BASE + err_cap_2.msid));
+
+		struct nps_ciu_fmt_msid_cfg *ms6_14 =
+			(struct nps_ciu_fmt_msid_cfg *) (nps_host_reg(cpu,
+			ciu_block_id, NPS_CIU_FMT_MSID_CFG_BASE -
+				x2_cluster_data + err_cap_2.msid));
+
+		struct nps_ciu_fmt_msid_cfg_15 *ms15 =
+			(struct nps_ciu_fmt_msid_cfg_15 *) (nps_host_reg(cpu,
+			ciu_block_id, NPS_CIU_FMT_MSID_CFG_BASE -
+				x2_cluster_data + err_cap_2.msid));
+
+		/* getting the relevant block id */
+		if (err_cap_2.msid < x2_cluster_data)
+			relevant_block_id = mtm_block_id;
+		else
+			relevant_block_id = ciu_block_id;
+
+		print_memory_space_type(err_cap_2.msid);
+
+		/*
+		 * checking if the memory space is enabled or if the
+		 * write is permitted
+		*/
+		if (err_cap_2.msid < half_cluster_data)
+			check_en_or_wp(ms0_1->en, ms0_1->wp);
+		else if (err_cap_2.msid < x2_cluster_data)
+			check_en_or_wp(ms2_5->en, ms2_5->wp);
+		else if (err_cap_2.msid < emem)
+			check_en_or_wp(ms6_14->en, ms6_14->wp);
+		else
+			check_en_or_wp(ms15->en, ms15->wp);
+	}
+
+	pr_err_fmt_with_indent("Offset: 0x%llx\n", memory_offset);
+	pr_err_fmt_with_indent("Error code = 0x%x => ", err_cap_2.erc);
 
 	/* parsing the error code (reason of the exception) */
 	switch (err_cap_2.erc) {
@@ -216,7 +279,7 @@ int print_memory_exception(void)
 		pr_cont("Unknown error");
 	}
 
-	pr_err_with_indent("Transaction code = 0x%x => ", err_cap_2.rqtc);
+	pr_err_fmt_with_indent("Transaction code = 0x%x => ", err_cap_2.rqtc);
 
 	/* parsing the transaction code */
 	switch (err_cap_2.rqtc) {
