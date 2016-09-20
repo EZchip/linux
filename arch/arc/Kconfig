@@ -381,6 +381,15 @@ config ARC_HUGEPAGE_16M
 
 endchoice
 
+config NUMA
+	bool "NUMA Memory Allocation and Scheduler Support"
+	depends on SMP && DISCONTIGMEM
+	default y if ARC_PLAT_EZNPS
+	---help---
+	  NUMA memory allocation is required for NPS400 processors.
+	  The reason is that node1 in NPS400 is assigned to lower
+	  addresses than node0, which is not typical scenario.
+
 config NODES_SHIFT
 	int "Maximum NUMA Nodes (as a power of 2)"
 	default "0" if !DISCONTIGMEM

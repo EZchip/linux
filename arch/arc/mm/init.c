@@ -108,6 +108,10 @@ void __init setup_arch_memory(void)
 	init_mm.end_data = (unsigned long)_edata;
 	init_mm.brk = (unsigned long)_end;
 
+	node_set_online(0);
+	node_set_state(0, N_MEMORY);
+	node_set_state(0, N_NORMAL_MEMORY);
+
 	/* first page of system - kernel .vector starts here */
 	min_low_pfn = ARCH_PFN_OFFSET;
 
@@ -177,6 +181,8 @@ void __init setup_arch_memory(void)
 	 * populated with normal memory zone while node 1 only has highmem
 	 */
 	node_set_online(1);
+	node_set_state(1, N_MEMORY);
+	node_set_state(1, N_HIGH_MEMORY);
 
 	min_high_pfn = PFN_DOWN(high_mem_start);
 	max_high_pfn = PFN_DOWN(high_mem_start + high_mem_sz);

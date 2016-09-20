@@ -1,6 +1,12 @@
 #ifndef _ASM_ARC_TOPOLOGY_H
 #define _ASM_ARC_TOPOLOGY_H
 
+#ifdef CONFIG_NUMA
+#define cpu_to_node(cpu)	((void)(cpu), 0)
+#define parent_node(node)	(node)
+#define cpumask_of_node(node)	((void)node, cpu_online_mask)
+#endif
+
 #ifdef CONFIG_NPS_CPU_TOPOLOGY
 
 #include <linux/cpumask.h>

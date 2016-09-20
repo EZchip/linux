@@ -538,6 +538,9 @@ static int __init topology_init(void)
 {
 	int cpu;
 
+	for_each_online_node(cpu)
+		register_one_node(cpu);
+
 	for_each_present_cpu(cpu)
 	    register_cpu(&per_cpu(cpu_topo_info, cpu), cpu);
 
