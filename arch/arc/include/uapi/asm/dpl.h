@@ -34,6 +34,8 @@ struct dpl_reg_db {
 #define DPL_GET_AUX_REG	_IOR(DPL_BASE, 2, struct dpl_aux_reg)
 #define DPL_SET_REG_DB	_IOW(DPL_BASE, 3, struct dpl_reg_db)
 #define DPL_GET_REG_DB	_IOR(DPL_BASE, 4, struct dpl_reg_db)
+#define DPL_SET_PCT_REG	_IOW(DPL_BASE, 5, struct dpl_aux_reg)
+#define DPL_GET_PCT_REG	_IOR(DPL_BASE, 6, struct dpl_aux_reg)
 
 
 #endif /* __PLAT_DPL_H_ */
