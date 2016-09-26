@@ -26,6 +26,8 @@
 #include <asm/dpl.h>
 #include <plat/ctop.h>
 
+DEFINE_PER_CPU(pid_t, dp_running_pid);
+
 struct dpl_arg {
 	void __iomem *addr;
 	void *buf;
@@ -254,6 +256,17 @@ static int dpl_open(struct inode *inode, struct file *file)
 		       "process must be binded to a specific cpu\n");
 			return -EPERM;
 	}
+
+	if (smp_processor_id()) /* cpu 0 is not meant for dp processes */
+		if (this_cpu_cmpxchg(dp_running_pid, 0, current->pid))
+			/*
+			 * locking the cpu from running other dp processes by
+			 * setting the current pid to the dp_running_pid cpu
+			 * variable. if the exchange returned a non-zero value,
+			 * it means the exchange failed and another dp process
+			 * is currently running on this cpu
+			 */
+			return -EBUSY;
 
 	return 0;
 }
