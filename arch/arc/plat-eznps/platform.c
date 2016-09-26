@@ -41,6 +41,7 @@ static void __init eznps_configure_gim(void)
 	u32 gim_int_lines;
 	struct nps_host_reg_gim_p_int_dst gim_p_int_dst = {.value = 0};
 
+	/* adding the low lines to the interrupt lines to set polarity */
 	gim_int_lines = NPS_GIM_UART_LINE;
 	gim_int_lines |= NPS_GIM_DBG_LAN_EAST_TX_DONE_LINE;
 	gim_int_lines |= NPS_GIM_DBG_LAN_EAST_RX_RDY_LINE;
@@ -75,11 +76,20 @@ static void __init eznps_configure_gim(void)
 	iowrite32be(gim_p_int_dst.value, REG_GIM_P_INT_DST_25);
 	iowrite32be(gim_p_int_dst.value, REG_GIM_P_INT_DST_26);
 
+	/* adding watchdog interrupt to the interrupt lines */
+	gim_int_lines |= NPS_GIM_WDOG_LINE;
+
 	/*
 	 * CTOP IRQ lines should be defined
 	 * as blocking in GIM
 	*/
 	iowrite32be(gim_int_lines, REG_GIM_P_INT_BLK_0);
+
+	/* watchdog interrupt should be sent to the interrupt out line */
+	gim_p_int_dst.value = 0;
+	gim_p_int_dst.int_out_en = 1;
+	iowrite32be(gim_p_int_dst.value, REG_GIM_P_INT_DST_0);
+	iowrite32be(1, REG_GIM_IO_INT_EN);
 
 	/* enable CTOP IRQ lines in GIM */
 	iowrite32be(gim_int_lines, REG_GIM_P_INT_EN_0);

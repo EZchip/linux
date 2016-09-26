@@ -124,6 +124,7 @@
 #define NPS_GIM_BLKID				0x5C0
 
 /* GIM registers and fields*/
+#define NPS_GIM_WDOG_LINE			_BITUL(0)
 #define NPS_GIM_UART_LINE			_BITUL(7)
 #define NPS_GIM_DBG_LAN_EAST_TX_DONE_LINE	_BITUL(10)
 #define NPS_GIM_DBG_LAN_EAST_RX_RDY_LINE	_BITUL(11)
@@ -352,10 +353,12 @@ struct nps_ciu_fmt_msid_cfg_15 {
 #define REG_GIM_P_INT_POL_0     nps_host_reg_non_cl(NPS_GIM_BLKID, 0x110)
 #define REG_GIM_P_INT_SENS_0    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x114)
 #define REG_GIM_P_INT_BLK_0     nps_host_reg_non_cl(NPS_GIM_BLKID, 0x118)
+#define REG_GIM_P_INT_DST_0     nps_host_reg_non_cl(NPS_GIM_BLKID, 0x130)
 #define REG_GIM_P_INT_DST_10    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x13A)
 #define REG_GIM_P_INT_DST_11    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x13B)
 #define REG_GIM_P_INT_DST_25    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x149)
 #define REG_GIM_P_INT_DST_26    nps_host_reg_non_cl(NPS_GIM_BLKID, 0x14A)
+#define REG_GIM_IO_INT_EN       nps_host_reg_non_cl(NPS_GIM_BLKID, 0x800)
 
 int provide_nps_mapping_information(unsigned long);
 int print_memory_exception(void);
