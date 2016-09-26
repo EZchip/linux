@@ -328,7 +328,9 @@ PTE_BIT_FUNC(mkexec,	|= (_PAGE_EXECUTE));
 PTE_BIT_FUNC(mkspecial,	|= (_PAGE_SPECIAL));
 PTE_BIT_FUNC(mkhuge,	|= (_PAGE_HW_SZ));
 
+#ifndef CONFIG_ARC_PLAT_EZNPS
 #define __HAVE_ARCH_PTE_SPECIAL
+#endif /* CONFIG_ARC_PLAT_EZNPS */
 
 static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 {
