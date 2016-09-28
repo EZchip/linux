@@ -73,6 +73,42 @@ static void nps400_irq_unmask(struct irq_data *irqd)
 	write_aux_reg(AUX_IENABLE, ienb);
 }
 
+static void nps400_irq_mask_global_from_ipi(void *arg)
+{
+	nps400_irq_mask((struct irq_data *) arg);
+}
+
+static void nps400_irq_unmask_global_from_ipi(void *arg)
+{
+	nps400_irq_unmask((struct irq_data *) arg);
+}
+
+/*
+ * cpu 0 is the cpu that handles network or serial interrupts, so sending
+ * him an IPI to do the mask/unmask
+ */
+static struct call_single_data nps400_irq_mask_single_data = {
+	.func		= nps400_irq_mask_global_from_ipi,
+	.flags		= 0,
+};
+
+static struct call_single_data nps400_irq_unmask_single_data = {
+	.func		= nps400_irq_unmask_global_from_ipi,
+	.flags		= 0,
+};
+
+static void nps400_irq_mask_global(struct irq_data *irqd)
+{
+	nps400_irq_mask_single_data.info = (void *) irqd;
+	smp_call_function_single_async(0, &nps400_irq_mask_single_data);
+}
+
+static void nps400_irq_unmask_global(struct irq_data *irqd)
+{
+	nps400_irq_unmask_single_data.info = (void *) irqd;
+	smp_call_function_single_async(0, &nps400_irq_unmask_single_data);
+}
+
 static void nps400_irq_eoi_global(struct irq_data *irqd)
 {
 	unsigned int __maybe_unused irq = irqd_to_hwirq(irqd);
@@ -92,10 +128,10 @@ static void nps400_irq_ack(struct irq_data *irqd)
 	write_aux_reg(CTOP_AUX_IACK, 1 << irq);
 }
 
-static struct irq_chip nps400_irq_chip_fasteoi = {
+static struct irq_chip nps400_irq_chip_global = {
 	.name		= "NPS400 IC Global",
-	.irq_mask	= nps400_irq_mask,
-	.irq_unmask	= nps400_irq_unmask,
+	.irq_mask	= nps400_irq_mask_global,
+	.irq_unmask	= nps400_irq_unmask_global,
 	.irq_eoi	= nps400_irq_eoi_global,
 };
 
@@ -119,8 +155,9 @@ static int nps400_irq_map(struct irq_domain *d, unsigned int virq,
 					 handle_percpu_devid_irq);
 		break;
 	default:
-		irq_set_chip_and_handler(virq, &nps400_irq_chip_fasteoi,
-					 handle_fasteoi_irq);
+		/* serial and network interrupt cases */
+		irq_set_chip_and_handler(virq, &nps400_irq_chip_global,
+					handle_fasteoi_irq);
 		break;
 	}
 
