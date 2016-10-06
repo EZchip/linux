@@ -26,6 +26,10 @@
 #define NPS_DEFAULT_MSID	0x34
 #define NPS_MTM_CPU_CFG		0x90
 
+#ifdef CONFIG_NO_HZ_FULL
+extern cpumask_var_t housekeeping_mask;
+#endif /* CONFIG_NO_HZ_FULL */
+
 struct cpumask _cpu_possible_mask;
 static char smp_cpuinfo_buf[128] = {"Extn [EZNPS-SMP]\t: On\n"};
 
@@ -144,6 +148,16 @@ static void eznps_init_per_cpu(int cpu)
 
 	eznps_init_core(cpu);
 	mtm_enable_core(cpu);
+
+#ifdef CONFIG_NO_HZ_FULL
+	/*
+	 * set nohz_full cpus as housekeeping to enable them to order timers,
+	 * otherwise cpu 0 will be overloaded with timers when using usleep
+	 * with a large amount of cpus
+	 */
+	if (cpu)
+		cpumask_set_cpu(cpu, housekeeping_mask);
+#endif /* CONFIG_NO_HZ_FULL */
 }
 
 struct plat_smp_ops plat_smp_ops = {
