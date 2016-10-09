@@ -39,7 +39,6 @@
 #include <soc/nps/common.h>
 
 #define NPS_NR_CPU_IRQS 8  /* number of interrupt lines of NPS400 CPU */
-#define NPS_TIMER0_IRQ  3
 
 /*
  * NPS400 core includes an Interrupt Controller (IC) support.

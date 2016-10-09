@@ -37,6 +37,7 @@
 #include <linux/cpu.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
+#include <soc/nps/common.h>
 #include <asm/irq.h>
 #include <asm/arcregs.h>
 
@@ -248,11 +249,53 @@ static void arc_timer_event_setup(unsigned int cycles)
 	write_aux_reg(ARC_REG_TIMER0_CTRL, TIMER_CTRL_IE | TIMER_CTRL_NH);
 }
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+static void arc_timer_mask(void)
+{
+	unsigned int ienb;
+
+	ienb = read_aux_reg(AUX_IENABLE);
+	ienb &= ~(1 << NPS_TIMER0_IRQ);
+	write_aux_reg(AUX_IENABLE, ienb);
+}
+
+static void arc_timer_unmask(void)
+{
+	unsigned int ienb;
+
+	ienb = read_aux_reg(AUX_IENABLE);
+	ienb |= (1 << NPS_TIMER0_IRQ);
+	write_aux_reg(AUX_IENABLE, ienb);
+}
+
+/*
+ * Whenever anyone tries to change modes, we just mask interrupts
+ * and wait for the next event to get set.
+ */
+static int arc_clkevent_timer_shutdown(struct clock_event_device *dev)
+{
+	arc_timer_mask();
+
+	return 0;
+}
+
+static int arc_clkevent_set_oneshot(struct clock_event_device *dev)
+{
+	write_aux_reg(ARC_REG_TIMER0_CTRL, TIMER_CTRL_NH);
+	arc_clkevent_timer_shutdown(dev);
+
+	return 0;
+}
+#endif
 
 static int arc_clkevent_set_next_event(unsigned long delta,
 				       struct clock_event_device *dev)
 {
 	arc_timer_event_setup(delta);
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	arc_timer_unmask();
+#endif
+
 	return 0;
 }
 
@@ -273,6 +316,15 @@ static DEFINE_PER_CPU(struct clock_event_device, arc_clockevent_device) = {
 	.rating			= 300,
 	.set_next_event		= arc_clkevent_set_next_event,
 	.set_state_periodic	= arc_clkevent_set_periodic,
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	/* hardwired, no need for resources */
+	.irq				= NPS_TIMER0_IRQ,
+
+	.set_state_oneshot		= arc_clkevent_set_oneshot,
+	.set_state_oneshot_stopped	= arc_clkevent_timer_shutdown,
+	.set_state_shutdown		= arc_clkevent_timer_shutdown,
+	.tick_resume			= arc_clkevent_timer_shutdown,
+#endif
 };
 
 static irqreturn_t timer_irq_handler(int irq, void *dev_id)
