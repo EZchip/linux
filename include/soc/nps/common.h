@@ -37,6 +37,8 @@
 #define NPS_IPI_IRQ					5
 #endif
 
+#define NPS_TIMER0_IRQ					3
+
 #define NPS_HOST_REG_BASE			0xF6000000
 
 #define NPS_MSU_BLKID				0x018
