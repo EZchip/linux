@@ -504,12 +504,15 @@ static int __bitmap_parselist(const char *buf, unsigned int buflen,
 		int is_user, unsigned long *maskp,
 		int nmaskbits)
 {
-	unsigned a, b;
+	unsigned a, b, old_a, old_b, mod_val, mod_a, mod_b;
 	int c, old_c, totaldigits;
 	const char __user __force *ubuf = (const char __user __force *)buf;
 	int at_start, in_range;
 
 	totaldigits = c = 0;
+        old_a = old_b = 0;
+        mod_val = mod_a = mod_b = 0;
+
 	bitmap_zero(maskp, nmaskbits);
 	do {
 		at_start = 1;
@@ -540,6 +543,23 @@ static int __bitmap_parselist(const char *buf, unsigned int buflen,
 			if (c == '\0' || c == ',')
 				break;
 
+                        if (c == '=') {
+                               mod_val = a;
+                               at_start = 1;
+                               in_range = 0;
+                               a = b = 0;
+                               continue;
+                        }
+
+                        if (c == '%') {
+                               old_a = a;
+                               old_b = b;
+                               at_start = 1;
+                               in_range = 0;
+                               a = b = 0;
+                               continue;
+                        }
+
 			if (c == '-') {
 				if (at_start || in_range)
 					return -EINVAL;
@@ -557,15 +577,31 @@ static int __bitmap_parselist(const char *buf, unsigned int buflen,
 			at_start = 0;
 			totaldigits++;
 		}
-		if (!(a <= b))
+
+                if (mod_val) {
+                       mod_a = a;
+                       mod_b = b;
+                       a = old_a;
+                       b = old_b;
+                       old_a = old_b = 0;
+                }
+
+                if (!(a <= b) || !(mod_a <= mod_b))
 			return -EINVAL;
-		if (b >= nmaskbits)
+		if (b >= nmaskbits || (mod_val && (mod_b >= mod_val)))	
 			return -ERANGE;
 		if (!at_start) {
 			while (a <= b) {
+                        	if (mod_val) {
+                                	unsigned rem = a % mod_val;
+                                       	if (rem >= mod_a && rem <= mod_b)
+                                        	set_bit(a, maskp);
+                               	}
+                               	else
 				set_bit(a, maskp);
 				a++;
 			}
+			mod_val = mod_a = mod_b = 0;
 		}
 	} while (buflen && c == ',');
 	return 0;

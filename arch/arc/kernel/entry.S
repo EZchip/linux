@@ -337,7 +337,29 @@ resume_user_mode_begin:
 
 	mov  r0, sp
 	GET_CURR_THR_INFO_FLAGS   r1
+
+	; Normal Trap/IRQ entry only saves Scratch (caller-saved) regs
+	; in pt_reg since the "C" ABI (kernel code) will automatically
+	; save/restore callee-saved regs.
+	;
+	; However, here we need to explicitly save callee regs because
+	; (i)  If this signal causes coredump - full regfile needed
+	; (ii) If signal is SIGTRAP/SIGSTOP, task is being traced thus
+	;      tracer might call PEEKUSR(CALLEE reg)
+	;
+	; NOTE: SP will grow up by size of CALLEE Reg-File
+	SAVE_CALLEE_SAVED_USER		; clobbers r12
+
+	; save location of saved Callee Regs @ thread_struct->callee
+	GET_CURR_TASK_FIELD_PTR   TASK_THREAD, r10
+	st  sp, [r10, THREAD_CALLEE_REG]
+
 	bl     @prepare_exit_to_usermode
+
+	; Ideally we want to discard the Callee reg above, however if this was
+	; a tracing signal, tracer could have done a POKEUSR(CALLEE reg)
+	RESTORE_CALLEE_SAVED_USER
+
 	b      .Lrestore_regs
 
 resume_kernel_mode:

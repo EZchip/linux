@@ -41,6 +41,9 @@
 #include <asm/cacheflush.h>
 #include <asm/dpl.h>
 #include <plat/ctop.h>
+#include <plat/perf_event.h>
+
+DEFINE_PER_CPU(pid_t, dp_running_pid);
 
 struct dpl_arg {
 	void __iomem *addr;
@@ -72,6 +75,17 @@ static bool dpl_is_valid_dp_address(void *reg_db_address)
 		return false;
 
 	return true;
+}
+
+static bool dpl_is_valid_pct_address(void *pct_reg_address)
+{
+	unsigned int addr = (unsigned int) pct_reg_address;
+
+	return ((addr == NPS_REG_PCT_COUNT0) ||
+		(addr == NPS_REG_PCT_COUNT1) ||
+		(addr == NPS_REG_PCT_CONFIG0) ||
+		(addr == NPS_REG_PCT_CONFIG1) ||
+		(addr == NPS_REG_PCT_CONTROL));
 }
 
 static long dpl_set_aux(struct dpl_aux_reg __user *user_reg)
@@ -138,6 +152,38 @@ static long dpl_get_reg_db(struct dpl_reg_db __user *user_reg)
 	return 0;
 }
 
+static long dpl_set_pct_reg(struct dpl_aux_reg __user *user_reg)
+{
+	struct dpl_aux_reg kernel_reg;
+
+	if (copy_from_user(&kernel_reg, user_reg, sizeof(struct dpl_aux_reg)))
+		return -EFAULT;
+
+	if (!dpl_is_valid_pct_address((void *)kernel_reg.address))
+		return -EFAULT;
+
+	write_aux_reg(kernel_reg.address, kernel_reg.value);
+
+	return 0;
+}
+
+static long dpl_get_pct_reg(struct dpl_aux_reg __user *user_reg)
+{
+	struct dpl_aux_reg kernel_reg;
+
+	if (copy_from_user(&kernel_reg, user_reg, sizeof(struct dpl_aux_reg)))
+			return -EFAULT;
+
+	if (!dpl_is_valid_pct_address((void *)kernel_reg.address))
+		return -EFAULT;
+
+	kernel_reg.value = read_aux_reg(kernel_reg.address);
+	if (copy_to_user(user_reg, &kernel_reg, sizeof(struct dpl_aux_reg)))
+		return -EFAULT;
+
+	return 0;
+}
+
 static long dpl_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	long ret_val = 0;
@@ -157,6 +203,14 @@ static long dpl_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	case DPL_GET_REG_DB:
 		ret_val = dpl_get_reg_db((struct dpl_reg_db __user *)arg);
+		break;
+
+	case DPL_SET_PCT_REG:
+		ret_val = dpl_set_pct_reg((struct dpl_aux_reg __user *)arg);
+		break;
+
+	case DPL_GET_PCT_REG:
+		ret_val = dpl_get_pct_reg((struct dpl_aux_reg __user *)arg);
 		break;
 
 	default:
@@ -269,6 +323,17 @@ static int dpl_open(struct inode *inode, struct file *file)
 			"process must be binded to a specific cpu\n");
 		return -EPERM;
 	}
+
+	if (smp_processor_id()) /* cpu 0 is not meant for dp processes */
+		if (this_cpu_cmpxchg(dp_running_pid, 0, current->pid))
+			/*
+			 * locking the cpu from running other dp processes by
+			 * setting the current pid to the dp_running_pid cpu
+			 * variable. if the exchange returned a non-zero value,
+			 * it means the exchange failed and another dp process
+			 * is currently running on this cpu
+			 */
+			return -EBUSY;
 
 	return 0;
 }

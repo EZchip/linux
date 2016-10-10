@@ -52,8 +52,6 @@ static int genregs_get(struct task_struct *target,
 			offsetof(struct user_regs_struct, LOC) + 4);
 
 	REG_O_ZERO(pad);
-	REG_O_ONE(scratch.eflags, &ptregs->eflags);
-	REG_O_ONE(scratch.gpa1, &ptregs->gpa1);
 	REG_O_ONE(scratch.bta, &ptregs->bta);
 	REG_O_ONE(scratch.lp_start, &ptregs->lp_start);
 	REG_O_ONE(scratch.lp_end, &ptregs->lp_end);
@@ -142,8 +140,6 @@ static int genregs_set(struct task_struct *target,
 
 	REG_IGNORE_ONE(pad);
 
-	REG_IN_ONE(scratch.eflags, &ptregs->eflags);
-	REG_IN_ONE(scratch.gpa1, &ptregs->gpa1);
 	REG_IN_ONE(scratch.bta, &ptregs->bta);
 	REG_IN_ONE(scratch.lp_start, &ptregs->lp_start);
 	REG_IN_ONE(scratch.lp_end, &ptregs->lp_end);

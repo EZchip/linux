@@ -410,87 +410,17 @@ static inline bool timer_isolation_ready(void)
 	return !task_isolation_enabled() || _timer_isolation_ready();
 }
 
-void save_callee (struct pt_regs *regs, struct callee_regs *cregs)
-{
-	struct task_struct *tsk = current;
-
-	__asm__ __volatile__(
-#ifdef CONFIG_ARC_CURR_IN_REG
-	"st    %1, [%0, 0]     \n\t"
-#else
-	"st    r25, [%0, 0]    \n\t"
-#endif
-	"st    r24, [%0, 4]    \n\t"
-	"st    r23, [%0, 8]    \n\t"
-	"st    r22, [%0, 12]   \n\t"
-	"st    r21, [%0, 16]   \n\t"
-	"st    r20, [%0, 20]   \n\t"
-	"st    r19, [%0, 24]   \n\t"
-	"st    r18, [%0, 28]   \n\t"
-	"st    r17, [%0, 32]   \n\t"
-	"st    r16, [%0, 36]   \n\t"
-	"st    r15, [%0, 40]   \n\t"
-	"st    r14, [%0, 44]   \n\t"
-	"st    r13, [%0, 48]   \n\t"
-	:
-	: "r"(cregs)
-#ifdef CONFIG_ARC_CURR_IN_REG
-	, "r"(regs->user_r25)
-#endif
-	: "memory"
-	);
-
-	tsk->thread.callee_reg = (unsigned long)cregs;
-}
-
-void restore_callee (struct pt_regs *regs, struct callee_regs *cregs)
-{
-	__asm__ __volatile__(
-#ifdef CONFIG_ARC_CURR_IN_REG
-	"ld    r13, [%0, 0]     \n\t"
-	"st    r13, [%1, 0]     \n\t"
-#else
-	"ld    r25, [%0, 0]    \n\t"
-#endif
-	"ld    r24, [%0, 4]    \n\t"
-	"ld    r23, [%0, 8]    \n\t"
-	"ld    r22, [%0, 12]   \n\t"
-	"ld    r21, [%0, 16]   \n\t"
-	"ld    r20, [%0, 20]   \n\t"
-	"ld    r19, [%0, 24]   \n\t"
-	"ld    r18, [%0, 28]   \n\t"
-	"ld    r17, [%0, 32]   \n\t"
-	"ld    r16, [%0, 36]   \n\t"
-	"ld    r15, [%0, 40]   \n\t"
-	"ld    r14, [%0, 44]   \n\t"
-	"ld    r13, [%0, 48]   \n\t"
-	:
-	: "r"(cregs)
-#ifdef CONFIG_ARC_CURR_IN_REG
-	 ,"r"(&regs->user_r25)
-#endif
-	: "r13", "r14", "r15", "r16", "r17",
-	  "r20", "r21", "r22", "r23", "r24",
-	  "r25", "memory"
-	);
-}
-
 asmlinkage void prepare_exit_to_usermode(struct pt_regs *regs,
 					 unsigned int thread_flags)
 {
-	struct callee_regs cregs;
-
 	do {
+		if (thread_flags & _TIF_NEED_RESCHED) {
+			schedule();
+		} else {
 		local_irq_enable();
 
-		if (thread_flags & _TIF_NEED_RESCHED)
-			schedule();
-
-		if (thread_flags & _TIF_SIGPENDING) {
-			save_callee(regs, &cregs);
+			if (thread_flags & _TIF_SIGPENDING)
 			do_signal(regs);
-			restore_callee(regs, &cregs);
-		}
 
 		if (thread_flags & _TIF_NOTIFY_RESUME) {
 			clear_thread_flag(TIF_NOTIFY_RESUME);
@@ -498,6 +428,7 @@ asmlinkage void prepare_exit_to_usermode(struct pt_regs *regs,
 		}
 
 		task_isolation_enter();
+		}
 
 		local_irq_disable();
 

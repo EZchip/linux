@@ -48,7 +48,7 @@
 	};
 	
 	chosen {
-		bootargs = "earlycon=uart8250,mmio32be,0xf7209000,115200n8 console=ttyS0,115200n8 rcupdate.rcu_cpu_stall_suppress=1";
+		bootargs = "earlycon=uart8250,mmio32be,0xf7209000,115200n8 console=ttyS0,115200n8";
 	};
 
 	memory {
@@ -148,6 +148,12 @@
 			interrupts = <7>;
 			/* Filled in by U-Boot */
 			mac-address = [ 00 00 00 00 00 00 ];
+		};
+
+		wdt@f7200414 {
+			compatible = "ezchip,nps-wdt";
+			reg = <0xf7200414 0x18>;
+			clock-frequency = <800000000>;
 		};
 
 		arcpmu0: pmu {

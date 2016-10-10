@@ -56,33 +56,6 @@ struct global_id {
 
 #define ARC_PLAT_START_PC_ALIGN				1024
 
-/* CIU registers */
-#define NPS_CIU_WEST_BLOCK_ID				0x8
-#define NPS_CIU_EAST_BLOCK_ID				0x28
-#define NPS_CIU_ERR_CAP_1				0xD0
-#define NPS_CIU_ERR_CAP_2				0xD1
-#define NPS_CIU_ERR_STS					0xD2
-#define NPS_CLUSTER_MIDDLE_CORE_NUMBER			8
-#define ERR_CAP_2_RQTC_POST_WRITE			0x0
-#define ERR_CAP_2_RQTC_NON_POST_WRITE			0x1
-#define ERR_CAP_2_RQTC_POST_WIDE_WRITE			0x2
-#define ERR_CAP_2_RQTC_NON_POST_WIDE_WRITE		0x3
-#define ERR_CAP_2_RQTC_BURST_WRITE			0x4
-#define ERR_CAP_2_RQTC_BURST_WRITE_SAFE			0x5
-#define ERR_CAP_2_RQTC_ADDR_BASE_MAINTENANCE		0x7
-#define ERR_CAP_2_RQTC_SINGLE_READ			0x8
-#define ERR_CAP_2_RQTC_BURST_READ			0xC
-#define ERR_CAP_2_RQTC_BURST_L2_READ			0xD
-#define ERR_CAP_2_ERC_INVALID_MSID			0x0
-#define ERR_CAP_2_ERC_ADDR_RANGE_VIOLATION		0x1
-#define ERR_CAP_2_ERC_ALIGNMENT_SIZE			0x2
-#define ERR_CAP_2_ERC_BAD_TRANSACTION			0x4
-#define	ERR_CAP_2_ERC_ILLEGAL_FIELD_VALUE		0x5
-#define ERR_CAP_2_ERC_WRITE_PRIVILAGE_VIOLATION		0x6
-#define ERR_CAP_2_ERC_UNCORRECTABLE_ECC			0xF
-#define ERR_CAP_2_ADDRESS_SHIFT_LEFT_VALUE		34
-#define ERR_CAP_1_SHIFT_LEFT_VALUE			2
-
 #define NPS_MSU_BLKID					0x18
 #define NPS_MSU_EN_CFG					0x80
 #define NPS_MSU_TICK_LOW				0xC8
@@ -136,16 +109,6 @@ struct nps_host_reg_address {
 		struct {
 			u32	base:8,	cl_x:4, cl_y:4,
 				blkid:6, reg:8, __reserved:2;
-		};
-		u32 value;
-	};
-};
-
-struct nps_ciu_err_cap_2 {
-	union {
-		struct {
-			u32 msid:8, erc:4, rqtc:4, tt:12,
-			reserved:2, addr:2;
 		};
 		u32 value;
 	};
