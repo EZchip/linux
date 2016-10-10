@@ -23,6 +23,7 @@
 	interrupt-parent = <&intc>;
 	present-cpus = "0-1,16-17";
 	possible-cpus = "0-4095";
+	init-possible-as-present = <1>;
 
 	aliases {
 		ethernet0 = &gmac0;
@@ -34,7 +35,7 @@
 
 	memory {
 		device_type = "memory";
-		reg = <0x80000000 0x20000000>;  /* 512M */
+		reg = <0x80002000 0x20000000>;	/* 512M*/
 	};
 
 	clocks {
@@ -66,7 +67,7 @@
 		};
 
 		timer1: timer_clksrc {
-			compatible = "ezchip,nps400-timer";
+			compatible = "ezchip,nps400-timer1";
 			clocks = <&sysclk>;
 			clock-names="sysclk";
 		};
@@ -89,7 +90,11 @@
 			reg = <0xf7470000 0x1940>;
 			interrupts = <7>;
 			/* Filled in by U-Boot */
-			mac-address = [ 00 C0 00 F0 04 03 ];
+			mac-address = [ 00 00 00 00 00 00 ];
+		};
+
+		arcpmu0: pmu {
+			compatible = "ezchip,nps-pct";
 		};
 	};
 };

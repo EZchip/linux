@@ -1,0 +1,151 @@
+/*
+ * Copyright(c) 2015 EZchip Technologies.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ */
+
+/dts-v1/;
+
+/ {
+	compatible = "ezchip,arc-nps";
+	#address-cells = <1>;
+	#size-cells = <1>;
+	interrupt-parent = <&intc>;
+	present-cpus = "0,16-4095";
+	possible-cpus = "0-4095";
+	init-possible-as-present = <1>;
+
+	aliases {
+		ethernet0 = &gmac0;
+	};
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32be,0xf7209000,115200n8 console=ttyS0,115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x80000000 0x76000000
+			0x00000000 0x80000000>;    /* 1.88G, 2G */
+	};
+
+	clocks {
+		sysclk: sysclk {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <800000000>;
+		};
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* child and parent address space 1:1 mapped */
+		ranges;
+
+		intc: interrupt-controller {
+			compatible = "ezchip,nps400-ic";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
+		timer0: timer_clkevt {
+			compatible = "ezchip,nps400-timer0";
+			interrupts = <3>;
+			clocks = <&sysclk>;
+		};
+
+		timer1: timer_clksrc {
+			compatible = "ezchip,nps400-timer1";
+			clocks = <&sysclk>;
+			clock-names="sysclk";
+		};
+
+		uart@f7209000 {
+			compatible = "snps,dw-apb-uart";
+			device_type = "serial";
+			reg = <0xf7209000 0x100>;
+			interrupts = <6>;
+			clocks = <&sysclk>;
+			clock-names="baudclk";
+			baud = <115200>;
+			reg-shift = <2>;
+			reg-io-width = <4>;
+			native-endian;
+		};
+
+		gmac0: ethernet@f7070000 {
+			compatible = "ezchip,nps-mgt-enet";
+			reg = <0xf7070000 0x1940>;
+			interrupts = <7>;
+			/* Filled in by U-Boot */
+			mac-address = [ 00 00 00 00 00 00 ];
+		};
+
+		spi@f7208c00 {
+			compatible = "snps,dw-apb-ssi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0xf7208c00 0x100>;
+			interrupts = <0>;
+			clocks = <&sysclk>;
+			num-cs = <1>;
+
+			flash@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "s25fl256s1";
+				reg = <0>;
+				spi-max-frequency = <25000000>;
+				spi-cpol;
+				spi-cpha;
+
+				partition@0 {
+					label = "uImage";
+					reg = <0x000000 0xe70000>;
+				};
+
+				partition@1 {
+					label = "u-boot";
+					reg = <0xe70000 0x80000>;
+				};
+
+				partition@2 {
+					label = "dtb";
+					reg = <0xef0000 0x10000>;
+				};
+
+				partition@3 {
+					label = "btl";
+					reg = <0xf00000 0x80000>;
+				};
+
+				partition@4 {
+					label = "btl-redundancy";
+					reg = <0xf80000 0x70000>;
+				};
+
+				partition@5 {
+					label = "u-boot-env";
+					reg = <0xff0000 0x10000>;
+				};
+			};
+		};
+
+		arcpmu0: pmu {
+			compatible = "ezchip,nps-pct";
+		};
+	};
+};
