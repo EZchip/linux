@@ -250,6 +250,13 @@ trap_with_param:
 
 ENTRY(EV_Trap)
 
+#ifdef CONFIG_ARC_PLAT_EZNPS
+	; Before doing anything, check if this trap was made by
+	; ret_from_exception in order to revert the fake rtie and
+	; switch back to CPU Exception context
+	TRY_COMPLETE_FAKE_REVERT
+#endif
+
 	EXCEPTION_PROLOGUE
 
 	;============ TRAP 1   :breakpoints

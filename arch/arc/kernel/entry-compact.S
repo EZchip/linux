@@ -112,8 +112,13 @@ VECTOR   EV_TLBProtV             ; 0x118, Protection Violation  (0x23)
 VECTOR   EV_PrivilegeV           ; 0x120, Privilege Violation   (0x24)
 VECTOR   EV_Trap                 ; 0x128, Trap exception        (0x25)
 VECTOR   EV_Extension            ; 0x130, Extn Intruction Excp  (0x26)
+#if defined(CONFIG_ARC_PLAT_EZNPS) && defined(CONFIG_PERF_EVENTS)
+VECTOR   EV_PerfMon              ; 0x138, Perf Monitor Excp     (0x27)
 
+.rept   23
+#else
 .rept   24
+#endif
 VECTOR   reserved                ; Reserved Exceptions
 .endr
 
@@ -299,6 +304,26 @@ ENTRY(EV_TLBProtV)
 
 END(EV_TLBProtV)
 
+#if defined(CONFIG_ARC_PLAT_EZNPS) && defined(CONFIG_PERF_EVENTS)
+; ---------------------------------------------
+; Perf Monitor Exception Handler
+; ---------------------------------------------
+ENTRY(EV_PerfMon)
+	EXCEPTION_PROLOGUE
+
+	mov r0, sp
+
+	bl  do_perfmon
+
+	; not using ret_from_exception to prevent invoking preemption and
+	; enabling interrupts which may lead to a double fault since we're
+	; not faking
+	EXCEPTION_EPILOGUE
+
+	rtie
+END(EV_PerfMon)
+#endif /* CONFIG_ARC_PLAT_EZNPS && CONFIG_PERF_EVENTS */
+
 ; Wrapper for Linux page fault handler called from EV_TLBMiss*
 ; Very similar to ProtV handler case (6a) above, but avoids the extra checks
 ; for Misaligned access
@@ -397,6 +422,13 @@ debug_marker_l1:
 
 .Lexcep_or_pure_K_ret:
 
+#if defined(CONFIG_ARC_PLAT_EZNPS) && defined(CONFIG_PERF_EVENTS)
+	; switch back to CPU Exception context mode before restoring regs
+	; to prevent the registers (i.e eret) from being overwritten
+	; by another exception (i.e perf overflow exception)
+	trap_s ECR_P_TRAP_FAKE_REVERT
+ret_as_exception:
+#endif /* CONFIG_ARC_PLAT_EZNPS && CONFIG_PERF_EVENTS */
 	;this case is for syscalls or Exceptions or pure kernel mode
 
 	EXCEPTION_EPILOGUE
