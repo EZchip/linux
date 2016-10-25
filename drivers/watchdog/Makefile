@@ -28,6 +28,9 @@ obj-$(CONFIG_USBPCWATCHDOG) += pcwd_usb.o
 
 # ALPHA Architecture
 
+# ARC Architecture
+obj-$(CONFIG_ARC_NPS_WATCHDOG) += nps_wdt.o
+
 # ARM Architecture
 obj-$(CONFIG_ARM_SP805_WATCHDOG) += sp805_wdt.o
 obj-$(CONFIG_ARM_SBSA_WATCHDOG) += sbsa_gwdt.o

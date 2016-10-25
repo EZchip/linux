@@ -191,6 +191,16 @@ config ZIIRAVE_WATCHDOG
 
 # ALPHA Architecture
 
+# ARC Architecture
+
+config ARC_NPS_WATCHDOG
+	tristate "ARC NPS Watchdog"
+	depends on ARC_PLAT_EZNPS
+	select WATCHDOG_CORE
+	help
+	  NPS Watchdog timer. This will reboot your system when
+	  the timeout is reached.
+
 # ARM Architecture
 
 config ARM_SP805_WATCHDOG
