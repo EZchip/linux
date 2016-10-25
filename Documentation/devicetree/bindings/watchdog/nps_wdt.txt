@@ -1,0 +1,16 @@
+Mellanox NPS Watchdog Timer
+
+Required properties:
+- compatible 		: Should be "ezchip,nps-wdt"
+- regs			: Specifies the base and size of the registers
+- clock-frequency	: Clock frequency of the cpu
+
+Optional properties:
+- timeout-sec		: Watchdog timeout in seconds
+
+Examples:
+	wdt@4190aae2 {
+		compatible = "ezchip,nps-wdt";
+		reg = <0x4190aae2 0x18>;
+		clock-frequency = <800000000>;
+	};
