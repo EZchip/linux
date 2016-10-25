@@ -55,6 +55,7 @@
 #include <linux/tracehook.h>
 #include <linux/context_tracking.h>
 #include <linux/isolation.h>
+#include <soc/nps/common.h>
 #include <asm/ucontext.h>
 
 struct rt_sigframe {
@@ -391,6 +392,29 @@ void do_signal(struct pt_regs *regs)
 	restore_saved_sigmask();
 }
 
+/*
+ * Keep waiting until timer irq is masked.
+ * Prevents a single hrtimer that may occur after a process that requested
+ * isolation returns to user mode.
+ */
+static bool _timer_isolation_ready(void)
+{
+	/* Request rescheduling if timer irq is not masked. */
+	if (read_aux_reg(AUX_IENABLE) & (1 << NPS_TIMER0_IRQ)) {
+		set_tsk_need_resched(current);
+
+		return false;
+	}
+
+	return true;
+}
+
+static inline bool timer_isolation_ready(unsigned int thread_flags)
+{
+	return !(thread_flags & _TIF_TASK_ISOLATION) ||
+		_timer_isolation_ready();
+}
+
 asmlinkage void do_notify_resume(struct pt_regs *regs,
 					  unsigned int thread_flags)
 {
@@ -421,7 +445,8 @@ asmlinkage void do_notify_resume(struct pt_regs *regs,
 		     task_isolation_ready())
 			thread_flags &= ~_TIF_TASK_ISOLATION;
 
-	} while (thread_flags & _TIF_WORK_MASK);
+	} while ((thread_flags & _TIF_WORK_MASK) ||
+		!timer_isolation_ready(thread_flags));
 
 	user_enter();
 }
