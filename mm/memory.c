@@ -783,30 +783,22 @@ static void print_bad_pte(struct vm_area_struct *vma, unsigned long addr,
  * PFNMAP mappings in order to support COWable mappings.
  *
  */
-#ifdef __HAVE_ARCH_PTE_SPECIAL
-# define HAVE_PTE_SPECIAL 1
-#else
-# define HAVE_PTE_SPECIAL 0
-#endif
 struct page *vm_normal_page(struct vm_area_struct *vma, unsigned long addr,
 				pte_t pte)
 {
 	unsigned long pfn = pte_pfn(pte);
 
-	if (HAVE_PTE_SPECIAL) {
-		if (likely(!pte_special(pte)))
-			goto check_pfn;
-		if (vma->vm_ops && vma->vm_ops->find_special_page)
-			return vma->vm_ops->find_special_page(vma, addr);
-		if (vma->vm_flags & (VM_PFNMAP | VM_MIXEDMAP))
-			return NULL;
-		if (!is_zero_pfn(pfn))
-			print_bad_pte(vma, addr, pte, NULL);
+#ifdef __HAVE_ARCH_PTE_SPECIAL
+	if (likely(!pte_special(pte)))
+		goto check_pfn;
+	if (vma->vm_ops && vma->vm_ops->find_special_page)
+		return vma->vm_ops->find_special_page(vma, addr);
+	if (vma->vm_flags & (VM_PFNMAP | VM_MIXEDMAP))
 		return NULL;
-	}
-
-	/* !HAVE_PTE_SPECIAL case follows: */
-
+	if (!is_zero_pfn(pfn))
+		print_bad_pte(vma, addr, pte, NULL);
+	return NULL;
+#else /* !__HAVE_ARCH_PTE_SPECIAL */
 	if (unlikely(vma->vm_flags & (VM_PFNMAP|VM_MIXEDMAP))) {
 		if (vma->vm_flags & VM_MIXEDMAP) {
 			if (!pfn_valid(pfn))
@@ -824,7 +816,11 @@ struct page *vm_normal_page(struct vm_area_struct *vma, unsigned long addr,
 
 	if (is_zero_pfn(pfn))
 		return NULL;
+#endif /* __HAVE_ARCH_PTE_SPECIAL */
+
+#ifdef __HAVE_ARCH_PTE_SPECIAL
 check_pfn:
+#endif /* __HAVE_ARCH_PTE_SPECIAL */
 	if (unlikely(pfn > highest_memmap_pfn)) {
 		print_bad_pte(vma, addr, pte, NULL);
 		return NULL;
@@ -834,7 +830,9 @@ check_pfn:
 	 * NOTE! We still have PageReserved() pages in the page tables.
 	 * eg. VDSO mappings can cause them to exist.
 	 */
+#ifndef __HAVE_ARCH_PTE_SPECIAL
 out:
+#endif /* __HAVE_ARCH_PTE_SPECIAL */
 	return pfn_to_page(pfn);
 }
 
@@ -847,7 +845,7 @@ struct page *vm_normal_page_pmd(struct vm_area_struct *vma, unsigned long addr,
 	/*
 	 * There is no pmd_special() but there may be special pmds, e.g.
 	 * in a direct-access (dax) mapping, so let's just replicate the
-	 * !HAVE_PTE_SPECIAL case from vm_normal_page() here.
+	 * !__HAVE_ARCH_PTE_SPECIAL case from vm_normal_page() here.
 	 */
 	if (unlikely(vma->vm_flags & (VM_PFNMAP|VM_MIXEDMAP))) {
 		if (vma->vm_flags & VM_MIXEDMAP) {
@@ -1761,7 +1759,8 @@ int vm_insert_mixed(struct vm_area_struct *vma, unsigned long addr,
 	 * than insert_pfn).  If a zero_pfn were inserted into a VM_MIXEDMAP
 	 * without pte special, it would there be refcounted as a normal page.
 	 */
-	if (!HAVE_PTE_SPECIAL && !pfn_t_devmap(pfn) && pfn_t_valid(pfn)) {
+#ifndef __HAVE_ARCH_PTE_SPECIAL
+	if (!pfn_t_devmap(pfn) && pfn_t_valid(pfn)) {
 		struct page *page;
 
 		/*
@@ -1772,6 +1771,7 @@ int vm_insert_mixed(struct vm_area_struct *vma, unsigned long addr,
 		page = pfn_to_page(pfn_t_to_pfn(pfn));
 		return insert_page(vma, addr, page, pgprot);
 	}
+#endif /* __HAVE_ARCH_PTE_SPECIAL */
 	return insert_pfn(vma, addr, pfn, pgprot);
 }
 EXPORT_SYMBOL(vm_insert_mixed);
