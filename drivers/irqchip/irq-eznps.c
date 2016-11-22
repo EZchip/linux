@@ -49,7 +49,7 @@
  * This second level can control level and edge interrupt.
  *
  * NOTE: AUX_IENABLE and CTOP_AUX_IACK are auxiliary registers
- * with private HW copy per CPU.
+ * with private HW copy per CORE (16 CPUs).
  */
 
 static void nps400_irq_mask(struct irq_data *irqd)
