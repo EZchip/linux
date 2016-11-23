@@ -102,8 +102,13 @@ void do_page_fault(unsigned long address, struct pt_regs *regs)
 #ifdef CONFIG_ARC_PLAT_EZNPS
 	if (address >= STACK_TOP && user_mode(regs)) {
 		ret = provide_nps_mapping_information(address);
-		if (ret)
+		if (ret) {
+			pr_info("cpu: %d\n", smp_processor_id());
+			pr_info("pid: %d\n", current->pid);
+			pr_info("command: %s\n", current->comm);
+			pr_info("return pc: 0x%lx\n", regs->ret);
 			goto bad_area_nosemaphore;
+		}
 	}
 #endif
 
