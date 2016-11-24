@@ -21,10 +21,6 @@
 #include <linux/tick.h>
 #include <linux/hw_breakpoint.h>
 
-#ifdef CONFIG_ARC_PLAT_EZNPS
-DECLARE_PER_CPU(pid_t, dp_running_pid);
-#endif
-
 SYSCALL_DEFINE1(arc_settls, void *, user_tls_data_ptr)
 {
 	task_thread_info(current)->thr_ptr = (unsigned int)user_tls_data_ptr;
@@ -201,17 +197,6 @@ void start_thread(struct pt_regs * regs, unsigned long pc, unsigned long usp)
 void flush_thread(void)
 {
 }
-
-#ifdef CONFIG_ARC_PLAT_EZNPS
-void exit_thread(struct task_struct *tsk)
-{
-	/*
-	 * unlocking current cpu for other dp processes, if the current process
-	 * locked it earlier
-	 */
-	this_cpu_cmpxchg(dp_running_pid, tsk->pid, 0);
-}
-#endif
 
 int dump_fpu(struct pt_regs *regs, elf_fpregset_t *fpu)
 {

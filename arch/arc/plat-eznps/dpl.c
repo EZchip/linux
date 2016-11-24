@@ -339,10 +339,22 @@ static int dpl_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static int dpl_release(struct inode *inode, struct file *file)
+{
+	/*
+	 * unlocking current cpu for other dp processes, if the current process
+	 * locked it earlier
+	 */
+	this_cpu_cmpxchg(dp_running_pid, current->pid, 0);
+
+	return 0;
+}
+
 static const struct file_operations dpl_fops = {
 	.open		= dpl_open,
 	.unlocked_ioctl	= dpl_ioctl,
 	.mmap		= dpl_mmap,
+	.release	= dpl_release,
 };
 
 static struct miscdevice dpl_dev = {
