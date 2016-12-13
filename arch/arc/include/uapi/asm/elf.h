@@ -17,11 +17,11 @@
 #define EF_ARC_OSABI_V3		0x00000300   /* v3 (no legacy syscalls) */
 #define EF_ARC_OSABI_V4		0x00000400   /* v4 (64bit data any reg align) */
 
-#if __GNUC__ < 6
+//#if __GNUC__ < 6
 #define EF_ARC_OSABI_CURRENT	EF_ARC_OSABI_V3
-#else
-#define EF_ARC_OSABI_CURRENT	EF_ARC_OSABI_V4
-#endif
+//#else
+//#define EF_ARC_OSABI_CURRENT	EF_ARC_OSABI_V4
+//#endif
 
 typedef unsigned long elf_greg_t;
 typedef unsigned long elf_fpregset_t;
