@@ -213,6 +213,17 @@ END(handle_interrupt_level2)
 ; ---------------------------------------------
 ENTRY(mem_service)
 
+#if defined(CONFIG_EZNPS_MEM_ERROR)
+        ; SW workaround to cover up on a difference between
+        ; NPS real chip and simulator behaviors.
+        ; NPS real chip will activate a machine check exception
+        ; in case of memory error, while the simulator will
+        ; trigger a level 2 interrupt. Therefor this code section
+        ; should be reached only in simulation mode.
+        ; DEAD END: display Regs and HALT
+
+	j EV_MachineCheck
+#endif
 	INTERRUPT_PROLOGUE 2
 
 #ifdef CONFIG_CONTEXT_TRACKING
