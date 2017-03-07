@@ -50,7 +50,6 @@ struct dpl_arg {
 	void *buf;
 	int len;
 	int write;
-	unsigned int dpc;
 };
 
 struct dpl_mmap_arg {
@@ -97,6 +96,16 @@ static long dpl_set_aux(struct dpl_aux_reg __user *user_reg)
 
 	if (!dpl_is_valid_aux_address((void *)kernel_reg.address))
 		return -EFAULT;
+
+	/*
+	 * DPC register should not be changed from its
+	 * initial value.
+	 */
+	if(kernel_reg.address == CTOP_AUX_DPC) {
+		printk("Due to HW bug that smears DPC register at thread"
+		       "context switch, changing its value is not allowed\n");
+		return -EFAULT;
+	}
 
 	write_aux_reg(kernel_reg.address, kernel_reg.value);
 
@@ -227,7 +236,6 @@ static void dpl_access_phys_local(void *arg)
 	if (arg == NULL)
 		return;
 
-	write_aux_reg(CTOP_AUX_DPC, a->dpc);
 	if (a->write) {
 		memcpy_toio(a->addr, a->buf, a->len);
 
@@ -241,7 +249,6 @@ static void dpl_access_phys_local(void *arg)
 	}
 	else
 		memcpy_fromio(a->buf, a->addr, a->len);
-	write_aux_reg(CTOP_AUX_DPC, current->thread.dp.dpc);
 }
 
 static int dpl_access_phys(struct vm_area_struct *vma, unsigned long addr,
@@ -262,7 +269,6 @@ static int dpl_access_phys(struct vm_area_struct *vma, unsigned long addr,
 		return -EINVAL;
 
 	mmap_arg = vma->vm_private_data;
-	arg.dpc = mmap_arg->task->thread.dp.dpc;
 	offset = addr - mmap_arg->user_base;
 	arg.addr = mmap_arg->kernel_base + offset;
 	cpu = task_cpu(mmap_arg->task);
