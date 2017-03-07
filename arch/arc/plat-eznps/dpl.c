@@ -81,6 +81,16 @@ static long dpl_set_aux(struct dpl_aux_reg __user *user_reg)
 	if (!dpl_is_valid_aux_address((void *)kernel_reg.address))
 		return -EFAULT;
 
+	/*
+	 * DPC register should not be changed from its
+	 * initial value.
+	 */
+	if(kernel_reg.address == CTOP_AUX_DPC) {
+		printk("Due to HW bug that smears DPC register at thread"
+		       "context switch, changing its value is not allowed\n");
+		return -EFAULT;
+	}
+
 	write_aux_reg(kernel_reg.address, kernel_reg.value);
 
 	return 0;
