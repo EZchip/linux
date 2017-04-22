@@ -9,6 +9,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/irqchip.h>
+#include <linux/isolation.h>
 #include <asm/mach_desc.h>
 #include <asm/smp.h>
 
@@ -43,5 +44,6 @@ void __init init_IRQ(void)
  */
 void arch_do_IRQ(unsigned int hwirq, struct pt_regs *regs)
 {
+	task_isolation_irq(regs, "irq %d", hwirq);
 	handle_domain_irq(NULL, hwirq, regs);
 }

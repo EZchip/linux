@@ -34,6 +34,8 @@ ENTRY(sys_clone_wrapper)
 	GET_CURR_THR_INFO_FLAGS   r10
 	btst r10, TIF_SYSCALL_TRACE
 	bnz  tracesys_exit
+	btst r10, TIF_TASK_ISOLATION
+	bnz  tracesys_exit
 
 	b ret_from_system_call
 END(sys_clone_wrapper)
@@ -290,6 +292,8 @@ ENTRY(EV_Trap)
 	; If syscall tracing ongoing, invoke pre-post-hooks
 	GET_CURR_THR_INFO_FLAGS   r10
 	btst r10, TIF_SYSCALL_TRACE
+	bnz tracesys  ; this never comes back
+	btst r10, TIF_TASK_ISOLATION
 	bnz tracesys  ; this never comes back
 
 	;============ Normal syscall case
