@@ -55,7 +55,7 @@ static cycle_t nps_clksrc_read(struct clocksource *clksrc)
 	return (cycle_t)ioread32be(nps_msu_reg_low_addr[cluster]);
 }
 
-static void __init nps_setup_clocksource(struct device_node *node)
+static int __init nps_setup_clocksource(struct device_node *node)
 {
 	struct clk *clk;
 	int ret, cluster;
@@ -63,7 +63,7 @@ static void __init nps_setup_clocksource(struct device_node *node)
 	clk = of_clk_get(node, 0);
 	if (IS_ERR(clk)) {
 		pr_err("Can't get timer clock.\n");
-		return;
+		return PTR_ERR(clk);
 	}
 
 	for (cluster = 0; cluster < NPS_CLUSTER_NUM; cluster++)
@@ -271,7 +271,7 @@ static struct notifier_block nps_timer_cpu_nb = {
 	.notifier_call = nps_timer_cpu_notify,
 };
 
-static void __init nps_setup_clockevent(struct device_node *node)
+static int __init nps_setup_clockevent(struct device_node *node)
 {
 	struct clock_event_device *evt = this_cpu_ptr(&nps_clockevent_device);
 	struct clk *clk;
@@ -280,7 +280,7 @@ static void __init nps_setup_clockevent(struct device_node *node)
 	nps_timer0_irq = irq_of_parse_and_map(node, 0);
 	if (nps_timer0_irq <= 0) {
 		pr_err("Can't parse IRQ");
-		return;
+		return -EINVAL;
 	}
 
 	clk = of_clk_get(node, 0);
@@ -294,7 +294,7 @@ static void __init nps_setup_clockevent(struct device_node *node)
 	ret = clk_prepare_enable(clk);
 	if (ret) {
 		pr_err("Couldn't enable parent clock\n");
-		return;
+		return ret;
 	}
 
 	nps_timer0_freq = clk_get_rate(clk);
@@ -309,9 +309,11 @@ static void __init nps_setup_clockevent(struct device_node *node)
 	if (ret) {
 		pr_err("Couldn't request irq\n");
 		clk_disable_unprepare(clk);
+		return ret;
 	}
 
 	enable_percpu_irq(nps_timer0_irq, 0);
+	return 0;
 }
 
 CLOCKSOURCE_OF_DECLARE(ezchip_nps400_clkevt, "ezchip,nps400-timer0",
