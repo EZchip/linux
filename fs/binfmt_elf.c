@@ -2314,6 +2314,9 @@ static int elf_core_dump(struct coredump_params *cprm)
 				stop = !dump_emit(cprm, kaddr, PAGE_SIZE);
 				kunmap(page);
 				put_page(page);
+			/* TODO: move this to below elf_core_write_extra_data() */
+			} else if (addr > 0x58000000 /* STACK_TOP - CMEM */) {
+				dump_emit(cprm, (void *)addr, PAGE_SIZE);
 			} else
 				stop = !dump_skip(cprm, PAGE_SIZE);
 			if (stop)
