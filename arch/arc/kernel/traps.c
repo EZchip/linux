@@ -83,6 +83,8 @@ DO_ERROR_INFO(SIGILL, "Illegal Insn (or Seq)", insterror_is_error, ILL_ILLOPC)
 DO_ERROR_INFO(SIGBUS, "Invalid Mem Access", do_memory_error, BUS_ADRERR)
 DO_ERROR_INFO(SIGTRAP, "Breakpoint Set", trap_is_brkpt, TRAP_BRKPT)
 DO_ERROR_INFO(SIGBUS, "Misaligned Access", do_misaligned_error, BUS_ADRALN)
+DO_ERROR_INFO(SIGBUS, "Machine Check", do_machine_check, BUS_MCEERR_AR )
+
 
 /*
  * Entry Point for Misaligned Data access Exception, for emulating in software

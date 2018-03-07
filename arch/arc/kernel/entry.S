@@ -118,6 +118,11 @@ ENTRY(EV_MachineCheck)
 	b       ret_from_exception
 
 1:
+	FAKE_RET_FROM_EXCPN
+	bl		do_machine_check
+	b       ret_from_exception
+
+
 	; DEAD END: can't do much, display Regs and HALT
 	SAVE_CALLEE_SAVED_USER
 
